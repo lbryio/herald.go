@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+option go_package = "github.com/lbryio/hub/protobuf/go/pb";
+
+package pb;
+
+service Hub {
+  rpc Search (SearchRequest) returns (SearchReply) {}
+}
+
+message SearchRequest {
+  string query = 1;
+}
+
+message SearchReply {
+  repeated Output txos = 1;
+  repeated Output extra_txos = 2;
+  uint32 total = 3;
+  uint32 offset = 4;
+  repeated Blocked blocked = 5;
+  uint32 blocked_total = 6;
+}
+
+message Output {
+  bytes tx_hash = 1;
+  uint32 nout = 2;
+  uint32 height = 3;
+  oneof meta {
+    ClaimMeta claim = 7;
+    Error error = 15;
+  }
+}
+
+message ClaimMeta {
+  Output channel = 1;
+  Output repost = 2;
+  string short_url = 3;
+  string canonical_url = 4;
+  bool is_controlling = 5;
+  uint32 take_over_height = 6;
+  uint32 creation_height = 7;
+  uint32 activation_height = 8;
+  uint32 expiration_height = 9;
+  uint32 claims_in_channel = 10;
+  uint32 reposted = 11;
+
+  uint64 effective_amount = 20;
+  uint64 support_amount = 21;
+  uint32 trending_group = 22;
+  float trending_mixed = 23;
+  float trending_local = 24;
+  float trending_global = 25;
+}
+
+message Error {
+  enum Code {
+    UNKNOWN_CODE = 0;
+    NOT_FOUND = 1;
+    INVALID = 2;
+    BLOCKED = 3;
+  }
+  Code code = 1;
+  string text = 2;
+  Blocked blocked = 3;
+}
+
+message Blocked {
+  uint32 count = 1;
+  Output channel = 2;
+}

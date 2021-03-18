@@ -13,13 +13,28 @@ and the [lighthouse](https://github.com/lbryio/lighthouse) search provider.
 
 ## Installation
 
-
 ## Usage
-
 
 ## Contributing
 
 Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.tech/contribute) link.
+
+### Dev Dependencies
+
+Install Go 1.14+
+
+- Ubuntu: `sudo add-apt-repository ppa:longsleep/golang-backports && sudo apt install golang-go`
+- OSX: `brew install go`
+
+Download `protoc` from https://github.com/protocolbuffers/protobuf/releases and make sure it is 
+executable and in your path.
+
+Install Go plugin for protoc:
+
+```
+go get google.golang.org/protobuf/cmd/protoc-gen-go google.golang.org/grpc/cmd/protoc-gen-go-grpc
+```
+
 
 ## License
 
