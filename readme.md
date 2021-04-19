@@ -17,6 +17,22 @@ and the [lighthouse](https://github.com/lbryio/lighthouse) search provider.
 
 ## Usage
 
+### Run python block processor and search plugin
+
+Follow the instructions [here](https://lbry.tech/resources/wallet-server).
+
+### Run this hub
+
+```bash
+go run . serve
+```
+
+### Search for stuff
+
+```bash
+go run . search text goes here
+```
+
 ## Contributing
 
 Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.tech/contribute) link.

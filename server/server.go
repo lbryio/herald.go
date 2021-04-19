@@ -1,19 +1,11 @@
-package main
+package server
 
 import (
-	"context"
-	"log"
-
 	pb "github.com/lbryio/hub/protobuf/go"
 )
 
-type server struct {
+type Server struct {
 	pb.UnimplementedHubServer
-}
-
-func (s *server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
-	log.Printf("Got query: %s", in.GetQuery())
-	return &pb.SearchReply{}, nil
 }
 
 /*

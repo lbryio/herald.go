@@ -2,12 +2,16 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
+	"github.com/lbryio/hub/server"
+
 	"google.golang.org/grpc"
 )
 
@@ -16,14 +20,14 @@ const (
 )
 
 func main() {
-	if len(os.Args) > 1 && os.Args[1] == "serve" {
+	if len(os.Args) == 2 && os.Args[1] == "serve" {
 		l, err := net.Listen("tcp", port)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
 
 		s := grpc.NewServer()
-		pb.RegisterHubServer(s, &server{})
+		pb.RegisterHubServer(s, &server.Server{})
 
 		log.Printf("listening on %s\n", l.Addr().String())
 		if err := s.Serve(l); err != nil {
@@ -40,10 +44,12 @@ func main() {
 
 	c := pb.NewHubClient(conn)
 
-	// Contact the server and print out its response.
-	query := "what is lbry"
+	var query string
 	if len(os.Args) > 1 {
-		query = os.Args[1]
+		query = strings.Join(os.Args[1:], " ")
+	} else {
+		log.Printf("error: no search query provided\n")
+		os.Exit(1)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
@@ -55,4 +61,8 @@ func main() {
 	}
 
 	log.Printf("found %d results\n", r.GetTotal())
+
+	for _, t := range r.Txos {
+		fmt.Printf("%s:%d\n", server.FromHash(t.TxHash), t.Nout)
+	}
 }
