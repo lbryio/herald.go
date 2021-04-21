@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/hex"
-	"errors"
 	"log"
 	"reflect"
 
@@ -18,21 +17,22 @@ type record struct {
 }
 
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
+	// TODO: reuse elastic client across requests
 	client, err := elastic.NewClient()
 	if err != nil {
 		return nil, err
 	}
 
 	// Ping the Elasticsearch server to get e.g. the version number
-	_, code, err := client.Ping("http://127.0.0.1:9200").Do(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if code != 200 {
-		return nil, errors.New("ping failed")
-	}
+	//_, code, err := client.Ping("http://127.0.0.1:9200").Do(ctx)
+	//if err != nil {
+	//	return nil, err
+	//}
+	//if code != 200 {
+	//	return nil, errors.New("ping failed")
+	//}
 
-	//"claim_name^4", "channel_name^8", "title^1", "description^.5", "author^1", "tags^.5"
+	// TODO: support all of this https://github.com/lbryio/lbry-sdk/blob/master/lbry/wallet/server/db/elasticsearch/search.py#L385
 	q := elastic.NewSimpleQueryStringQuery(in.Query).
 		FieldWithBoost("claim_name", 4).
 		FieldWithBoost("channel_name", 8).

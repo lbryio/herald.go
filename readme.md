@@ -15,27 +15,29 @@ and the [lighthouse](https://github.com/lbryio/lighthouse) search provider.
 
 ## Installation
 
+No install instructions yet. See Contributing below.
+
 ## Usage
 
-### Run python block processor and search plugin
+### Prerequisite: run python block processor and search plugin
 
 Follow the instructions [here](https://lbry.tech/resources/wallet-server).
 
 ### Run this hub
 
 ```bash
-go run . serve
+./hub serve
 ```
 
 ### Search for stuff
 
 ```bash
-go run . search text goes here
+./hub search text goes here
 ```
 
 ## Contributing
 
-Contributions to this project are welcome, encouraged, and compensated. For more details, please check [this](https://lbry.tech/contribute) link.
+Contributions to this project are welcome, encouraged, and compensated. Details [here](https://lbry.tech/contribute).
 
 ### Dev Dependencies
 
@@ -53,6 +55,15 @@ Install Go plugin for protoc:
 go get google.golang.org/protobuf/cmd/protoc-gen-go google.golang.org/grpc/cmd/protoc-gen-go-grpc
 ```
 
+If you can run `./protobuf/build.sh` without errors, you have `go` and `protoc` installed correctly. 
+
+Finally, run the block processor as described under Usage.
+
+### Running from Source
+
+Run `./dev.sh` to start the hub. The script will restart the hub as you make changes to `*.go` files. 
+
+To search, use `go run . search text goes here`.
 
 ## License
 
