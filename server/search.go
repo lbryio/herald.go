@@ -18,7 +18,7 @@ type record struct {
 
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
 	// TODO: reuse elastic client across requests
-	client, err := elastic.NewClient()
+	client, err := elastic.NewClient(elastic.SetSniff(false))
 	if err != nil {
 		return nil, err
 	}
