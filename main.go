@@ -55,7 +55,10 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	r, err := c.Search(ctx, &pb.SearchRequest{Query: query})
+	//searchRequest := &pb.SearchRequest{Query: query}
+	//searchRequest := &pb.SearchRequest{XId: [][]byte{[]byte(query)}}
+	searchRequest := &pb.SearchRequest{ClaimType: []string{query}}
+	r, err := c.Search(ctx, searchRequest)
 	if err != nil {
 		log.Fatal(err)
 	}

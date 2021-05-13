@@ -3,10 +3,9 @@ package server
 import (
 	"context"
 	"encoding/hex"
+	pb "github.com/lbryio/hub/protobuf/go"
 	"log"
 	"reflect"
-
-	pb "github.com/lbryio/hub/protobuf/go"
 
 	"github.com/olivere/elastic/v7"
 )
@@ -16,6 +15,12 @@ type record struct {
 	Nout uint32 `json:"tx_nout"`
 }
 
+func reverseBytes(s []byte) {
+	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
+		s[i], s[j] = s[j], s[i]
+	}
+}
+
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
 	// TODO: reuse elastic client across requests
 	client, err := elastic.NewClient(elastic.SetSniff(false))
@@ -23,6 +28,12 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		return nil, err
 	}
 
+	claimTypes := map[string]int {
+		"stream": 1,
+		"channel": 2,
+		"repost": 3,
+		"collection": 4,
+	}
 	// Ping the Elasticsearch server to get e.g. the version number
 	//_, code, err := client.Ping("http://127.0.0.1:9200").Do(ctx)
 	//if err != nil {
@@ -33,13 +44,44 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	//}
 
 	// TODO: support all of this https://github.com/lbryio/lbry-sdk/blob/master/lbry/wallet/server/db/elasticsearch/search.py#L385
-	q := elastic.NewSimpleQueryStringQuery(in.Query).
-		FieldWithBoost("claim_name", 4).
-		FieldWithBoost("channel_name", 8).
-		FieldWithBoost("title", 1).
-		FieldWithBoost("description", 0.5).
-		FieldWithBoost("author", 1).
-		FieldWithBoost("tags", 0.5)
+
+	q := elastic.NewBoolQuery()
+
+	if in.AmountOrder > 0 {
+		in.Limit = 1
+		in.OrderBy = "effective_amount"
+		in.Offset = in.AmountOrder - 1
+	}
+
+	if len(in.ClaimType) > 0 {
+		searchVals := make([]interface{}, len(in.ClaimType))
+		for i := 0; i < len(in.ClaimType); i++ {
+			searchVals[i] = claimTypes[in.ClaimType[i]]
+		}
+		q = q.Must(elastic.NewTermsQuery("claim_type", searchVals...))
+	}
+
+	if len(in.XId) > 0 {
+		searchVals := make([]interface{}, len(in.XId))
+		for i := 0; i < len(in.XId); i++ {
+			reverseBytes(in.XId[i])
+			searchVals[i] = hex.Dump(in.XId[i])
+		}
+		q = q.Must(elastic.NewTermsQuery("_id", searchVals...))
+	}
+
+	if in.Query != "" {
+		textQuery := elastic.NewSimpleQueryStringQuery(in.Query).
+			FieldWithBoost("claim_name", 4).
+			FieldWithBoost("channel_name", 8).
+			FieldWithBoost("title", 1).
+			FieldWithBoost("description", 0.5).
+			FieldWithBoost("author", 1).
+			FieldWithBoost("tags", 0.5)
+
+		q = q.Must(textQuery)
+	}
+
 
 	searchResult, err := client.Search().
 		//Index("twitter").   // search in index "twitter"
