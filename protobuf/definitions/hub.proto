@@ -8,6 +8,18 @@ service Hub {
   rpc Search (SearchRequest) returns (SearchReply) {}
 }
 
+message RangeQuery {
+  enum Op {
+    EQ = 0;
+    LTE = 1;
+    GTE = 2;
+    LT = 3;
+    GT = 4;
+  }
+  Op op = 1;
+  repeated string value = 2;
+}
+
 message SearchRequest {
   string query = 1;
   string name = 2;
@@ -17,52 +29,52 @@ message SearchRequest {
   int32 offset = 6;
   bool is_controlling = 7;
   string last_take_over_height = 20;
-  string claim_id = 21;
-  string claim_name = 22;
-  string normalized = 23;
-  string tx_position = 24;
-  string amount = 25;
-  string timestamp = 26;
-  string creation_timestamp = 27;
-  string height = 28;
-  string creation_height = 29;
-  string activation_height = 30;
-  string expiration_height = 31;
-  string release_time = 32;
-  string short_url = 33;
-  string canonical_url = 34;
-  string title = 35;
-  string author = 36;
-  string description = 37;
+  repeated string claim_id = 21;
+  repeated string claim_name = 22;
+  repeated string normalized = 23;
+  RangeQuery tx_position = 24;
+  RangeQuery amount = 25;
+  RangeQuery timestamp = 26;
+  RangeQuery creation_timestamp = 27;
+  RangeQuery height = 28;
+  RangeQuery creation_height = 29;
+  RangeQuery activation_height = 30;
+  RangeQuery expiration_height = 31;
+  RangeQuery release_time = 32;
+  repeated string short_url = 33;
+  repeated string canonical_url = 34;
+  repeated string title = 35;
+  repeated string author = 36;
+  repeated string description = 37;
   repeated string claim_type = 38;
-  string reposted = 39;
-  string stream_type = 40;
-  string media_type = 41;
-  string fee_amount = 42;
-  string fee_currency = 43;
-  string duration = 44;
+  RangeQuery reposted = 39;
+  repeated string stream_type = 40;
+  repeated string media_type = 41;
+  RangeQuery fee_amount = 42;
+  repeated string fee_currency = 43;
+  RangeQuery duration = 44;
   string reposted_claim_hash = 45;
-  string censor_type = 46;
+  RangeQuery censor_type = 46;
   string claims_in_channel = 47;
-  string channel_join = 48;
+  RangeQuery channel_join = 48;
   string signature_valid = 49;
-  string effective_amount = 50;
-  string support_amount = 51;
-  string trending_group = 52;
-  string trending_mixed = 53;
-  string trending_local = 54;
-  string trending_global = 55;
-  string channel_id = 56;
-  string tx_id = 57;
+  RangeQuery effective_amount = 50;
+  RangeQuery support_amount = 51;
+  RangeQuery trending_group = 52;
+  RangeQuery trending_mixed = 53;
+  RangeQuery trending_local = 54;
+  RangeQuery trending_global = 55;
+  repeated string channel_id = 56;
+  repeated string tx_id = 57;
   string tx_nout = 58;
-  string signature = 59;
-  string signature_digest = 60;
-  string public_key_bytes = 61;
-  string public_key_hash = 62;
+  repeated string signature = 59;
+  repeated string signature_digest = 60;
+  repeated string public_key_bytes = 61;
+  repeated string public_key_hash = 62;
   string public_key_id = 63;
   repeated bytes _id = 64;
-  string tags = 65;
-  string reposted_claim_id = 66;
+  repeated string tags = 65;
+  repeated string reposted_claim_id = 66;
 }
 
 message SearchReply {

@@ -7,6 +7,7 @@ import (
 	"log"
 	"reflect"
 
+	"github.com/btcsuite/btcutil/base58"
 	"github.com/olivere/elastic/v7"
 )
 
@@ -15,9 +16,49 @@ type record struct {
 	Nout uint32 `json:"tx_nout"`
 }
 
-func reverseBytes(s []byte) {
+func ReverseBytes(s []byte) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
+	}
+}
+
+func StrArrToInterface(arr []string) []interface{} {
+	searchVals := make([]interface{}, len(arr))
+	for i := 0; i < len(arr); i++ {
+		searchVals[i] = arr[i]
+	}
+	return searchVals
+}
+
+func AddTermsQuery(arr []string, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
+	if len(arr) > 0 {
+		searchVals := StrArrToInterface(arr)
+		return q.Must(elastic.NewTermsQuery(name, searchVals...))
+	}
+	return q
+}
+
+func AddRangeQuery(rq *pb.RangeQuery, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
+	if rq == nil {
+		return q
+	}
+
+	if len(rq.Value) > 1 {
+		if rq.Op != pb.RangeQuery_EQ {
+			return q
+		}
+		return AddTermsQuery(rq.Value, name, q)
+	}
+	if rq.Op == pb.RangeQuery_EQ {
+		return AddTermsQuery(rq.Value, name, q)
+	} else if rq.Op == pb.RangeQuery_LT {
+		return q.Must(elastic.NewRangeQuery(name).Lt(rq.Value))
+	} else if rq.Op == pb.RangeQuery_LTE {
+		return q.Must(elastic.NewRangeQuery(name).Lte(rq.Value))
+	} else if rq.Op == pb.RangeQuery_GT {
+		return q.Must(elastic.NewRangeQuery(name).Gt(rq.Value))
+	} else { // pb.RangeQuery_GTE
+		return q.Must(elastic.NewRangeQuery(name).Gte(rq.Value))
 	}
 }
 
@@ -64,11 +105,70 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	if len(in.XId) > 0 {
 		searchVals := make([]interface{}, len(in.XId))
 		for i := 0; i < len(in.XId); i++ {
-			reverseBytes(in.XId[i])
+			ReverseBytes(in.XId[i])
 			searchVals[i] = hex.Dump(in.XId[i])
 		}
-		q = q.Must(elastic.NewTermsQuery("_id", searchVals...))
+		if len(in.XId) == 1 && len(in.XId[0]) < 20 {
+			q = q.Must(elastic.NewPrefixQuery("_id", string(in.XId[0])))
+		} else {
+			q = q.Must(elastic.NewTermsQuery("_id", searchVals...))
+		}
 	}
+
+
+	if len(in.ClaimId) > 0 {
+		searchVals := StrArrToInterface(in.ClaimId)
+		if len(in.ClaimId) == 1 && len(in.ClaimId[0]) < 20 {
+			q = q.Must(elastic.NewPrefixQuery("claim_id.keyword", in.ClaimId[0]))
+		} else {
+			q = q.Must(elastic.NewTermsQuery("claim_id.keyword", searchVals...))
+		}
+	}
+
+	if in.PublicKeyId != "" {
+		value := hex.Dump(base58.Decode(in.PublicKeyId)[1:21])
+		q = q.Must(elastic.NewTermQuery("public_key_hash.keyword", value))
+	}
+
+	q = AddTermsQuery(in.PublicKeyHash, "public_key_hash.keyword", q)
+	q = AddTermsQuery(in.Author, "author.keyword", q)
+	q = AddTermsQuery(in.Title, "title.keyword", q)
+	q = AddTermsQuery(in.CanonicalUrl, "canonical_url.keyword", q)
+	q = AddTermsQuery(in.ChannelId, "channel_id.keyword", q)
+	q = AddTermsQuery(in.ClaimName, "claim_name.keyword", q)
+	q = AddTermsQuery(in.Description, "description.keyword", q)
+	q = AddTermsQuery(in.MediaType, "media_type.keyword", q)
+	q = AddTermsQuery(in.Normalized, "normalized.keyword", q)
+	q = AddTermsQuery(in.PublicKeyBytes, "public_key_bytes.keyword", q)
+	q = AddTermsQuery(in.ShortUrl, "short_url.keyword", q)
+	q = AddTermsQuery(in.Signature, "signature.keyword", q)
+	q = AddTermsQuery(in.SignatureDigest, "signature_digest.keyword", q)
+	q = AddTermsQuery(in.StreamType, "stream_type.keyword", q)
+	q = AddTermsQuery(in.TxId, "tx_id.keyword", q)
+	q = AddTermsQuery(in.FeeCurrency, "fee_currency.keyword", q)
+	q = AddTermsQuery(in.RepostedClaimId, "reposted_claim_id.keyword", q)
+	q = AddTermsQuery(in.Tags, "tags.keyword", q)
+
+	q = AddRangeQuery(in.TxPosition, "tx_position", q)
+	q = AddRangeQuery(in.Amount, "amount", q)
+	q = AddRangeQuery(in.Timestamp, "timestamp", q)
+	q = AddRangeQuery(in.CreationTimestamp, "creation_timestamp", q)
+	q = AddRangeQuery(in.Height, "height", q)
+	q = AddRangeQuery(in.CreationHeight, "creation_height", q)
+	q = AddRangeQuery(in.ActivationHeight, "activation_height", q)
+	q = AddRangeQuery(in.ExpirationHeight, "expiration_height", q)
+	q = AddRangeQuery(in.ReleaseTime, "release_time", q)
+	q = AddRangeQuery(in.Reposted, "reposted", q)
+	q = AddRangeQuery(in.FeeAmount, "fee_amount", q)
+	q = AddRangeQuery(in.Duration, "duration", q)
+	q = AddRangeQuery(in.CensorType, "censor_type", q)
+	q = AddRangeQuery(in.ChannelJoin, "channel_join", q)
+	q = AddRangeQuery(in.EffectiveAmount, "effective_amount", q)
+	q = AddRangeQuery(in.SupportAmount, "support_amount", q)
+	q = AddRangeQuery(in.TrendingGroup, "trending_group", q)
+	q = AddRangeQuery(in.TrendingMixed, "trending_mixed", q)
+	q = AddRangeQuery(in.TrendingLocal, "trending_local", q)
+	q = AddRangeQuery(in.TrendingGlobal, "trending_global", q)
 
 	if in.Query != "" {
 		textQuery := elastic.NewSimpleQueryStringQuery(in.Query).

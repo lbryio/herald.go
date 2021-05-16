@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
-	"strings"
 	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -18,6 +18,32 @@ import (
 const (
 	port = ":50051"
 )
+
+func parseArgs(searchRequest *pb.SearchRequest) {
+	query:= flag.String("query", "", "query string")
+	claimType := flag.String("claimType", "", "claim type")
+	id := flag.String("id", "", "_id")
+	author := flag.String("author", "", "author")
+	title := flag.String("title", "", "title")
+
+	flag.Parse()
+
+	if *query != "" {
+		searchRequest.Query = *query
+	}
+	if *claimType != "" {
+		searchRequest.ClaimType = []string{*claimType}
+	}
+	if *id != "" {
+		searchRequest.XId = [][]byte{[]byte(*id)}
+	}
+	if *author != "" {
+		searchRequest.Author = []string{*author}
+	}
+	if *title != "" {
+		searchRequest.Title = []string{*title}
+	}
+}
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "serve" {
@@ -44,6 +70,7 @@ func main() {
 
 	c := pb.NewHubClient(conn)
 
+	/*
 	var query string
 	if len(os.Args) > 1 {
 		query = strings.Join(os.Args[1:], " ")
@@ -51,13 +78,15 @@ func main() {
 		log.Printf("error: no search query provided\n")
 		os.Exit(1)
 	}
+	 */
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	//searchRequest := &pb.SearchRequest{Query: query}
-	//searchRequest := &pb.SearchRequest{XId: [][]byte{[]byte(query)}}
-	searchRequest := &pb.SearchRequest{ClaimType: []string{query}}
+	searchRequest := &pb.SearchRequest{}
+
+	parseArgs(searchRequest)
+
 	r, err := c.Search(ctx, searchRequest)
 	if err != nil {
 		log.Fatal(err)
