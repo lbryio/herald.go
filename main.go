@@ -25,6 +25,8 @@ func parseArgs(searchRequest *pb.SearchRequest) {
 	id := flag.String("id", "", "_id")
 	author := flag.String("author", "", "author")
 	title := flag.String("title", "", "title")
+	channelName := flag.String("channelName", "", "channel name")
+	description := flag.String("description", "", "description")
 
 	flag.Parse()
 
@@ -42,6 +44,12 @@ func parseArgs(searchRequest *pb.SearchRequest) {
 	}
 	if *title != "" {
 		searchRequest.Title = []string{*title}
+	}
+	if *channelName != "" {
+		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: []string{*channelName}}
+	}
+	if *description != "" {
+		searchRequest.Description = []string{*description}
 	}
 }
 

@@ -16,6 +16,11 @@ type record struct {
 	Nout uint32 `json:"tx_nout"`
 }
 
+type orderField struct {
+	Field string
+	is_asc bool
+}
+
 func ReverseBytes(s []byte) {
 	for i, j := 0, len(s)-1; i < j; i, j = i+1, j-1 {
 		s[i], s[j] = s[j], s[i]
@@ -30,7 +35,7 @@ func StrArrToInterface(arr []string) []interface{} {
 	return searchVals
 }
 
-func AddTermsQuery(arr []string, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
+func AddTermsField(arr []string, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
 	if len(arr) > 0 {
 		searchVals := StrArrToInterface(arr)
 		return q.Must(elastic.NewTermsQuery(name, searchVals...))
@@ -38,27 +43,39 @@ func AddTermsQuery(arr []string, name string, q *elastic.BoolQuery) *elastic.Boo
 	return q
 }
 
-func AddRangeQuery(rq *pb.RangeQuery, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
+func AddRangeField(rq *pb.RangeField, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
 	if rq == nil {
 		return q
 	}
 
 	if len(rq.Value) > 1 {
-		if rq.Op != pb.RangeQuery_EQ {
+		if rq.Op != pb.RangeField_EQ {
 			return q
 		}
-		return AddTermsQuery(rq.Value, name, q)
+		return AddTermsField(rq.Value, name, q)
 	}
-	if rq.Op == pb.RangeQuery_EQ {
-		return AddTermsQuery(rq.Value, name, q)
-	} else if rq.Op == pb.RangeQuery_LT {
+	if rq.Op == pb.RangeField_EQ {
+		return AddTermsField(rq.Value, name, q)
+	} else if rq.Op == pb.RangeField_LT {
 		return q.Must(elastic.NewRangeQuery(name).Lt(rq.Value))
-	} else if rq.Op == pb.RangeQuery_LTE {
+	} else if rq.Op == pb.RangeField_LTE {
 		return q.Must(elastic.NewRangeQuery(name).Lte(rq.Value))
-	} else if rq.Op == pb.RangeQuery_GT {
+	} else if rq.Op == pb.RangeField_GT {
 		return q.Must(elastic.NewRangeQuery(name).Gt(rq.Value))
-	} else { // pb.RangeQuery_GTE
+	} else { // pb.RangeField_GTE
 		return q.Must(elastic.NewRangeQuery(name).Gte(rq.Value))
+	}
+}
+
+func AddInvertibleField(field *pb.InvertibleField, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
+	if field == nil {
+		return q
+	}
+	searchVals := StrArrToInterface(field.Value)
+	if field.Invert {
+		return q.MustNot(elastic.NewTermsQuery(name, searchVals...))
+	} else {
+		return q.Must(elastic.NewTermsQuery(name, searchVals...))
 	}
 }
 
@@ -75,6 +92,48 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		"repost": 3,
 		"collection": 4,
 	}
+
+	streamTypes := map[string]int {
+		"video": 1,
+		"audio": 2,
+		"image": 3,
+		"document": 4,
+		"binary": 5,
+		"model": 6,
+	}
+
+	replacements := map[string]string {
+		"name": "normalized",
+		"txid": "tx_id",
+		"claim_hash": "_id",
+	}
+
+	textFields := map[string]bool {
+		"author": true,
+		"canonical_url": true,
+		"channel_id": true,
+		"claim_name": true,
+		"description": true,
+		"claim_id": true,
+		"media_type": true,
+		"normalized": true,
+		"public_key_bytes": true,
+		"public_key_hash": true,
+		"short_url": true,
+		"signature": true,
+		"signature_digest": true,
+		"stream_type": true,
+		"title": true,
+		"tx_id": true,
+		"fee_currency": true,
+		"reposted_claim_id": true,
+		"tags": true,
+	}
+
+	var from = 0
+	var size = 10
+	var orderBy []orderField
+
 	// Ping the Elasticsearch server to get e.g. the version number
 	//_, code, err := client.Ping("http://127.0.0.1:9200").Do(ctx)
 	//if err != nil {
@@ -90,8 +149,34 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 
 	if in.AmountOrder > 0 {
 		in.Limit = 1
-		in.OrderBy = "effective_amount"
+		in.OrderBy = []string{"effective_amount"}
 		in.Offset = in.AmountOrder - 1
+	}
+
+	if in.Limit > 0 {
+		size = int(in.Limit)
+	}
+
+	if in.Offset > 0 {
+		from = int(in.Offset)
+	}
+
+	if len(in.OrderBy) > 0 {
+		for _, x := range in.OrderBy {
+			var toAppend string
+			var is_asc = false
+			if x[0] == '^' {
+				is_asc = true
+				x = x[1:]
+			}
+			if _, ok := replacements[x]; ok {
+				toAppend = replacements[x]
+			}
+			if _, ok := textFields[x]; ok {
+				toAppend = x + ".keyword"
+			}
+			orderBy = append(orderBy, orderField{toAppend, is_asc})
+		}
 	}
 
 	if len(in.ClaimType) > 0 {
@@ -100,6 +185,15 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 			searchVals[i] = claimTypes[in.ClaimType[i]]
 		}
 		q = q.Must(elastic.NewTermsQuery("claim_type", searchVals...))
+	}
+
+	// FIXME is this a text field or not?
+	if len(in.StreamType) > 0 {
+		searchVals := make([]interface{}, len(in.StreamType))
+		for i := 0; i < len(in.StreamType); i++ {
+			searchVals[i] = streamTypes[in.StreamType[i]]
+		}
+		q = q.Must(elastic.NewTermsQuery("stream_type.keyword", searchVals...))
 	}
 
 	if len(in.XId) > 0 {
@@ -116,12 +210,20 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 
-	if len(in.ClaimId) > 0 {
-		searchVals := StrArrToInterface(in.ClaimId)
-		if len(in.ClaimId) == 1 && len(in.ClaimId[0]) < 20 {
-			q = q.Must(elastic.NewPrefixQuery("claim_id.keyword", in.ClaimId[0]))
+	if in.ClaimId != nil {
+		searchVals := StrArrToInterface(in.ClaimId.Value)
+		if len(in.ClaimId.Value) == 1 && len(in.ClaimId.Value[0]) < 20 {
+			if in.ClaimId.Invert {
+				q = q.MustNot(elastic.NewPrefixQuery("claim_id.keyword", in.ClaimId.Value[0]))
+			} else {
+				q = q.Must(elastic.NewPrefixQuery("claim_id.keyword", in.ClaimId.Value[0]))
+			}
 		} else {
-			q = q.Must(elastic.NewTermsQuery("claim_id.keyword", searchVals...))
+			if in.ClaimId.Invert {
+				q = q.MustNot(elastic.NewTermsQuery("claim_id.keyword", searchVals...))
+			} else {
+				q = q.Must(elastic.NewTermsQuery("claim_id.keyword", searchVals...))
+			}
 		}
 	}
 
@@ -130,45 +232,73 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		q = q.Must(elastic.NewTermQuery("public_key_hash.keyword", value))
 	}
 
-	q = AddTermsQuery(in.PublicKeyHash, "public_key_hash.keyword", q)
-	q = AddTermsQuery(in.Author, "author.keyword", q)
-	q = AddTermsQuery(in.Title, "title.keyword", q)
-	q = AddTermsQuery(in.CanonicalUrl, "canonical_url.keyword", q)
-	q = AddTermsQuery(in.ChannelId, "channel_id.keyword", q)
-	q = AddTermsQuery(in.ClaimName, "claim_name.keyword", q)
-	q = AddTermsQuery(in.Description, "description.keyword", q)
-	q = AddTermsQuery(in.MediaType, "media_type.keyword", q)
-	q = AddTermsQuery(in.Normalized, "normalized.keyword", q)
-	q = AddTermsQuery(in.PublicKeyBytes, "public_key_bytes.keyword", q)
-	q = AddTermsQuery(in.ShortUrl, "short_url.keyword", q)
-	q = AddTermsQuery(in.Signature, "signature.keyword", q)
-	q = AddTermsQuery(in.SignatureDigest, "signature_digest.keyword", q)
-	q = AddTermsQuery(in.StreamType, "stream_type.keyword", q)
-	q = AddTermsQuery(in.TxId, "tx_id.keyword", q)
-	q = AddTermsQuery(in.FeeCurrency, "fee_currency.keyword", q)
-	q = AddTermsQuery(in.RepostedClaimId, "reposted_claim_id.keyword", q)
-	q = AddTermsQuery(in.Tags, "tags.keyword", q)
+	if in.HasChannelSignature {
+		q = q.Should(elastic.NewBoolQuery().Must(elastic.NewExistsQuery("signature_digest")))
+		if in.SignatureValid {
+			q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid))
+		}
+	} else if in.SignatureValid {
+		//FIXME Might need to abstract this to another message so we can tell if the param is passed
+		//without relying on it's truth value
+		q = q.MinimumNumberShouldMatch(1)
+		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
+		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid))
+	}
 
-	q = AddRangeQuery(in.TxPosition, "tx_position", q)
-	q = AddRangeQuery(in.Amount, "amount", q)
-	q = AddRangeQuery(in.Timestamp, "timestamp", q)
-	q = AddRangeQuery(in.CreationTimestamp, "creation_timestamp", q)
-	q = AddRangeQuery(in.Height, "height", q)
-	q = AddRangeQuery(in.CreationHeight, "creation_height", q)
-	q = AddRangeQuery(in.ActivationHeight, "activation_height", q)
-	q = AddRangeQuery(in.ExpirationHeight, "expiration_height", q)
-	q = AddRangeQuery(in.ReleaseTime, "release_time", q)
-	q = AddRangeQuery(in.Reposted, "reposted", q)
-	q = AddRangeQuery(in.FeeAmount, "fee_amount", q)
-	q = AddRangeQuery(in.Duration, "duration", q)
-	q = AddRangeQuery(in.CensorType, "censor_type", q)
-	q = AddRangeQuery(in.ChannelJoin, "channel_join", q)
-	q = AddRangeQuery(in.EffectiveAmount, "effective_amount", q)
-	q = AddRangeQuery(in.SupportAmount, "support_amount", q)
-	q = AddRangeQuery(in.TrendingGroup, "trending_group", q)
-	q = AddRangeQuery(in.TrendingMixed, "trending_mixed", q)
-	q = AddRangeQuery(in.TrendingLocal, "trending_local", q)
-	q = AddRangeQuery(in.TrendingGlobal, "trending_global", q)
+	if in.HasSource {
+		q = q.MinimumNumberShouldMatch(1)
+		isStreamOrReport := elastic.NewTermsQuery("claim_type", claimTypes["stream"], claimTypes["repost"])
+		q = q.Should(elastic.NewBoolQuery().Must(isStreamOrReport, elastic.NewMatchQuery("has_source", in.HasSource)))
+		q = q.Should(elastic.NewBoolQuery().MustNot(isStreamOrReport))
+		q = q.Should(elastic.NewBoolQuery().Must(elastic.NewTermQuery("reposted_claim_type", claimTypes["channel"])))
+	}
+
+	var collapse *elastic.CollapseBuilder
+	if in.LimitClaimsPerChannel > 0 {
+		innerHit := elastic.NewInnerHit().Size(int(in.LimitClaimsPerChannel)).Name("channel_id.keyword")
+		collapse = elastic.NewCollapseBuilder("channel_id.keyword").InnerHit(innerHit)
+	}
+
+
+	q = AddTermsField(in.PublicKeyHash, "public_key_hash.keyword", q)
+	q = AddTermsField(in.Author, "author.keyword", q)
+	q = AddTermsField(in.Title, "title.keyword", q)
+	q = AddTermsField(in.CanonicalUrl, "canonical_url.keyword", q)
+	q = AddTermsField(in.ClaimName, "claim_name.keyword", q)
+	q = AddTermsField(in.Description, "description.keyword", q)
+	q = AddTermsField(in.MediaType, "media_type.keyword", q)
+	q = AddTermsField(in.Normalized, "normalized.keyword", q)
+	q = AddTermsField(in.PublicKeyBytes, "public_key_bytes.keyword", q)
+	q = AddTermsField(in.ShortUrl, "short_url.keyword", q)
+	q = AddTermsField(in.Signature, "signature.keyword", q)
+	q = AddTermsField(in.SignatureDigest, "signature_digest.keyword", q)
+	q = AddTermsField(in.TxId, "tx_id.keyword", q)
+	q = AddTermsField(in.FeeCurrency, "fee_currency.keyword", q)
+	q = AddTermsField(in.RepostedClaimId, "reposted_claim_id.keyword", q)
+
+	q = AddInvertibleField(in.ChannelId, "channel_id.keyword", q)
+	q = AddInvertibleField(in.Tags, "tags.keyword", q)
+
+	q = AddRangeField(in.TxPosition, "tx_position", q)
+	q = AddRangeField(in.Amount, "amount", q)
+	q = AddRangeField(in.Timestamp, "timestamp", q)
+	q = AddRangeField(in.CreationTimestamp, "creation_timestamp", q)
+	q = AddRangeField(in.Height, "height", q)
+	q = AddRangeField(in.CreationHeight, "creation_height", q)
+	q = AddRangeField(in.ActivationHeight, "activation_height", q)
+	q = AddRangeField(in.ExpirationHeight, "expiration_height", q)
+	q = AddRangeField(in.ReleaseTime, "release_time", q)
+	q = AddRangeField(in.Reposted, "reposted", q)
+	q = AddRangeField(in.FeeAmount, "fee_amount", q)
+	q = AddRangeField(in.Duration, "duration", q)
+	q = AddRangeField(in.CensorType, "censor_type", q)
+	q = AddRangeField(in.ChannelJoin, "channel_join", q)
+	q = AddRangeField(in.EffectiveAmount, "effective_amount", q)
+	q = AddRangeField(in.SupportAmount, "support_amount", q)
+	q = AddRangeField(in.TrendingGroup, "trending_group", q)
+	q = AddRangeField(in.TrendingMixed, "trending_mixed", q)
+	q = AddRangeField(in.TrendingLocal, "trending_local", q)
+	q = AddRangeField(in.TrendingGlobal, "trending_global", q)
 
 	if in.Query != "" {
 		textQuery := elastic.NewSimpleQueryStringQuery(in.Query).
@@ -182,14 +312,18 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		q = q.Must(textQuery)
 	}
 
-
-	searchResult, err := client.Search().
+	search := client.Search().
 		//Index("twitter").   // search in index "twitter"
 		Query(q). // specify the query
-		//Sort("user", true). // sort by "user" field, ascending
-		From(0).Size(10). // take documents 0-9
-		//Pretty(true).       // pretty print request and response JSON
-		Do(ctx) // execute
+		From(from).Size(size)
+	if in.LimitClaimsPerChannel > 0 {
+		search = search.Collapse(collapse)
+	}
+	for _, x := range orderBy {
+		search = search.Sort(x.Field, x.is_asc)
+	}
+
+	searchResult, err := search.Do(ctx) // execute
 	if err != nil {
 		return nil, err
 	}
