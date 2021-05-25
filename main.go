@@ -16,17 +16,39 @@ import (
 )
 
 const (
-	port = ":50051"
+	defaultPort = "50051"
+	defaultRPCUser = "rpcuser"
+	defaultRPCPassword = "rpcpassword"
 )
 
-func parseArgs(searchRequest *pb.SearchRequest) {
-	query:= flag.String("query", "", "query string")
+type loginCreds struct {
+	Username, Password string
+}
+
+func (c *loginCreds) GetRequestMetadata(context.Context, ...string) (map[string]string, error) {
+	return map[string]string{
+		"username": c.Username,
+		"password": c.Password,
+	}, nil
+}
+
+func (c *loginCreds) RequireTransportSecurity() bool {
+	return false
+}
+
+
+func parseArgs(searchRequest *pb.SearchRequest) server.Args {
+	query := flag.String("query", "", "query string")
 	claimType := flag.String("claimType", "", "claim type")
 	id := flag.String("id", "", "_id")
 	author := flag.String("author", "", "author")
 	title := flag.String("title", "", "title")
 	channelName := flag.String("channelName", "", "channel name")
 	description := flag.String("description", "", "description")
+
+	port := flag.String("rpcport", defaultPort, "port")
+	user := flag.String("rpcuser", defaultRPCUser, "username")
+	pass := flag.String("rpcpassword", defaultRPCPassword, "password")
 
 	flag.Parse()
 
@@ -51,16 +73,31 @@ func parseArgs(searchRequest *pb.SearchRequest) {
 	if *description != "" {
 		searchRequest.Description = []string{*description}
 	}
+
+
+	return server.Args{Port: ":" + *port, User: *user, Pass: *pass}
+}
+
+func parseServerArgs() server.Args {
+	port := flag.String("rpcport", defaultPort, "port")
+	user := flag.String("rpcuser", defaultRPCUser, "username")
+	pass := flag.String("rpcpassword", defaultRPCPassword, "password")
+
+	flag.Parse()
+
+	return server.Args{Port: ":" + *port, User: *user, Pass: *pass}
 }
 
 func main() {
 	if len(os.Args) == 2 && os.Args[1] == "serve" {
-		l, err := net.Listen("tcp", port)
+		args := parseServerArgs()
+
+		l, err := net.Listen("tcp", args.Port)
 		if err != nil {
 			log.Fatalf("failed to listen: %v", err)
 		}
 
-		s := grpc.NewServer()
+		s := server.MakeHubServer(args)
 		pb.RegisterHubServer(s, &server.Server{})
 
 		log.Printf("listening on %s\n", l.Addr().String())
@@ -70,7 +107,18 @@ func main() {
 		return
 	}
 
-	conn, err := grpc.Dial("localhost"+port, grpc.WithInsecure(), grpc.WithBlock())
+	searchRequest := &pb.SearchRequest{}
+
+	args := parseArgs(searchRequest)
+
+	conn, err := grpc.Dial("localhost"+args.Port,
+		grpc.WithInsecure(),
+		//grpc.WithBlock(),
+		grpc.WithPerRPCCredentials(&loginCreds{
+			Username: args.User,
+			Password: args.Pass,
+		}),
+	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
 	}
@@ -91,9 +139,6 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	searchRequest := &pb.SearchRequest{}
-
-	parseArgs(searchRequest)
 
 	r, err := c.Search(ctx, searchRequest)
 	if err != nil {
