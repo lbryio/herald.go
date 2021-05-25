@@ -12,6 +12,7 @@ type Server struct {
 }
 
 type Args struct {
+	Serve bool
 	Port string
 	User string
 	Pass string

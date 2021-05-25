@@ -161,6 +161,10 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		from = int(in.Offset)
 	}
 
+	if len(in.Name) > 0 {
+		in.Normalized = in.Name
+	}
+
 	if len(in.OrderBy) > 0 {
 		for _, x := range in.OrderBy {
 			var toAppend string

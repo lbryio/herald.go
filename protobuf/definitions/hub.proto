@@ -27,7 +27,7 @@ message RangeField {
 
 message SearchRequest {
   string query = 1;
-  string name = 2;
+  repeated string name = 2;
   int32 amount_order = 3;
   int32 limit = 4;
   repeated string order_by = 5;

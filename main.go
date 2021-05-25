@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-	"os"
 	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -38,7 +37,9 @@ func (c *loginCreds) RequireTransportSecurity() bool {
 
 
 func parseArgs(searchRequest *pb.SearchRequest) server.Args {
+	serve := flag.String("serve", "", "server client")
 	query := flag.String("query", "", "query string")
+	name := flag.String("name", "", "name")
 	claimType := flag.String("claimType", "", "claim type")
 	id := flag.String("id", "", "_id")
 	author := flag.String("author", "", "author")
@@ -52,8 +53,16 @@ func parseArgs(searchRequest *pb.SearchRequest) server.Args {
 
 	flag.Parse()
 
+	args := server.Args{Serve: false, Port: ":" + *port, User: *user, Pass: *pass}
+
+	if *serve == "true" {
+		args.Serve = true
+	}
 	if *query != "" {
 		searchRequest.Query = *query
+	}
+	if *name!= "" {
+		searchRequest.Name = []string{*name}
 	}
 	if *claimType != "" {
 		searchRequest.ClaimType = []string{*claimType}
@@ -75,7 +84,7 @@ func parseArgs(searchRequest *pb.SearchRequest) server.Args {
 	}
 
 
-	return server.Args{Port: ":" + *port, User: *user, Pass: *pass}
+	return args
 }
 
 func parseServerArgs() server.Args {
@@ -89,8 +98,11 @@ func parseServerArgs() server.Args {
 }
 
 func main() {
-	if len(os.Args) == 2 && os.Args[1] == "serve" {
-		args := parseServerArgs()
+	searchRequest := &pb.SearchRequest{}
+
+	args := parseArgs(searchRequest)
+
+	if args.Serve {
 
 		l, err := net.Listen("tcp", args.Port)
 		if err != nil {
@@ -106,10 +118,6 @@ func main() {
 		}
 		return
 	}
-
-	searchRequest := &pb.SearchRequest{}
-
-	args := parseArgs(searchRequest)
 
 	conn, err := grpc.Dial("localhost"+args.Port,
 		grpc.WithInsecure(),
