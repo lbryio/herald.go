@@ -1,6 +1,7 @@
 syntax = "proto3";
 
 option go_package = "github.com/lbryio/hub/protobuf/go/pb";
+import "google/protobuf/wrappers.proto";
 
 package pb;
 
@@ -26,15 +27,15 @@ message RangeField {
 }
 
 message SearchRequest {
-  string query = 1;
+  string text = 1;
   repeated string name = 2;
-  int32 amount_order = 3;
-  int32 limit = 4;
+  .google.protobuf.Int32Value amount_order = 3;
+  .google.protobuf.Int32Value limit = 4;
   repeated string order_by = 5;
-  int32 offset = 6;
-  bool is_controlling = 7;
-  string last_take_over_height = 20;
-  InvertibleField claim_id = 21;
+  .google.protobuf.Int32Value offset = 6;
+  .google.protobuf.BoolValue is_controlling = 7;
+  string last_take_over_height = 19;
+  InvertibleField claim_id = 20;
   repeated string claim_name = 22;
   repeated string normalized = 23;
   RangeField tx_position = 24;
@@ -62,27 +63,28 @@ message SearchRequest {
   RangeField censor_type = 46;
   string claims_in_channel = 47;
   RangeField channel_join = 48;
-  bool signature_valid = 49;
-  RangeField effective_amount = 50;
-  RangeField support_amount = 51;
-  RangeField trending_group = 52;
-  RangeField trending_mixed = 53;
-  RangeField trending_local = 54;
-  RangeField trending_global = 55;
-  InvertibleField channel_id = 56;
-  repeated string tx_id = 57;
-  string tx_nout = 58;
-  repeated string signature = 59;
-  repeated string signature_digest = 60;
-  repeated string public_key_bytes = 61;
-  repeated string public_key_hash = 62;
-  string public_key_id = 63;
-  repeated bytes _id = 64;
-  InvertibleField tags = 65;
-  repeated string reposted_claim_id = 66;
-  bool has_channel_signature = 67;
-  bool has_source = 68;
-  int32 limit_claims_per_channel = 69;
+  .google.protobuf.BoolValue signature_valid = 49;
+  RangeField effective_amount = 51;
+  RangeField support_amount = 52;
+  RangeField trending_group = 53;
+  RangeField trending_mixed = 54;
+  RangeField trending_local = 55;
+  RangeField trending_global = 56;
+  InvertibleField channel_id = 57;
+  InvertibleField channel_ids = 58;
+  repeated string tx_id = 59;
+  .google.protobuf.Int32Value tx_nout = 60;
+  repeated string signature = 61;
+  repeated string signature_digest = 62;
+  repeated string public_key_bytes = 63;
+  repeated string public_key_hash = 64;
+  string public_key_id = 65;
+  repeated bytes _id = 66;
+  InvertibleField tags = 67;
+  repeated string reposted_claim_id = 68;
+  .google.protobuf.BoolValue has_channel_signature = 69;
+  .google.protobuf.BoolValue has_source = 70;
+  .google.protobuf.Int32Value limit_claims_per_channel = 71;
 }
 
 message SearchReply {

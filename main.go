@@ -46,7 +46,7 @@ func parseArgs(searchRequest *pb.SearchRequest) server.Args {
 	user := parser.String("", "rpcuser", &argparse.Options{Required: false, Help: "user", Default: defaultRPCUser})
 	pass := parser.String("", "rpcpassword", &argparse.Options{Required: false, Help: "password", Default: defaultRPCPassword})
 
-	query := parser.String("", "query", &argparse.Options{Required: false, Help: "text query"})
+	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
 	claimType := parser.String("", "claim_type", &argparse.Options{Required: false, Help: "claim_type"})
 	id := parser.String("", "id", &argparse.Options{Required: false, Help: "id"})
@@ -75,8 +75,8 @@ func parseArgs(searchRequest *pb.SearchRequest) server.Args {
 		args.Serve = true
 	}
 
-	if *query != "" {
-		searchRequest.Query = *query
+	if *text != "" {
+		searchRequest.Text = *text
 	}
 	if *name!= "" {
 		searchRequest.Name = []string{*name}

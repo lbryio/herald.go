@@ -3,16 +3,14 @@ package server
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
-	"fmt"
-	pb "github.com/lbryio/hub/protobuf/go"
-	"log"
-	"reflect"
-
 	"github.com/btcsuite/btcutil/base58"
+	"github.com/golang/protobuf/ptypes/wrappers"
+	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/unicode/norm"
+	"log"
+	"reflect"
 )
 
 type record struct {
@@ -157,18 +155,22 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 
 	q := elastic.NewBoolQuery()
 
-	if in.AmountOrder > 0 {
-		in.Limit = 1
+	if in.IsControlling != nil {
+		q = q.Must(elastic.NewTermQuery("is_controlling", in.IsControlling.Value))
+	}
+
+	if in.AmountOrder != nil {
+		in.Limit.Value = 1
 		in.OrderBy = []string{"effective_amount"}
-		in.Offset = in.AmountOrder - 1
+		in.Offset = &wrappers.Int32Value{Value: in.AmountOrder.Value - 1}
 	}
 
-	if in.Limit > 0 {
-		size = int(in.Limit)
+	if in.Limit != nil {
+		size = int(in.Limit.Value)
 	}
 
-	if in.Offset > 0 {
-		from = int(in.Offset)
+	if in.Offset != nil {
+		from = int(in.Offset.Value)
 	}
 
 	if len(in.Name) > 0 {
@@ -187,15 +189,20 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 				is_asc = true
 				x = x[1:]
 			}
+			println(x)
 			if _, ok := replacements[x]; ok {
 				toAppend = replacements[x]
+			} else {
+				toAppend = x
 			}
-			if _, ok := textFields[x]; ok {
-				toAppend = x + ".keyword"
+
+			if _, ok := textFields[toAppend]; ok {
+				toAppend = toAppend + ".keyword"
 			}
 			orderBy = append(orderBy, orderField{toAppend, is_asc})
 		}
 	}
+	println(orderBy)
 
 	if len(in.ClaimType) > 0 {
 		searchVals := make([]interface{}, len(in.ClaimType))
@@ -246,37 +253,40 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 	if in.PublicKeyId != "" {
-		value := hex.Dump(base58.Decode(in.PublicKeyId)[1:21])
+		value := hex.EncodeToString(base58.Decode(in.PublicKeyId)[1:21])
 		q = q.Must(elastic.NewTermQuery("public_key_hash.keyword", value))
 	}
 
-	if in.HasChannelSignature {
-		q = q.Should(elastic.NewBoolQuery().Must(elastic.NewExistsQuery("signature_digest")))
-		if in.SignatureValid {
-			q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid))
+	if in.HasChannelSignature != nil && in.HasChannelSignature.Value {
+		q = q.Must(elastic.NewExistsQuery("signature_digest"))
+		if in.SignatureValid != nil {
+			q = q.Must(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
 		}
-	} else if in.SignatureValid {
+	} else if in.SignatureValid != nil {
 		//FIXME Might need to abstract this to another message so we can tell if the param is passed
 		//without relying on it's truth value
 		q = q.MinimumNumberShouldMatch(1)
 		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
-		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid))
+		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
 	}
 
-	if in.HasSource {
+	if in.HasSource != nil {
 		q = q.MinimumNumberShouldMatch(1)
-		isStreamOrReport := elastic.NewTermsQuery("claim_type", claimTypes["stream"], claimTypes["repost"])
-		q = q.Should(elastic.NewBoolQuery().Must(isStreamOrReport, elastic.NewMatchQuery("has_source", in.HasSource)))
-		q = q.Should(elastic.NewBoolQuery().MustNot(isStreamOrReport))
+		isStreamOrRepost := elastic.NewTermsQuery("claim_type", claimTypes["stream"], claimTypes["repost"])
+		q = q.Should(elastic.NewBoolQuery().Must(isStreamOrRepost, elastic.NewMatchQuery("has_source", in.HasSource.Value)))
+		q = q.Should(elastic.NewBoolQuery().MustNot(isStreamOrRepost))
 		q = q.Should(elastic.NewBoolQuery().Must(elastic.NewTermQuery("reposted_claim_type", claimTypes["channel"])))
 	}
 
 	var collapse *elastic.CollapseBuilder
-	if in.LimitClaimsPerChannel > 0 {
-		innerHit := elastic.NewInnerHit().Size(int(in.LimitClaimsPerChannel)).Name("channel_id.keyword")
+	if in.LimitClaimsPerChannel != nil {
+		innerHit := elastic.NewInnerHit().Size(int(in.LimitClaimsPerChannel.Value)).Name("channel_id.keyword")
 		collapse = elastic.NewCollapseBuilder("channel_id.keyword").InnerHit(innerHit)
 	}
 
+	if in.TxNout != nil {
+		q = q.Must(elastic.NewTermQuery("tx_nout", in.TxNout.Value))
+	}
 
 	q = AddTermsField(in.PublicKeyHash, "public_key_hash.keyword", q)
 	q = AddTermsField(in.Author, "author.keyword", q)
@@ -295,6 +305,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	q = AddTermsField(in.RepostedClaimId, "reposted_claim_id.keyword", q)
 
 	q = AddInvertibleField(in.ChannelId, "channel_id.keyword", q)
+	q = AddInvertibleField(in.ChannelIds, "channel_id.keyword", q)
 	q = AddInvertibleField(in.Tags, "tags.keyword", q)
 
 	q = AddRangeField(in.TxPosition, "tx_position", q)
@@ -318,8 +329,8 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	q = AddRangeField(in.TrendingLocal, "trending_local", q)
 	q = AddRangeField(in.TrendingGlobal, "trending_global", q)
 
-	if in.Query != "" {
-		textQuery := elastic.NewSimpleQueryStringQuery(in.Query).
+	if in.Text != "" {
+		textQuery := elastic.NewSimpleQueryStringQuery(in.Text).
 			FieldWithBoost("claim_name", 4).
 			FieldWithBoost("channel_name", 8).
 			FieldWithBoost("title", 1).
@@ -331,13 +342,28 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 
+	indices, err := client.IndexNames()
+	if err != nil {
+		log.Fatalln(err)
+	}
+	searchIndices := make([]string, len(indices)-1)
+	j := 0
+	for i := 0; i < len(indices); i++ {
+		if indices[i] == "claims" {
+			continue
+		}
+		searchIndices[j] = indices[i]
+		j = j + 1
+	}
+
 	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
 	search := client.Search().
+		Index(searchIndices...).
 		FetchSourceContext(fsc).
 		//Index("twitter").   // search in index "twitter"
 		Query(q). // specify the query
 		From(from).Size(size)
-	if in.LimitClaimsPerChannel > 0 {
+	if in.LimitClaimsPerChannel != nil {
 		search = search.Collapse(collapse)
 	}
 	for _, x := range orderBy {
@@ -349,7 +375,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		return nil, err
 	}
 
-	log.Printf("%s: found %d results in %dms\n", in.Query, len(searchResult.Hits.Hits), searchResult.TookInMillis)
+	log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
 
 	txos := make([]*pb.Output, len(searchResult.Hits.Hits))
 
@@ -365,25 +391,25 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 	// or if you want more control
-	for _, hit := range searchResult.Hits.Hits {
-		// hit.Index contains the name of the index
-
-		var t map[string]interface{} // or could be a Record
-		err := json.Unmarshal(hit.Source, &t)
-		if err != nil {
-			return nil, err
-		}
-
-		b, err := json.MarshalIndent(t, "", "  ")
-		if err != nil {
-			fmt.Println("error:", err)
-		}
-		fmt.Print(string(b))
-		//for k := range t {
-		//	fmt.Println(k)
-		//}
-		//return nil, nil
-	}
+	//for _, hit := range searchResult.Hits.Hits {
+	//	// hit.Index contains the name of the index
+	//
+	//	var t map[string]interface{} // or could be a Record
+	//	err := json.Unmarshal(hit.Source, &t)
+	//	if err != nil {
+	//		return nil, err
+	//	}
+	//
+	//	b, err := json.MarshalIndent(t, "", "  ")
+	//	if err != nil {
+	//		fmt.Println("error:", err)
+	//	}
+	//	fmt.Println(string(b))
+	//	//for k := range t {
+	//	//	fmt.Println(k)
+	//	//}
+	//	//return nil, nil
+	//}
 
 	return &pb.SearchReply{
 		Txos:  txos,
