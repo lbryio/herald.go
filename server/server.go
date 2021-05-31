@@ -5,6 +5,7 @@ import (
 	pb "github.com/lbryio/hub/protobuf/go"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
+	"log"
 )
 
 type Server struct {
@@ -68,11 +69,11 @@ func (EmptyMetadataErr) Error() string {
 */
 
 func MakeHubServer(args Args) *grpc.Server {
-	authorize := makeAuthorizeFunc(args.User, args.Pass)
-	return grpc.NewServer(
-		grpc.StreamInterceptor(makeStreamInterceptor(authorize)),
-		grpc.UnaryInterceptor(makeUnaryInterceptor(authorize)),
-	)
+	// authorize := makeAuthorizeFunc(args.User, args.Pass)
+	return grpc.NewServer()
+	//	grpc.StreamInterceptor(makeStreamInterceptor(authorize)),
+	//  grpc.UnaryInterceptor(makeUnaryInterceptor(authorize)),
+	//)
 }
 
 func makeStreamInterceptor(authorize func(context.Context) error) func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
@@ -100,6 +101,7 @@ func makeAuthorizeFunc(username string, password string) func(context.Context) e
 
 	return func(ctx context.Context) error {
 		if md, ok := metadata.FromIncomingContext(ctx); ok {
+			log.Println(md)
 			if len(md["username"]) > 0 && md["username"][0] == username &&
 				len(md["password"]) > 0 && md["password"][0] == password {
 				return nil

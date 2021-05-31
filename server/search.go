@@ -3,17 +3,22 @@ package server
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"log"
 	"reflect"
 
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/olivere/elastic/v7"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/unicode/norm"
 )
 
 type record struct {
-	Txid string `json:"tx_id"`
-	Nout uint32 `json:"tx_nout"`
+	Txid string   `json:"tx_id"`
+	Nout uint32   `json:"tx_nout"`
+	Height uint32 `json:"height"`
 }
 
 type orderField struct {
@@ -77,6 +82,11 @@ func AddInvertibleField(field *pb.InvertibleField, name string, q *elastic.BoolQ
 	} else {
 		return q.Must(elastic.NewTermsQuery(name, searchVals...))
 	}
+}
+
+func normalize(s string) string {
+	c := cases.Fold()
+	return c.String(norm.NFD.String(s))
 }
 
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
@@ -162,7 +172,11 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 	if len(in.Name) > 0 {
-		in.Normalized = in.Name
+		normalized := make([]string, len(in.Name))
+		for i := 0; i < len(in.Name); i++ {
+			normalized[i] = normalize(in.Name[i])
+		}
+		in.Normalized = normalized
 	}
 
 	if len(in.OrderBy) > 0 {
@@ -316,7 +330,10 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		q = q.Must(textQuery)
 	}
 
+
+	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
 	search := client.Search().
+		FetchSourceContext(fsc).
 		//Index("twitter").   // search in index "twitter"
 		Query(q). // specify the query
 		From(from).Size(size)
@@ -342,25 +359,31 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 			txos[i] = &pb.Output{
 				TxHash: toHash(t.Txid),
 				Nout:   t.Nout,
+				Height: t.Height,
 			}
 		}
 	}
 
 	// or if you want more control
-	//for _, hit := range searchResult.Hits.Hits {
-	//	// hit.Index contains the name of the index
-	//
-	//	var t map[string]interface{} // or could be a Record
-	//	err := json.Unmarshal(hit.Source, &t)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	for k := range t {
-	//		fmt.Println(k)
-	//	}
-	//	return nil, nil
-	//}
+	for _, hit := range searchResult.Hits.Hits {
+		// hit.Index contains the name of the index
+
+		var t map[string]interface{} // or could be a Record
+		err := json.Unmarshal(hit.Source, &t)
+		if err != nil {
+			return nil, err
+		}
+
+		b, err := json.MarshalIndent(t, "", "  ")
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		fmt.Print(string(b))
+		//for k := range t {
+		//	fmt.Println(k)
+		//}
+		//return nil, nil
+	}
 
 	return &pb.SearchReply{
 		Txos:  txos,

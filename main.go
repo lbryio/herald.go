@@ -2,16 +2,18 @@ package main
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
+	"github.com/akamensky/argparse"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 const (
@@ -35,29 +37,44 @@ func (c *loginCreds) RequireTransportSecurity() bool {
 	return false
 }
 
-
 func parseArgs(searchRequest *pb.SearchRequest) server.Args {
-	serve := flag.String("serve", "", "server client")
-	query := flag.String("query", "", "query string")
-	name := flag.String("name", "", "name")
-	claimType := flag.String("claimType", "", "claim type")
-	id := flag.String("id", "", "_id")
-	author := flag.String("author", "", "author")
-	title := flag.String("title", "", "title")
-	channelName := flag.String("channelName", "", "channel name")
-	description := flag.String("description", "", "description")
+	parser := argparse.NewParser("hub", "hub server and client")
 
-	port := flag.String("rpcport", defaultPort, "port")
-	user := flag.String("rpcuser", defaultRPCUser, "username")
-	pass := flag.String("rpcpassword", defaultRPCPassword, "password")
+	serveCmd := parser.NewCommand("serve", "start the hub server")
 
-	flag.Parse()
+	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
+	user := parser.String("", "rpcuser", &argparse.Options{Required: false, Help: "user", Default: defaultRPCUser})
+	pass := parser.String("", "rpcpassword", &argparse.Options{Required: false, Help: "password", Default: defaultRPCPassword})
+
+	query := parser.String("", "query", &argparse.Options{Required: false, Help: "text query"})
+	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
+	claimType := parser.String("", "claim_type", &argparse.Options{Required: false, Help: "claim_type"})
+	id := parser.String("", "id", &argparse.Options{Required: false, Help: "id"})
+	author := parser.String("", "author", &argparse.Options{Required: false, Help: "author"})
+	title := parser.String("", "title", &argparse.Options{Required: false, Help: "title"})
+	description := parser.String("", "description", &argparse.Options{Required: false, Help: "description"})
+	channelId := parser.String("", "channel_id", &argparse.Options{Required: false, Help: "channel id"})
+	channelIds := parser.StringList("", "channel_ids", &argparse.Options{Required: false, Help: "channel ids"})
+
+	// Now parse the arguments
+	err := parser.Parse(os.Args)
+	if err != nil {
+		log.Fatalln(parser.Usage(err))
+	}
 
 	args := server.Args{Serve: false, Port: ":" + *port, User: *user, Pass: *pass}
 
-	if *serve == "true" {
+	/*
+	Verify no invalid argument combinations
+	 */
+	if len(*channelIds) > 0 && *channelId != "" {
+		log.Fatal("Cannot specify both channel_id and channel_ids")
+	}
+
+	if serveCmd.Happened() {
 		args.Serve = true
 	}
+
 	if *query != "" {
 		searchRequest.Query = *query
 	}
@@ -76,25 +93,17 @@ func parseArgs(searchRequest *pb.SearchRequest) server.Args {
 	if *title != "" {
 		searchRequest.Title = []string{*title}
 	}
-	if *channelName != "" {
-		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: []string{*channelName}}
-	}
 	if *description != "" {
 		searchRequest.Description = []string{*description}
 	}
-
+	if *channelId != "" {
+		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: []string{*channelId}}
+	}
+	if len(*channelIds) > 0 {
+		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: *channelIds}
+	}
 
 	return args
-}
-
-func parseServerArgs() server.Args {
-	port := flag.String("rpcport", defaultPort, "port")
-	user := flag.String("rpcuser", defaultRPCUser, "username")
-	pass := flag.String("rpcpassword", defaultRPCPassword, "password")
-
-	flag.Parse()
-
-	return server.Args{Port: ":" + *port, User: *user, Pass: *pass}
 }
 
 func main() {
@@ -111,6 +120,7 @@ func main() {
 
 		s := server.MakeHubServer(args)
 		pb.RegisterHubServer(s, &server.Server{})
+		reflection.Register(s)
 
 		log.Printf("listening on %s\n", l.Addr().String())
 		if err := s.Serve(l); err != nil {
@@ -121,11 +131,11 @@ func main() {
 
 	conn, err := grpc.Dial("localhost"+args.Port,
 		grpc.WithInsecure(),
-		//grpc.WithBlock(),
-		grpc.WithPerRPCCredentials(&loginCreds{
-			Username: args.User,
-			Password: args.Pass,
-		}),
+		grpc.WithBlock(),
+		//grpc.WithPerRPCCredentials(&loginCreds{
+		//	Username: args.User,
+		//	Password: args.Pass,
+		//}),
 	)
 	if err != nil {
 		log.Fatalf("did not connect: %v", err)
