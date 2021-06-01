@@ -37,7 +37,7 @@ func (c *loginCreds) RequireTransportSecurity() bool {
 	return false
 }
 
-func parseArgs(searchRequest *pb.SearchRequest) server.Args {
+func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	parser := argparse.NewParser("hub", "hub server and client")
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
@@ -62,7 +62,7 @@ func parseArgs(searchRequest *pb.SearchRequest) server.Args {
 		log.Fatalln(parser.Usage(err))
 	}
 
-	args := server.Args{Serve: false, Port: ":" + *port, User: *user, Pass: *pass}
+	args := &server.Args{Serve: false, Port: ":" + *port, User: *user, Pass: *pass}
 
 	/*
 	Verify no invalid argument combinations
@@ -119,11 +119,11 @@ func main() {
 		}
 
 		s := server.MakeHubServer(args)
-		pb.RegisterHubServer(s, &server.Server{})
-		reflection.Register(s)
+		pb.RegisterHubServer(s.GrpcServer, s)
+		reflection.Register(s.GrpcServer)
 
 		log.Printf("listening on %s\n", l.Addr().String())
-		if err := s.Serve(l); err != nil {
+		if err := s.GrpcServer.Serve(l); err != nil {
 			log.Fatalf("failed to serve: %v", err)
 		}
 		return

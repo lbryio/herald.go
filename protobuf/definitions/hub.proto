@@ -80,11 +80,15 @@ message SearchRequest {
   repeated string public_key_hash = 64;
   string public_key_id = 65;
   repeated bytes _id = 66;
-  InvertibleField tags = 67;
-  repeated string reposted_claim_id = 68;
-  .google.protobuf.BoolValue has_channel_signature = 69;
-  .google.protobuf.BoolValue has_source = 70;
-  .google.protobuf.Int32Value limit_claims_per_channel = 71;
+  repeated string any_tags = 67;
+  repeated string all_tags = 68;
+  repeated string not_tags = 69;
+  repeated string reposted_claim_id = 70;
+  .google.protobuf.BoolValue has_channel_signature = 71;
+  .google.protobuf.BoolValue has_source = 72;
+  .google.protobuf.Int32Value limit_claims_per_channel = 73;
+  repeated string any_languages = 74;
+  repeated string all_languages = 75;
 }
 
 message SearchReply {

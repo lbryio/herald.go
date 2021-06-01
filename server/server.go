@@ -6,9 +6,14 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"log"
+	"regexp"
 )
 
 type Server struct {
+	GrpcServer   *grpc.Server
+	Args 	     *Args
+	MultiSpaceRe *regexp.Regexp
+	WeirdCharsRe *regexp.Regexp
 	pb.UnimplementedHubServer
 }
 
@@ -68,9 +73,29 @@ func (EmptyMetadataErr) Error() string {
 	'blockchain.address.unsubscribe'
 */
 
-func MakeHubServer(args Args) *grpc.Server {
+//func MakeHubServer(args Args) *grpc.Server {
+func MakeHubServer(args *Args) *Server {
 	// authorize := makeAuthorizeFunc(args.User, args.Pass)
-	return grpc.NewServer()
+	grpcServer := grpc.NewServer()
+
+	multiSpaceRe, err := regexp.Compile("\\s{2,}")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	weirdCharsRe, err := regexp.Compile("[#!~]")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s := &Server {
+		GrpcServer: grpcServer,
+		Args: args,
+		MultiSpaceRe: multiSpaceRe,
+		WeirdCharsRe: weirdCharsRe,
+	}
+
+	return s
 	//	grpc.StreamInterceptor(makeStreamInterceptor(authorize)),
 	//  grpc.UnaryInterceptor(makeUnaryInterceptor(authorize)),
 	//)

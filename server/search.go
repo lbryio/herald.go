@@ -3,14 +3,18 @@ package server
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
+	"fmt"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 	"golang.org/x/text/unicode/norm"
 	"log"
 	"reflect"
+	"strings"
 )
 
 type record struct {
@@ -46,6 +50,20 @@ func AddTermsField(arr []string, name string, q *elastic.BoolQuery) *elastic.Boo
 	return q
 }
 
+func AddIndividualTermFields(arr []string, name string, q *elastic.BoolQuery, invert bool) *elastic.BoolQuery {
+	if len(arr) > 0 {
+		for _, x := range arr {
+			if invert {
+				q = q.MustNot(elastic.NewTermQuery(name, x))
+			} else {
+				q = q.Must(elastic.NewTermQuery(name, x))
+			}
+		}
+		return q
+	}
+	return q
+}
+
 func AddRangeField(rq *pb.RangeField, name string, q *elastic.BoolQuery) *elastic.BoolQuery {
 	if rq == nil {
 		return q
@@ -60,13 +78,13 @@ func AddRangeField(rq *pb.RangeField, name string, q *elastic.BoolQuery) *elasti
 	if rq.Op == pb.RangeField_EQ {
 		return AddTermsField(rq.Value, name, q)
 	} else if rq.Op == pb.RangeField_LT {
-		return q.Must(elastic.NewRangeQuery(name).Lt(rq.Value))
+		return q.Must(elastic.NewRangeQuery(name).Lt(rq.Value[0]))
 	} else if rq.Op == pb.RangeField_LTE {
-		return q.Must(elastic.NewRangeQuery(name).Lte(rq.Value))
+		return q.Must(elastic.NewRangeQuery(name).Lte(rq.Value[0]))
 	} else if rq.Op == pb.RangeField_GT {
-		return q.Must(elastic.NewRangeQuery(name).Gt(rq.Value))
+		return q.Must(elastic.NewRangeQuery(name).Gt(rq.Value[0]))
 	} else { // pb.RangeField_GTE
-		return q.Must(elastic.NewRangeQuery(name).Gte(rq.Value))
+		return q.Must(elastic.NewRangeQuery(name).Gte(rq.Value[0]))
 	}
 }
 
@@ -76,7 +94,11 @@ func AddInvertibleField(field *pb.InvertibleField, name string, q *elastic.BoolQ
 	}
 	searchVals := StrArrToInterface(field.Value)
 	if field.Invert {
-		return q.MustNot(elastic.NewTermsQuery(name, searchVals...))
+		q = q.MustNot(elastic.NewTermsQuery(name, searchVals...))
+		if name == "channel_id.keyword" {
+			q = q.MustNot(elastic.NewTermsQuery("_id", searchVals...))
+		}
+		return q
 	} else {
 		return q.Must(elastic.NewTermsQuery(name, searchVals...))
 	}
@@ -85,6 +107,26 @@ func AddInvertibleField(field *pb.InvertibleField, name string, q *elastic.BoolQ
 func normalize(s string) string {
 	c := cases.Fold()
 	return c.String(norm.NFD.String(s))
+}
+
+func (s *Server) normalizeTag(tag string) string {
+	c := cases.Lower(language.English)
+	res := s.MultiSpaceRe.ReplaceAll(
+		s.WeirdCharsRe.ReplaceAll(
+			[]byte(strings.TrimSpace(strings.Replace(c.String(tag), "'", "", -1))),
+			[]byte(" ")),
+		[]byte(" "))
+
+	return string(res)
+}
+
+
+func (s *Server) cleanTags(tags []string) []string {
+	cleanedTags := make([]string, len(tags))
+	for i, tag := range tags {
+		cleanedTags[i] = s.normalizeTag(tag)
+	}
+	return cleanedTags
 }
 
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
@@ -189,7 +231,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 				is_asc = true
 				x = x[1:]
 			}
-			println(x)
 			if _, ok := replacements[x]; ok {
 				toAppend = replacements[x]
 			} else {
@@ -202,7 +243,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 			orderBy = append(orderBy, orderField{toAppend, is_asc})
 		}
 	}
-	println(orderBy)
 
 	if len(in.ClaimType) > 0 {
 		searchVals := make([]interface{}, len(in.ClaimType))
@@ -218,7 +258,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		for i := 0; i < len(in.StreamType); i++ {
 			searchVals[i] = streamTypes[in.StreamType[i]]
 		}
-		q = q.Must(elastic.NewTermsQuery("stream_type.keyword", searchVals...))
+		q = q.Must(elastic.NewTermsQuery("stream_type", searchVals...))
 	}
 
 	if len(in.XId) > 0 {
@@ -263,8 +303,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 			q = q.Must(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
 		}
 	} else if in.SignatureValid != nil {
-		//FIXME Might need to abstract this to another message so we can tell if the param is passed
-		//without relying on it's truth value
 		q = q.MinimumNumberShouldMatch(1)
 		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
 		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
@@ -280,6 +318,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 
 	var collapse *elastic.CollapseBuilder
 	if in.LimitClaimsPerChannel != nil {
+		println(in.LimitClaimsPerChannel.Value)
 		innerHit := elastic.NewInnerHit().Size(int(in.LimitClaimsPerChannel.Value)).Name("channel_id.keyword")
 		collapse = elastic.NewCollapseBuilder("channel_id.keyword").InnerHit(innerHit)
 	}
@@ -304,9 +343,18 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	q = AddTermsField(in.FeeCurrency, "fee_currency.keyword", q)
 	q = AddTermsField(in.RepostedClaimId, "reposted_claim_id.keyword", q)
 
+
+	q = AddTermsField(s.cleanTags(in.AnyTags), "tags.keyword", q)
+	q = AddIndividualTermFields(s.cleanTags(in.AllTags), "tags.keyword", q, false)
+	q = AddIndividualTermFields(s.cleanTags(in.NotTags), "tags.keyword", q, true)
+	q = AddTermsField(in.AnyLanguages, "languages", q)
+	q = AddIndividualTermFields(in.AllLanguages, "languages", q, false)
+
 	q = AddInvertibleField(in.ChannelId, "channel_id.keyword", q)
 	q = AddInvertibleField(in.ChannelIds, "channel_id.keyword", q)
-	q = AddInvertibleField(in.Tags, "tags.keyword", q)
+	/*
+
+	 */
 
 	q = AddRangeField(in.TxPosition, "tx_position", q)
 	q = AddRangeField(in.Amount, "amount", q)
@@ -342,6 +390,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 
+	//TODO make this only happen in dev environment
 	indices, err := client.IndexNames()
 	if err != nil {
 		log.Fatalln(err)
@@ -360,13 +409,13 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	search := client.Search().
 		Index(searchIndices...).
 		FetchSourceContext(fsc).
-		//Index("twitter").   // search in index "twitter"
 		Query(q). // specify the query
 		From(from).Size(size)
 	if in.LimitClaimsPerChannel != nil {
 		search = search.Collapse(collapse)
 	}
 	for _, x := range orderBy {
+		log.Println(x.Field, x.is_asc)
 		search = search.Sort(x.Field, x.is_asc)
 	}
 
@@ -391,29 +440,30 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 	}
 
 	// or if you want more control
-	//for _, hit := range searchResult.Hits.Hits {
-	//	// hit.Index contains the name of the index
-	//
-	//	var t map[string]interface{} // or could be a Record
-	//	err := json.Unmarshal(hit.Source, &t)
-	//	if err != nil {
-	//		return nil, err
-	//	}
-	//
-	//	b, err := json.MarshalIndent(t, "", "  ")
-	//	if err != nil {
-	//		fmt.Println("error:", err)
-	//	}
-	//	fmt.Println(string(b))
-	//	//for k := range t {
-	//	//	fmt.Println(k)
-	//	//}
-	//	//return nil, nil
-	//}
+	for _, hit := range searchResult.Hits.Hits {
+		// hit.Index contains the name of the index
+
+		var t map[string]interface{} // or could be a Record
+		err := json.Unmarshal(hit.Source, &t)
+		if err != nil {
+			return nil, err
+		}
+
+		b, err := json.MarshalIndent(t, "", "  ")
+		if err != nil {
+			fmt.Println("error:", err)
+		}
+		fmt.Println(string(b))
+		//for k := range t {
+		//	fmt.Println(k)
+		//}
+		//return nil, nil
+	}
 
 	return &pb.SearchReply{
-		Txos:  txos,
-		Total: uint32(searchResult.TotalHits()),
+		Txos:   txos,
+		Total:  uint32(searchResult.TotalHits()),
+		Offset: uint32(int64(from) + searchResult.TotalHits()),
 	}, nil
 }
 
