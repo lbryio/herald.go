@@ -76,7 +76,7 @@ func AddRangeField(rq *pb.RangeField, name string, q *elastic.BoolQuery) *elasti
 		return AddTermsField(rq.Value, name, q)
 	}
 	if rq.Op == pb.RangeField_EQ {
-		return AddTermsField(rq.Value, name, q)
+		return q.Must(elastic.NewTermQuery(name, rq.Value[0]))
 	} else if rq.Op == pb.RangeField_LT {
 		return q.Must(elastic.NewRangeQuery(name).Lt(rq.Value[0]))
 	} else if rq.Op == pb.RangeField_LTE {
@@ -129,7 +129,7 @@ func (s *Server) cleanTags(tags []string) []string {
 	return cleanedTags
 }
 
-func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchReply, error) {
+func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
 	// TODO: reuse elastic client across requests
 	client, err := elastic.NewClient(elastic.SetSniff(false))
 	if err != nil {
@@ -460,7 +460,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.SearchRe
 		//return nil, nil
 	}
 
-	return &pb.SearchReply{
+	return &pb.Outputs{
 		Txos:   txos,
 		Total:  uint32(searchResult.TotalHits()),
 		Offset: uint32(int64(from) + searchResult.TotalHits()),

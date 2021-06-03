@@ -18,7 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HubClient interface {
-	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchReply, error)
+	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error)
 }
 
 type hubClient struct {
@@ -29,8 +29,8 @@ func NewHubClient(cc grpc.ClientConnInterface) HubClient {
 	return &hubClient{cc}
 }
 
-func (c *hubClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*SearchReply, error) {
-	out := new(SearchReply)
+func (c *hubClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error) {
+	out := new(Outputs)
 	err := c.cc.Invoke(ctx, "/pb.Hub/Search", in, out, opts...)
 	if err != nil {
 		return nil, err
@@ -42,7 +42,7 @@ func (c *hubClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.
 // All implementations must embed UnimplementedHubServer
 // for forward compatibility
 type HubServer interface {
-	Search(context.Context, *SearchRequest) (*SearchReply, error)
+	Search(context.Context, *SearchRequest) (*Outputs, error)
 	mustEmbedUnimplementedHubServer()
 }
 
@@ -50,7 +50,7 @@ type HubServer interface {
 type UnimplementedHubServer struct {
 }
 
-func (UnimplementedHubServer) Search(context.Context, *SearchRequest) (*SearchReply, error) {
+func (UnimplementedHubServer) Search(context.Context, *SearchRequest) (*Outputs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
 }
 func (UnimplementedHubServer) mustEmbedUnimplementedHubServer() {}
