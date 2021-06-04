@@ -614,7 +614,11 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	if err != nil {
 		log.Fatalln(err)
 	}
-	searchIndices := make([]string, len(indices)-1)
+	var numIndices = 0
+	if len(indices) > 0 {
+		numIndices = len(indices) - 1
+	}
+	searchIndices := make([]string, numIndices)
 	j := 0
 	for i := 0; i < len(indices); i++ {
 		if indices[i] == "claims" {

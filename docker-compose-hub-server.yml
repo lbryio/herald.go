@@ -9,13 +9,12 @@ services:
       - es01
     image: lbry/hub:latest
     restart: always
-    ports:
-      - "50051:50051" # rpc port
     environment:
       #- TCP_PORT=50051 # should probably have these supported by the go server too
       #- TCP_HOST=0.0.0.0
       - ELASTIC_HOST=http://127.0.0.1
       - ELASTIC_PORT=9200
+    network_mode: host
   es01:
     image: docker.elastic.co/elasticsearch/elasticsearch:7.12.1
     container_name: es01
@@ -32,7 +31,4 @@ services:
         hard: -1
     volumes:
       - es01:/usr/share/elasticsearch/data
-    ports:
-      - "9200:9200"
-      - "9300:9300"
-      #- 127.0.0.1:9200:9200
+    network_mode: host
