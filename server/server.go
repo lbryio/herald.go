@@ -24,6 +24,8 @@ type Args struct {
 	Port string
 	User string
 	Pass string
+	EsHost string
+	EsPort string
 }
 
 type AccessDeniedErr struct {}

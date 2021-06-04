@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/akamensky/argparse"
@@ -21,6 +22,8 @@ const (
 	defaultPort = "50051"
 	defaultRPCUser = "rpcuser"
 	defaultRPCPassword = "rpcpassword"
+	defaultEsHost = "http://localhost"
+	defaultEsPort = "9200"
 )
 
 type loginCreds struct {
@@ -39,6 +42,21 @@ func (c *loginCreds) RequireTransportSecurity() bool {
 }
 
 func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
+	getenvironment := func(data []string, getkeyval func(item string) (key, val string)) map[string]string {
+		items := make(map[string]string)
+		for _, item := range data {
+			key, val := getkeyval(item)
+			items[key] = val
+		}
+		return items
+	}
+	environment := getenvironment(os.Environ(), func(item string) (key, val string) {
+		splits := strings.Split(item, "=")
+		key = splits[0]
+		val = splits[1]
+		return
+	})
+
 	parser := argparse.NewParser("hub", "hub server and client")
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
@@ -63,7 +81,23 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 		log.Fatalln(parser.Usage(err))
 	}
 
-	args := &server.Args{Serve: false, Port: ":" + *port, User: *user, Pass: *pass}
+
+	args := &server.Args{
+		Serve: false,
+		Port: ":" + *port,
+		User: *user,
+		Pass: *pass,
+		EsHost: defaultEsHost,
+		EsPort: defaultEsPort,
+	}
+
+	if esHost, ok := environment["ELASTIC_HOST"]; ok {
+		args.EsHost = esHost
+	}
+
+	if esPort, ok := environment["ELASTIC_PORT"]; ok {
+		args.EsPort = esPort
+	}
 
 	/*
 	Verify no invalid argument combinations
@@ -109,6 +143,9 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 
 func main() {
 	searchRequest := &pb.SearchRequest{}
+	//
+	//res := schema.ParseURL("@abc#1111")
+	//log.Println(res)
 
 	args := parseArgs(searchRequest)
 

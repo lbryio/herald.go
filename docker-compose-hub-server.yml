@@ -1,0 +1,38 @@
+version: "3"
+
+volumes:
+  es01:
+
+services:
+  hub_server:
+    depends_on:
+      - es01
+    image: lbry/hub:latest
+    restart: always
+    ports:
+      - "50051:50051" # rpc port
+    environment:
+      #- TCP_PORT=50051 # should probably have these supported by the go server too
+      #- TCP_HOST=0.0.0.0
+      - ELASTIC_HOST=http://127.0.0.1
+      - ELASTIC_PORT=9200
+  es01:
+    image: docker.elastic.co/elasticsearch/elasticsearch:7.12.1
+    container_name: es01
+    environment:
+      - node.name=es01
+      - discovery.type=single-node
+      - indices.query.bool.max_clause_count=4096
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"  # no more than 32, remember to disable swap
+      #- "ES_JAVA_OPTS=-Xms8g -Xmx8g"  # no more than 32, remember to disable swap
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - es01:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+      #- 127.0.0.1:9200:9200

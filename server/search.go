@@ -341,7 +341,8 @@ func (s *Server) resolveUrl(ctx context.Context, rawUrl string) *urlResolution {
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
 	var client *elastic.Client = nil
 	if s.EsClient == nil {
-		tmpClient, err := elastic.NewClient(elastic.SetSniff(false))
+		esUrl := s.Args.EsHost + ":" + s.Args.EsPort
+		tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
 		if err != nil {
 			return nil, err
 		}
@@ -351,8 +352,8 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		client = s.EsClient
 	}
 
-	res := s.resolveUrl(ctx, "@abc#111")
-	log.Println(res)
+	//res := s.resolveUrl(ctx, "@abc#111")
+	//log.Println(res)
 
 	claimTypes := map[string]int {
 		"stream": 1,

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode/utf16"
 )
 
 type PathSegment struct {
@@ -123,9 +124,16 @@ func ParseURL(url string) *URL {
 }
 
 func createUrlRegex() *regexp.Regexp {
-	//invalidNamesRegex := "[^=&#:$@%?;\"/\\<>%{}|^~`\\[\\]" + "\u0000-\u0020\uD800-\uDFFF\uFFFE-\uFFFF]+"
+	d800 := []uint16{0xd800}
+	dfff := []uint16{0xdfff}
+	s1 := string(utf16.Decode(d800))
+	s2 := string(utf16.Decode(dfff))
+	log.Println(s1)
+	log.Println(s2)
+	//invalidNamesRegex := "[^=&#:$@%?;\"/\\<>%{}|^~`\\[\\]" + "\\u0000-\\u0020\\uD800-\\uDFFF\\uFFFE-\\uFFFF]+"
+	invalidNamesRegex := "[^=&#:$@%?;\"/\\<>%{}|^~`\\[\\]" + "\u0000-\u0020" + s1 + "-" + s2 + "\uFFFE-\uFFFF]+"
 	//invalidNamesRegex := "[^=&#:$@%?;\"/\\<>%{}|^~`\\[\\]" + "\u0000-\u0020-\uFFFE-\uFFFF]+"
-	invalidNamesRegex := "[^=&#:$@%?;\"/\\<>%{}|^~`\\[\\]" + "]+"
+	//invalidNamesRegex := "[^=&#:$@%?;\"/\\<>%{}|^~`\\[\\]" + "]+"
 
 	named := func (name string, regex string) string {
 		return "(?P<" + name + ">" + regex + ")"
