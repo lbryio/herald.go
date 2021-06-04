@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	pb "github.com/lbryio/hub/protobuf/go"
+	"github.com/olivere/elastic/v7"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/metadata"
 	"log"
@@ -14,6 +15,7 @@ type Server struct {
 	Args 	     *Args
 	MultiSpaceRe *regexp.Regexp
 	WeirdCharsRe *regexp.Regexp
+	EsClient     *elastic.Client
 	pb.UnimplementedHubServer
 }
 

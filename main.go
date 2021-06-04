@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/lbryio/hub/util"
 	"log"
 	"net"
 	"os"
@@ -166,6 +167,6 @@ func main() {
 	log.Printf("found %d results\n", r.GetTotal())
 
 	for _, t := range r.Txos {
-		fmt.Printf("%s:%d\n", server.FromHash(t.TxHash), t.Nout)
+		fmt.Printf("%s:%d\n", util.FromHash(t.TxHash), t.Nout)
 	}
 }
