@@ -1,4 +1,4 @@
 #!/bin/bash
 
 go build .
-docker build . -t lbry/hub:latest
+sudo docker build . -t lbry/hub:latest
