@@ -90,4 +90,5 @@ message SearchRequest {
   .google.protobuf.Int32Value limit_claims_per_channel = 73;
   repeated string any_languages = 74;
   repeated string all_languages = 75;
+  .google.protobuf.BoolValue remove_duplicates = 76;
 }

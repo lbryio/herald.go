@@ -22,11 +22,13 @@ import (
 )
 
 type record struct {
-	Txid string   	 `json:"tx_id"`
-	Nout uint32   	 `json:"tx_nout"`
-	Height uint32 	 `json:"height"`
-	ClaimId string 	 `json:"claim_id"`
-	ChannelId string `json:"channel_id"`
+	Txid           	string  `json:"tx_id"`
+	Nout           	uint32  `json:"tx_nout"`
+	Height         	uint32 	`json:"height"`
+	ClaimId        	string 	`json:"claim_id"`
+	ChannelId      	string 	`json:"channel_id"`
+	CreationHeight 	uint32 	`json:"creation_height"`
+	RepostedClaimId string  `json:"reposted_claim_id"`
 }
 
 type compareFunc func(r1, r2 **record, invert bool) int
@@ -506,7 +508,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		j = j + 1
 	}
 
-	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
+	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")//.Include("_id")
 	log.Printf("from: %d, size: %d\n", from, size)
 	search := client.Search().
 		Index(searchIndices...).
@@ -577,32 +579,30 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 			txos = append(txos, res)
 		}
 	}
+	//
+	//for _, rec := range records {
+	//	log.Println(*rec)
+	//}
+	//
+	//log.Println("#########################")
+	//
 
-	var finalRecords []*record
-	for _, rec := range records {
-		log.Println(*rec)
+	if in.RemoveDuplicates != nil {
+		records = removeDuplicates(records)
 	}
-
-
-	log.Println("#########################")
-
 
 	if in.LimitClaimsPerChannel != nil {
-		finalRecords = searchAhead(records, pageSize, int(in.LimitClaimsPerChannel.Value))
-		for _, rec := range finalRecords {
-			log.Println(*rec)
-		}
-	} else {
-		finalRecords = records
+		records = searchAhead(records, pageSize, int(in.LimitClaimsPerChannel.Value))
+		//for _, rec := range records {
+		//	log.Println(*rec)
+		//}
 	}
 
-	finalLength := int(math.Min(float64(len(finalRecords)), float64(pageSize)))
-	// var start int = from
+	finalLength := int(math.Min(float64(len(records)), float64(pageSize)))
 	txos = make([]*pb.Output, 0, finalLength)
-	//for i, t := range finalRecords {
 	j = 0
-	for i := from; i < from + finalLength && i < len(finalRecords) && j < finalLength; i++ {
-		t := finalRecords[i]
+	for i := from; i < from + finalLength && i < len(records) && j < finalLength; i++ {
+		t := records[i]
 		res := &pb.Output{
 			TxHash: util.ToHash(t.Txid),
 			Nout:   t.Nout,
@@ -612,7 +612,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		j += 1
 	}
 
-	// or if you want more control
+	//// or if you want more control
 	//for _, hit := range searchResult.Hits.Hits {
 	//	// hit.Index contains the name of the index
 	//
@@ -641,40 +641,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}, nil
 }
 
-/*    def __search_ahead(self, search_hits: list, page_size: int, per_channel_per_page: int):
-      reordered_hits = []
-      channel_counters = Counter()
-      next_page_hits_maybe_check_later = deque()
-      while search_hits or next_page_hits_maybe_check_later:
-          if reordered_hits and len(reordered_hits) % page_size == 0:
-              channel_counters.clear()
-          elif not reordered_hits:
-              pass
-          else:
-              break  # means last page was incomplete and we are left with bad replacements
-          for _ in range(len(next_page_hits_maybe_check_later)):
-              claim_id, channel_id = next_page_hits_maybe_check_later.popleft()
-              if per_channel_per_page > 0 and channel_counters[channel_id] < per_channel_per_page:
-                  reordered_hits.append((claim_id, channel_id))
-                  channel_counters[channel_id] += 1
-              else:
-                  next_page_hits_maybe_check_later.append((claim_id, channel_id))
-          while search_hits:
-              hit = search_hits.popleft()
-              hit_id, hit_channel_id = hit['_id'], hit['_source']['channel_id']
-              if hit_channel_id is None or per_channel_per_page <= 0:
-                  reordered_hits.append((hit_id, hit_channel_id))
-              elif channel_counters[hit_channel_id] < per_channel_per_page:
-                  reordered_hits.append((hit_id, hit_channel_id))
-                  channel_counters[hit_channel_id] += 1
-                  if len(reordered_hits) % page_size == 0:
-                      break
-              else:
-                  next_page_hits_maybe_check_later.append((hit_id, hit_channel_id))
-      return reordered_hits
-
- */
-
 
 func sumCounters(channelCounters map[string]int) int {
 	var sum int = 0
@@ -702,8 +668,6 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 			break
 		}
 
-		// log.Printf("searchHitsQ = %d, nextPageHitsMaybeCheckLater = %d\n", searchHitsQ.Size(), nextPageHitsMaybeCheckLater.Size())
-
 		for i := 0; i < nextPageHitsMaybeCheckLater.Size(); i++ {
 			rec := nextPageHitsMaybeCheckLater.PopLeft().(*record)
 			if perChannelPerPage > 0  && channelCounters[rec.ChannelId] < perChannelPerPage {
@@ -727,4 +691,48 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 		}
 	}
 	return finalHits
+}
+
+func (r *record) getHitId() string {
+	if r.RepostedClaimId != "" {
+		return r.RepostedClaimId
+	} else {
+		return r.ClaimId
+	}
+}
+
+func removeDuplicates(searchHits []*record) []*record {
+	dropped := make(map[*record]bool)
+	// claim_id -> (creation_height, hit_id), where hit_id is either reposted claim id or original
+	knownIds := make(map[string]*record)
+
+	for _, hit := range searchHits {
+		hitHeight := hit.Height
+		hitId := hit.getHitId()
+
+
+		if knownIds[hitId] == nil {
+			knownIds[hitId] = hit
+		} else {
+			prevHit := knownIds[hitId]
+			if hitHeight < prevHit.Height {
+				knownIds[hitId]	= hit
+				dropped[prevHit] = true
+			} else {
+				dropped[hit] = true
+			}
+		}
+	}
+
+	deduped := make([]*record, len(searchHits) - len(dropped))
+
+	var i = 0
+	for _, hit := range searchHits {
+		if !dropped[hit] {
+			deduped[i] = hit
+			i++
+		}
+	}
+
+	return deduped
 }
