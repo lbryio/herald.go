@@ -210,7 +210,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	if in.Limit != nil {
 		pageSize = int(in.Limit.Value)
-		log.Printf("page size: %d\n", pageSize)
 	}
 
 	if in.Offset != nil {
@@ -402,7 +401,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}
 
 	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")//.Include("_id")
-	log.Printf("from: %d, size: %d\n", from, size)
 	search := client.Search().
 		Index(searchIndices...).
 		FetchSourceContext(fsc).
@@ -410,7 +408,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		From(0).Size(1000)
 
 	for _, x := range orderBy {
-		log.Println(x.Field, x.IsAsc)
 		search = search.Sort(x.Field, x.IsAsc)
 	}
 
@@ -476,7 +473,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	//	//return nil, nil
 	//}
 
-	log.Printf("totalhits: %d\n", searchResult.TotalHits())
 	return &pb.Outputs{
 		Txos:   txos,
 		Total:  uint32(searchResult.TotalHits()),
