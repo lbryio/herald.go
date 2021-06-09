@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"encoding/hex"
-	"encoding/json"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -17,7 +16,6 @@ import (
 	"gopkg.in/karalabe/cookiejar.v1/collections/deque"
 	"log"
 	"reflect"
-	"sort"
 	"strings"
 )
 
@@ -31,88 +29,9 @@ type record struct {
 	RepostedClaimId string  `json:"reposted_claim_id"`
 }
 
-type compareFunc func(r1, r2 **record, invert bool) int
-
-type multiSorter struct {
-	records []*record
-	compare []compareFunc
-	invert  []bool
-}
-
-var compareFuncs = map[string]compareFunc {
-	"height": func(r1, r2 **record, invert bool) int {
-		var res = 0
-		if (*r1).Height < (*r2).Height {
-			res = -1
-		} else if (*r1).Height > (*r2).Height {
-			res = 1
-		}
-		if invert {
-			res = res * -1
-		}
-		return res
-	},
-}
-
-// Sort sorts the argument slice according to the less functions passed to OrderedBy.
-func (ms *multiSorter) Sort(records []*record) {
-	ms.records = records
-	sort.Sort(ms)
-}
-
-// OrderedBy returns a Sorter that sorts using the less functions, in order.
-// Call its Sort method to sort the data.
-func OrderedBy(compare ...compareFunc) *multiSorter {
-	return &multiSorter{
-		compare: compare,
-	}
-}
-
-// Len is part of sort.Interface.
-func (ms *multiSorter) Len() int {
-	return len(ms.records)
-}
-
-// Swap is part of sort.Interface.
-func (ms *multiSorter) Swap(i, j int) {
-	ms.records[i], ms.records[j] = ms.records[j], ms.records[i]
-}
-
-// Less is part of sort.Interface. It is implemented by looping along the
-// less functions until it finds a comparison that discriminates between
-// the two items (one is less than the other). Note that it can call the
-// less functions twice per call. We could change the functions to return
-// -1, 0, 1 and reduce the number of calls for greater efficiency: an
-// exercise for the reader.
-func (ms *multiSorter) Less(i, j int) bool {
-	p, q := &ms.records[i], &ms.records[j]
-	// Try all but the last comparison.
-	var k int
-	for k = 0; k < len(ms.compare)-1; k++ {
-		cmp := ms.compare[k]
-		res := cmp(p, q, ms.invert[k])
-
-		if res != 0 {
-			return res > 0
-		}
-	}
-	// All comparisons to here said "equal", so just return whatever
-	// the final comparison reports.
-	return ms.compare[k](p, q, ms.invert[k]) > 0
-}
-
 type orderField struct {
 	Field string
 	IsAsc bool
-}
-const (
-	errorResolution = iota
-	channelResolution = iota
-	streamResolution = iota
-)
-type urlResolution struct {
-	resolutionType 	int
-	value 			string
 }
 
 func StrArrToInterface(arr []string) []interface{} {
@@ -267,7 +186,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var size = 1000
 	var pageSize = 10
 	var orderBy []orderField
-	var ms *multiSorter
 
 	// Ping the Elasticsearch server to get e.g. the version number
 	//_, code, err := client.Ping("http://127.0.0.1:9200").Do(ctx)
@@ -277,8 +195,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	//if code != 200 {
 	//	return nil, errors.New("ping failed")
 	//}
-
-	// TODO: support all of this https://github.com/lbryio/lbry-sdk/blob/master/lbry/wallet/server/db/elasticsearch/search.py#L385
 
 	q := elastic.NewBoolQuery()
 
@@ -327,15 +243,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 				toAppend = toAppend + ".keyword"
 			}
 			orderBy = append(orderBy, orderField{toAppend, isAsc})
-		}
-
-		ms = &multiSorter{
-			invert: make([]bool, len(orderBy)),
-			compare: make([]compareFunc, len(orderBy)),
-		}
-		for i, x := range orderBy {
-			ms.compare[i] = compareFuncs[x.Field]
-			ms.invert[i] = x.IsAsc
 		}
 	}
 
@@ -409,20 +316,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		q = q.Should(elastic.NewBoolQuery().MustNot(isStreamOrRepost))
 		q = q.Should(elastic.NewBoolQuery().Must(elastic.NewTermQuery("reposted_claim_type", claimTypes["channel"])))
 	}
-
-	//var collapse *elastic.CollapseBuilder
-	//if in.LimitClaimsPerChannel != nil {
-	//	println(in.LimitClaimsPerChannel.Value)
-	//	innerHit := elastic.
-	//		NewInnerHit().
-	//		//From(0).
-	//		Size(int(in.LimitClaimsPerChannel.Value)).
-	//		Name("channel_id")
-	//	for _, x := range orderBy {
-	//		innerHit = innerHit.Sort(x.Field, x.IsAsc)
-	//	}
-	//	collapse = elastic.NewCollapseBuilder("channel_id.keyword").InnerHit(innerHit)
-	//}
 
 	if in.TxNout != nil {
 		q = q.Must(elastic.NewTermQuery("tx_nout", in.TxNout.Value))
@@ -515,9 +408,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		FetchSourceContext(fsc).
 		Query(q). // specify the query
 		From(0).Size(1000)
-	//if in.LimitClaimsPerChannel != nil {
-	//	search = search.Collapse(collapse)
-	//}
+
 	for _, x := range orderBy {
 		log.Println(x.Field, x.IsAsc)
 		search = search.Sort(x.Field, x.IsAsc)
@@ -533,59 +424,14 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var txos []*pb.Output
 	var records []*record
 
-	//if in.LimitClaimsPerChannel == nil {
-	if true {
-		records = make([]*record, 0, searchResult.TotalHits())
+	records = make([]*record, 0, searchResult.TotalHits())
 
-		var r record
-		for _, item := range searchResult.Each(reflect.TypeOf(r)) {
-			if t, ok := item.(record); ok {
-				records = append(records, &t)
-				//txos[i] = &pb.Output{
-				//	TxHash: util.ToHash(t.Txid),
-				//	Nout:   t.Nout,
-				//	Height: t.Height,
-				//}
-			}
-		}
-	} else {
-		records = make([]*record, 0, len(searchResult.Hits.Hits) * int(in.LimitClaimsPerChannel.Value))
-		txos = make([]*pb.Output, 0, len(searchResult.Hits.Hits) * int(in.LimitClaimsPerChannel.Value))
-		var i = 0
-		for _, hit := range searchResult.Hits.Hits {
-			if innerHit, ok := hit.InnerHits["channel_id"]; ok {
-				for _, hitt := range innerHit.Hits.Hits {
-					if i >= size {
-						break
-					}
-					var t *record
-					err := json.Unmarshal(hitt.Source, &t)
-					if err != nil {
-						return nil, err
-					}
-					records = append(records, t)
-					i++
-				}
-			}
-		}
-		ms.Sort(records)
-		log.Println(records)
-		for _, t := range records {
-			res := &pb.Output{
-				TxHash: util.ToHash(t.Txid),
-				Nout:   t.Nout,
-				Height: t.Height,
-			}
-			txos = append(txos, res)
+	var r record
+	for _, item := range searchResult.Each(reflect.TypeOf(r)) {
+		if t, ok := item.(record); ok {
+			records = append(records, &t)
 		}
 	}
-	//
-	//for _, rec := range records {
-	//	log.Println(*rec)
-	//}
-	//
-	//log.Println("#########################")
-	//
 
 	if in.RemoveDuplicates != nil {
 		records = removeDuplicates(records)
@@ -593,9 +439,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	if in.LimitClaimsPerChannel != nil {
 		records = searchAhead(records, pageSize, int(in.LimitClaimsPerChannel.Value))
-		//for _, rec := range records {
-		//	log.Println(*rec)
-		//}
 	}
 
 	finalLength := int(math.Min(float64(len(records)), float64(pageSize)))
