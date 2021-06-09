@@ -183,7 +183,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}
 
 	var from = 0
-	var size = 1000
 	var pageSize = 10
 	var orderBy []orderField
 
