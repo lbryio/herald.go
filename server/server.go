@@ -1,11 +1,9 @@
 package server
 
 import (
-	"context"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/metadata"
 	"log"
 	"regexp"
 )
@@ -21,21 +19,11 @@ type Server struct {
 
 type Args struct {
 	Serve bool
+	Host string
 	Port string
-	User string
-	Pass string
 	EsHost string
 	EsPort string
-}
-
-type AccessDeniedErr struct {}
-func (AccessDeniedErr) Error() string {
-	return "Username or password incorrect."
-}
-
-type EmptyMetadataErr struct {}
-func (EmptyMetadataErr) Error() string {
-	return "No username or password specified."
+	Dev bool
 }
 
 /*
@@ -77,9 +65,7 @@ func (EmptyMetadataErr) Error() string {
 	'blockchain.address.unsubscribe'
 */
 
-//func MakeHubServer(args Args) *grpc.Server {
 func MakeHubServer(args *Args) *Server {
-	// authorize := makeAuthorizeFunc(args.User, args.Pass)
 	grpcServer := grpc.NewServer()
 
 	multiSpaceRe, err := regexp.Compile("\\s{2,}")
@@ -100,45 +86,4 @@ func MakeHubServer(args *Args) *Server {
 	}
 
 	return s
-	//	grpc.StreamInterceptor(makeStreamInterceptor(authorize)),
-	//  grpc.UnaryInterceptor(makeUnaryInterceptor(authorize)),
-	//)
-}
-
-func makeStreamInterceptor(authorize func(context.Context) error) func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-	return func(srv interface{}, stream grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		if err := authorize(stream.Context()); err != nil {
-			return err
-		}
-
-		return handler(srv, stream)
-	}
-}
-
-
-func makeUnaryInterceptor(authorize func(context.Context) error) func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	return func(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-		if err := authorize(ctx); err != nil {
-			return nil, err
-		}
-
-		return handler(ctx, req)
-	}
-}
-
-func makeAuthorizeFunc(username string, password string) func(context.Context) error {
-
-	return func(ctx context.Context) error {
-		if md, ok := metadata.FromIncomingContext(ctx); ok {
-			log.Println(md)
-			if len(md["username"]) > 0 && md["username"][0] == username &&
-				len(md["password"]) > 0 && md["password"][0] == password {
-				return nil
-			}
-
-			return AccessDeniedErr{}
-		}
-
-		return EmptyMetadataErr{}
-	}
 }

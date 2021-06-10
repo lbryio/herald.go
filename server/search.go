@@ -7,7 +7,6 @@ import (
 	"github.com/golang/protobuf/ptypes/wrappers"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"math"
-
 	//"github.com/lbryio/hub/schema"
 	"github.com/lbryio/hub/util"
 	"github.com/olivere/elastic/v7"
@@ -20,13 +19,30 @@ import (
 )
 
 type record struct {
-	Txid           	string  `json:"tx_id"`
-	Nout           	uint32  `json:"tx_nout"`
-	Height         	uint32 	`json:"height"`
-	ClaimId        	string 	`json:"claim_id"`
-	ChannelId      	string 	`json:"channel_id"`
-	CreationHeight 	uint32 	`json:"creation_height"`
-	RepostedClaimId string  `json:"reposted_claim_id"`
+	Txid           		 string  `json:"tx_id"`
+	Nout           		 uint32  `json:"tx_nout"`
+	Height         		 uint32  `json:"height"`
+	ClaimId        		 string  `json:"claim_id"`
+	ChannelId      		 string  `json:"channel_id"`
+	RepostedClaimId 	 string  `json:"reposted_claim_id"`
+	CensorType      	 uint32  `json:"censor_type"`
+	CensoringChannelHash string  `json:"censoring_channel_hash"`
+	ShortUrl			 string  `json:"short_url"`
+	CanonicalUrl         string  `json:"canonical_url"`
+	IsControlling    	 bool    `json:"is_controlling"`
+	TakeOverHeight   	 uint32  `json:"take_over_height"`
+	CreationHeight   	 uint32  `json:"creation_height"`
+	ActivationHeight 	 uint32  `json:"activation_height"`
+	ExpirationHeight 	 uint32  `json:"expiration_height"`
+	ClaimsInChannel  	 uint32  `json:"claims_in_channel"`
+	Reposted         	 uint32  `json:"reposted"`
+	EffectiveAmount  	 uint64  `json:"effective_amount"`
+	SupportAmount    	 uint64  `json:"support_amount"`
+	TrendingGroup    	 uint32  `json:"trending_group"`
+	TrendingMixed    	 float32 `json:"trending_mixed"`
+	TrendingLocal    	 float32 `json:"trending_local"`
+	TrendingGlobal   	 float32 `json:"trending_global"`
+	Name 				 string  `json:"name"`
 }
 
 type orderField struct {
@@ -379,24 +395,25 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		q = q.Must(textQuery)
 	}
 
-
-	//TODO make this only happen in dev environment
-	indices, err := client.IndexNames()
-	if err != nil {
-		log.Fatalln(err)
-	}
-	var numIndices = 0
-	if len(indices) > 0 {
-		numIndices = len(indices) - 1
-	}
-	searchIndices := make([]string, numIndices)
-	j := 0
-	for i := 0; j < numIndices; i++ {
-		if indices[i] == "claims" {
-			continue
+	var searchIndices = []string{}
+	if s.Args.Dev {
+		indices, err := client.IndexNames()
+		if err != nil {
+			log.Fatalln(err)
 		}
-		searchIndices[j] = indices[i]
-		j = j + 1
+		var numIndices = 0
+		if len(indices) > 0 {
+			numIndices = len(indices) - 1
+		}
+		searchIndices = make([]string, numIndices)
+		j := 0
+		for i := 0; j < numIndices; i++ {
+			if indices[i] == "claims" {
+				continue
+			}
+			searchIndices[j] = indices[i]
+			j = j + 1
+		}
 	}
 
 	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")//.Include("_id")
@@ -419,6 +436,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	var txos []*pb.Output
 	var records []*record
+	var blocked []*pb.Blocked = make([]*pb.Blocked, 0)
 
 	records = make([]*record, 0, searchResult.TotalHits())
 
@@ -429,23 +447,46 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		}
 	}
 
+	records = removeBlocked(records, &blocked)
+
 	if in.RemoveDuplicates != nil {
 		records = removeDuplicates(records)
 	}
 
-	if in.LimitClaimsPerChannel != nil {
+	if in.LimitClaimsPerChannel != nil && in.LimitClaimsPerChannel.Value > 0 {
 		records = searchAhead(records, pageSize, int(in.LimitClaimsPerChannel.Value))
 	}
 
 	finalLength := int(math.Min(float64(len(records)), float64(pageSize)))
 	txos = make([]*pb.Output, 0, finalLength)
-	j = 0
+	var j = 0
 	for i := from; i < from + finalLength && i < len(records) && j < finalLength; i++ {
 		t := records[i]
 		res := &pb.Output{
 			TxHash: util.ToHash(t.Txid),
 			Nout:   t.Nout,
 			Height: t.Height,
+			Meta: &pb.Output_Claim{
+				Claim: &pb.ClaimMeta{
+					//Channel:
+					//Repost:
+					ShortUrl: t.ShortUrl,
+					CanonicalUrl: t.CanonicalUrl,
+					IsControlling: t.IsControlling,
+					TakeOverHeight: t.TakeOverHeight,
+					CreationHeight: t.CreationHeight,
+					ActivationHeight: t.ActivationHeight,
+					ExpirationHeight: t.ExpirationHeight,
+					ClaimsInChannel: t.ClaimsInChannel,
+					Reposted: t.Reposted,
+					EffectiveAmount: t.EffectiveAmount,
+					SupportAmount: t.SupportAmount,
+					TrendingGroup: t.TrendingGroup,
+					TrendingMixed: t.TrendingMixed,
+					TrendingLocal: t.TrendingLocal,
+					TrendingGlobal: t.TrendingGlobal,
+				},
+			},
 		}
 		txos = append(txos, res)
 		j += 1
@@ -472,10 +513,24 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	//	//return nil, nil
 	//}
 
+	if in.NoTotals != nil && !in.NoTotals.Value {
+		return &pb.Outputs{
+			Txos:   txos,
+			Offset: uint32(int64(from) + searchResult.TotalHits()),
+			Blocked: blocked,
+		}, nil
+	}
+
+	var blockedTotal uint32 = 0
+	for _, b := range blocked {
+		blockedTotal += b.Count
+	}
 	return &pb.Outputs{
 		Txos:   txos,
 		Total:  uint32(searchResult.TotalHits()),
 		Offset: uint32(int64(from) + searchResult.TotalHits()),
+		Blocked: blocked,
+		BlockedTotal: blockedTotal,
 	}, nil
 }
 
@@ -573,4 +628,31 @@ func removeDuplicates(searchHits []*record) []*record {
 	}
 
 	return deduped
+}
+
+func removeBlocked(searchHits []*record, blocked *[]*pb.Blocked) []*record {
+	newHits := make([]*record, 0, len(searchHits))
+	blockedChannels := make(map[string]*pb.Blocked)
+	for _, r := range searchHits {
+		if r.CensorType != 0 {
+			if blockedChannels[r.ChannelId] == nil {
+				blockedObj := &pb.Blocked{
+					Count: 1,
+					Channel: &pb.Output{
+						TxHash: util.ToHash(r.Txid),
+						Nout:   r.Nout,
+						Height: r.Height,
+					},
+				}
+				*blocked = append(*blocked, blockedObj)
+				blockedChannels[r.ChannelId] = blockedObj
+			} else {
+				blockedChannels[r.ChannelId].Count += 1
+			}
+		} else {
+			newHits = append(newHits, r)
+		}
+	}
+
+	return newHits
 }
