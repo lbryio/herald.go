@@ -462,32 +462,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var j = 0
 	for i := from; i < from + finalLength && i < len(records) && j < finalLength; i++ {
 		t := records[i]
-		res := &pb.Output{
-			TxHash: util.ToHash(t.Txid),
-			Nout:   t.Nout,
-			Height: t.Height,
-			Meta: &pb.Output_Claim{
-				Claim: &pb.ClaimMeta{
-					//Channel:
-					//Repost:
-					ShortUrl: t.ShortUrl,
-					CanonicalUrl: t.CanonicalUrl,
-					IsControlling: t.IsControlling,
-					TakeOverHeight: t.TakeOverHeight,
-					CreationHeight: t.CreationHeight,
-					ActivationHeight: t.ActivationHeight,
-					ExpirationHeight: t.ExpirationHeight,
-					ClaimsInChannel: t.ClaimsInChannel,
-					Reposted: t.Reposted,
-					EffectiveAmount: t.EffectiveAmount,
-					SupportAmount: t.SupportAmount,
-					TrendingGroup: t.TrendingGroup,
-					TrendingMixed: t.TrendingMixed,
-					TrendingLocal: t.TrendingLocal,
-					TrendingGlobal: t.TrendingGlobal,
-				},
-			},
-		}
+		res := t.recordToOutput()
 		txos = append(txos, res)
 		j += 1
 	}
@@ -586,6 +561,35 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 	return finalHits
 }
 
+func (r *record) recordToOutput() *pb.Output {
+	return &pb.Output{
+		TxHash: util.ToHash(r.Txid),
+		Nout:   r.Nout,
+		Height: r.Height,
+		Meta: &pb.Output_Claim{
+			Claim: &pb.ClaimMeta{
+				//Channel:
+				//Repost:
+				ShortUrl:         r.ShortUrl,
+				CanonicalUrl:     r.CanonicalUrl,
+				IsControlling:    r.IsControlling,
+				TakeOverHeight:   r.TakeOverHeight,
+				CreationHeight:   r.CreationHeight,
+				ActivationHeight: r.ActivationHeight,
+				ExpirationHeight: r.ExpirationHeight,
+				ClaimsInChannel:  r.ClaimsInChannel,
+				Reposted:         r.Reposted,
+				EffectiveAmount:  r.EffectiveAmount,
+				SupportAmount:    r.SupportAmount,
+				TrendingGroup:    r.TrendingGroup,
+				TrendingMixed:    r.TrendingMixed,
+				TrendingLocal:    r.TrendingLocal,
+				TrendingGlobal:   r.TrendingGlobal,
+			},
+		},
+	}
+}
+
 func (r *record) getHitId() string {
 	if r.RepostedClaimId != "" {
 		return r.RepostedClaimId
@@ -638,11 +642,7 @@ func removeBlocked(searchHits []*record, blocked *[]*pb.Blocked) []*record {
 			if blockedChannels[r.ChannelId] == nil {
 				blockedObj := &pb.Blocked{
 					Count: 1,
-					Channel: &pb.Output{
-						TxHash: util.ToHash(r.Txid),
-						Nout:   r.Nout,
-						Height: r.Height,
-					},
+					Channel: r.recordToOutput(),
 				}
 				*blocked = append(*blocked, blockedObj)
 				blockedChannels[r.ChannelId] = blockedObj
