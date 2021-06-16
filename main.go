@@ -150,6 +150,7 @@ func main() {
 		reflection.Register(s.GrpcServer)
 
 		log.Printf("listening on %s\n", l.Addr().String())
+		log.Println(s.Args)
 		if err := s.GrpcServer.Serve(l); err != nil {
 			log.Fatalf("failed to serve: %v", err)
 		}

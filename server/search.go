@@ -159,6 +159,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		esUrl := s.Args.EsHost + ":" + s.Args.EsPort
 		tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
 		if err != nil {
+			log.Println(err)
 			return nil, err
 		}
 		client = tmpClient
@@ -444,6 +445,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	searchResult, err := search.Do(ctx) // execute
 	if err != nil {
+		log.Println(err)
 		return nil, err
 	}
 
