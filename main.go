@@ -87,6 +87,10 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 		args.EsHost = esHost
 	}
 
+	if !strings.HasPrefix(args.EsHost, "http") {
+		args.EsHost = "http://" + args.EsHost
+	}
+
 	if esPort, ok := environment["ELASTIC_PORT"]; ok {
 		args.EsPort = esPort
 	}
