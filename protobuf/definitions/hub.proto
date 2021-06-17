@@ -92,4 +92,5 @@ message SearchRequest {
   repeated string all_languages = 75;
   .google.protobuf.BoolValue remove_duplicates = 76;
   .google.protobuf.BoolValue no_totals = 77;
+  repeated string search_indices = 78;
 }

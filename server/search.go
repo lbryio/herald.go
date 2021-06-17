@@ -410,7 +410,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}
 
 	var searchIndices = []string{}
-	if s.Args.Dev {
+	if s.Args.Dev && len(in.SearchIndices) == 0 {
 		// If we're running in dev mode ignore the mainnet claims index
 		indices, err := client.IndexNames()
 		if err != nil {
@@ -429,6 +429,10 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 			searchIndices[j] = indices[i]
 			j = j + 1
 		}
+	}
+
+	if len(in.SearchIndices) > 0 {
+		searchIndices = in.SearchIndices
 	}
 
 	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")//.Include("_id")
@@ -489,15 +493,10 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	//printJsonFullRecords(blockedRecords)
 
-	var searchIndex = "claims" //default
-	if len(searchIndices) > 0 {
-		searchIndex = searchIndices[0]
-	}
-
 	//Get claims for reposts
-	repostClaims, repostRecords, repostedMap := getClaimsForReposts(records, client, ctx, searchIndex)
+	repostClaims, repostRecords, repostedMap := getClaimsForReposts(records, client, ctx, searchIndices)
 	//get all unique channels
-	channels, channelMap := getUniqueChannels(append(append(records, repostRecords...), blockedRecords...), client, ctx, searchIndex)
+	channels, channelMap := getUniqueChannels(append(append(records, repostRecords...), blockedRecords...), client, ctx, searchIndices)
 	//add these to extra txos
 	extraTxos := append(repostClaims, channels...)
 
@@ -544,23 +543,25 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}, nil
 }
 
-func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Context, searchIndex string) ([]*pb.Output, map[string]*pb.Output) {
+func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Context, searchIndices []string) ([]*pb.Output, map[string]*pb.Output) {
 	channels := make(map[string]*pb.Output)
 	channelsSet := make(map[string]bool)
 	var mget = client.Mget()
 	var totalChannels = 0
 	for _, r := range records {
-		if r.ChannelId != "" && !channelsSet[r.ChannelId] {
-			channelsSet[r.ChannelId] = true
-			nmget := elastic.NewMultiGetItem().Id(r.ChannelId).Index(searchIndex)
-			mget = mget.Add(nmget)
-			totalChannels++
-		}
-		if r.CensorType != 0 && !channelsSet[r.CensoringChannelHash] {
-			channelsSet[r.CensoringChannelHash] = true
-			nmget := elastic.NewMultiGetItem().Id(r.CensoringChannelHash).Index(searchIndex)
-			mget = mget.Add(nmget)
-			totalChannels++
+		for _, searchIndex := range searchIndices {
+			if r.ChannelId != "" && !channelsSet[r.ChannelId] {
+				channelsSet[r.ChannelId] = true
+				nmget := elastic.NewMultiGetItem().Id(r.ChannelId).Index(searchIndex)
+				mget = mget.Add(nmget)
+				totalChannels++
+			}
+			if r.CensorType != 0 && !channelsSet[r.CensoringChannelHash] {
+				channelsSet[r.CensoringChannelHash] = true
+				nmget := elastic.NewMultiGetItem().Id(r.CensoringChannelHash).Index(searchIndex)
+				mget = mget.Add(nmget)
+				totalChannels++
+			}
 		}
 	}
 	if totalChannels == 0 {
@@ -592,7 +593,7 @@ func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Co
 	return channelTxos, channels
 }
 
-func getClaimsForReposts(records []*record, client *elastic.Client, ctx context.Context, searchIndex string) ([]*pb.Output, []*record, map[string]*pb.Output) {
+func getClaimsForReposts(records []*record, client *elastic.Client, ctx context.Context, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
 
 	var totalReposted = 0
 	var mget = client.Mget()//.StoredFields("_id")
@@ -603,11 +604,13 @@ func getClaimsForReposts(records []*record, client *elastic.Client, ctx context.
 	}
 	 */
 	for _, r := range records {
-		if r.RepostedClaimId != "" {
-			var nmget = elastic.NewMultiGetItem().Id(r.RepostedClaimId).Index(searchIndex)
-			//nmget = nmget.Id(r.RepostedClaimId)
-			mget = mget.Add(nmget)
-			totalReposted++
+		for _, searchIndex := range searchIndices {
+			if r.RepostedClaimId != "" {
+				var nmget = elastic.NewMultiGetItem().Id(r.RepostedClaimId).Index(searchIndex)
+				//nmget = nmget.Id(r.RepostedClaimId)
+				mget = mget.Add(nmget)
+				totalReposted++
+			}
 		}
 	}
 	//mget = mget.Add(nmget)
