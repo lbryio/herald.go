@@ -322,8 +322,8 @@ func (s *Server) postProcessResults(
 func (s *Server) setupEsQuery(
 	q *elastic.BoolQuery,
 	in *pb.SearchRequest,
-	from *int,
 	pageSize *int,
+	from *int,
 	orderBy *[]orderField) *elastic.BoolQuery {
 	claimTypes := map[string]int {
 		"stream": 1,
