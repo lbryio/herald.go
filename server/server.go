@@ -1,11 +1,12 @@
 package server
 
 import (
+	"log"
+	"regexp"
+
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"google.golang.org/grpc"
-	"log"
-	"regexp"
 )
 
 type Server struct {

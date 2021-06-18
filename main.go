@@ -13,7 +13,6 @@ import (
 	"github.com/akamensky/argparse"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
-
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
