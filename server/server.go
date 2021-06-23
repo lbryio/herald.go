@@ -1,11 +1,30 @@
 package server
 
 import (
+	"log"
+	"regexp"
+
 	pb "github.com/lbryio/hub/protobuf/go"
+	"github.com/olivere/elastic/v7"
+	"google.golang.org/grpc"
 )
 
 type Server struct {
+	GrpcServer   *grpc.Server
+	Args 	     *Args
+	MultiSpaceRe *regexp.Regexp
+	WeirdCharsRe *regexp.Regexp
+	EsClient     *elastic.Client
 	pb.UnimplementedHubServer
+}
+
+type Args struct {
+	Serve bool
+	Host string
+	Port string
+	EsHost string
+	EsPort string
+	Dev bool
 }
 
 /*
@@ -46,3 +65,26 @@ type Server struct {
 	'blockchain.address.subscribe'
 	'blockchain.address.unsubscribe'
 */
+
+func MakeHubServer(args *Args) *Server {
+	grpcServer := grpc.NewServer()
+
+	multiSpaceRe, err := regexp.Compile("\\s{2,}")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	weirdCharsRe, err := regexp.Compile("[#!~]")
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	s := &Server {
+		GrpcServer: grpcServer,
+		Args: args,
+		MultiSpaceRe: multiSpaceRe,
+		WeirdCharsRe: weirdCharsRe,
+	}
+
+	return s
+}

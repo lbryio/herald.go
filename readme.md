@@ -45,6 +45,7 @@ Install Go 1.14+
 
 - Ubuntu: `sudo add-apt-repository ppa:longsleep/golang-backports && sudo apt install golang-go`
 - OSX: `brew install go`
+- Windows https://golang.org/doc/install
 
 Download `protoc` from https://github.com/protocolbuffers/protobuf/releases and make sure it is
 executable and in your path.
@@ -64,6 +65,10 @@ Finally, run the block processor as described under Usage.
 Run `./dev.sh` to start the hub. The script will restart the hub as you make changes to `*.go` files. 
 
 To search, use `go run . search text goes here`.
+
+#### Windows
+
+reflex doesn't work on windows, so you'll need to run `go run . serve` and restart manually as you make changes.
 
 ## License
 

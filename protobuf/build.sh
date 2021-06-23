@@ -33,6 +33,12 @@ protoc --proto_path="$DIR/definitions" \
   --go-grpc_out="$DIR/go" --go-grpc_opt=paths=source_relative \
   $DIR/definitions/*.proto
 #  --python_out="$DIR/python" \
+#  --grpc_python_out="$DIR/python"
 #  --js_out="import_style=commonjs,binary:$DIR/js" \
+python -m grpc_tools.protoc --proto_path="$DIR/definitions" \
+  --python_out="$DIR/python" \
+  --grpc_python_out="$DIR/python" \
+  $DIR/definitions/*.proto
+
 
 ls "$DIR"/go/*.pb.go | xargs -n1 -IX bash -c "sed -e 's/,omitempty//' X > X.tmp && mv X{.tmp,}"

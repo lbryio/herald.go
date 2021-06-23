@@ -1,70 +1,96 @@
 syntax = "proto3";
 
 option go_package = "github.com/lbryio/hub/protobuf/go/pb";
+import "google/protobuf/wrappers.proto";
+import "result.proto";
 
 package pb;
 
 service Hub {
-  rpc Search (SearchRequest) returns (SearchReply) {}
+  rpc Search (SearchRequest) returns (Outputs) {}
+}
+
+message InvertibleField {
+  bool invert = 1;
+  repeated string value = 2;
+}
+
+message RangeField {
+  enum Op {
+    EQ = 0;
+    LTE = 1;
+    GTE = 2;
+    LT = 3;
+    GT = 4;
+  }
+  Op op = 1;
+  repeated string value = 2;
 }
 
 message SearchRequest {
-  string query = 1;
-}
-
-message SearchReply {
-  repeated Output txos = 1;
-  repeated Output extra_txos = 2;
-  uint32 total = 3;
-  uint32 offset = 4;
-  repeated Blocked blocked = 5;
-  uint32 blocked_total = 6;
-}
-
-message Output {
-  bytes tx_hash = 1;
-  uint32 nout = 2;
-  uint32 height = 3;
-  oneof meta {
-    ClaimMeta claim = 7;
-    Error error = 15;
-  }
-}
-
-message ClaimMeta {
-  Output channel = 1;
-  Output repost = 2;
-  string short_url = 3;
-  string canonical_url = 4;
-  bool is_controlling = 5;
-  uint32 take_over_height = 6;
-  uint32 creation_height = 7;
-  uint32 activation_height = 8;
-  uint32 expiration_height = 9;
-  uint32 claims_in_channel = 10;
-  uint32 reposted = 11;
-
-  uint64 effective_amount = 20;
-  uint64 support_amount = 21;
-  uint32 trending_group = 22;
-  float trending_mixed = 23;
-  float trending_local = 24;
-  float trending_global = 25;
-}
-
-message Error {
-  enum Code {
-    UNKNOWN_CODE = 0;
-    NOT_FOUND = 1;
-    INVALID = 2;
-    BLOCKED = 3;
-  }
-  Code code = 1;
-  string text = 2;
-  Blocked blocked = 3;
-}
-
-message Blocked {
-  uint32 count = 1;
-  Output channel = 2;
+  string text = 1;
+  repeated string name = 2;
+  .google.protobuf.Int32Value amount_order = 3;
+  .google.protobuf.Int32Value limit = 4;
+  repeated string order_by = 5;
+  .google.protobuf.Int32Value offset = 6;
+  .google.protobuf.BoolValue is_controlling = 7;
+  string last_take_over_height = 19;
+  InvertibleField claim_id = 20;
+  repeated string claim_name = 22;
+  repeated string normalized = 23;
+  RangeField tx_position = 24;
+  RangeField amount = 25;
+  RangeField timestamp = 26;
+  RangeField creation_timestamp = 27;
+  RangeField height = 28;
+  RangeField creation_height = 29;
+  RangeField activation_height = 30;
+  RangeField expiration_height = 31;
+  RangeField release_time = 32;
+  repeated string short_url = 33;
+  repeated string canonical_url = 34;
+  repeated string title = 35;
+  repeated string author = 36;
+  repeated string description = 37;
+  repeated string claim_type = 38;
+  RangeField reposted = 39;
+  repeated string stream_type = 40;
+  repeated string media_type = 41;
+  RangeField fee_amount = 42;
+  repeated string fee_currency = 43;
+  RangeField duration = 44;
+  string reposted_claim_hash = 45;
+  RangeField censor_type = 46;
+  string claims_in_channel = 47;
+  RangeField channel_join = 48;
+  .google.protobuf.BoolValue signature_valid = 49;
+  RangeField effective_amount = 51;
+  RangeField support_amount = 52;
+  RangeField trending_group = 53;
+  RangeField trending_mixed = 54;
+  RangeField trending_local = 55;
+  RangeField trending_global = 56;
+  InvertibleField channel_id = 57;
+  InvertibleField channel_ids = 58;
+  repeated string tx_id = 59;
+  .google.protobuf.Int32Value tx_nout = 60;
+  repeated string signature = 61;
+  repeated string signature_digest = 62;
+  repeated string public_key_bytes = 63;
+  repeated string public_key_hash = 64;
+  string public_key_id = 65;
+  repeated bytes _id = 66;
+  repeated string any_tags = 67;
+  repeated string all_tags = 68;
+  repeated string not_tags = 69;
+  repeated string reposted_claim_id = 70;
+  .google.protobuf.BoolValue has_channel_signature = 71;
+  .google.protobuf.BoolValue has_source = 72;
+  .google.protobuf.Int32Value limit_claims_per_channel = 73;
+  repeated string any_languages = 74;
+  repeated string all_languages = 75;
+  .google.protobuf.BoolValue remove_duplicates = 76;
+  .google.protobuf.BoolValue no_totals = 77;
+  repeated string search_indices = 78;
 }

@@ -1,0 +1,6 @@
+# action.yml
+name: 'Hub'
+description: 'Run go hub'
+runs:
+  using: 'docker'
+  image: 'dev.dockerfile'
