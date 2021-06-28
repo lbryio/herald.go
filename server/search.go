@@ -15,7 +15,7 @@ import (
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/golang/protobuf/ptypes/wrappers"
 	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/lbryio/hub/util"
+	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
@@ -390,7 +390,7 @@ func (s *Server) setupEsQuery(
 	if len(in.Name) > 0 {
 		normalized := make([]string, len(in.Name))
 		for i := 0; i < len(in.Name); i++ {
-			normalized[i] = util.Normalize(in.Name[i])
+			normalized[i] = util.NormalizeName(in.Name[i])
 		}
 		in.Normalized = normalized
 	}
@@ -432,10 +432,11 @@ func (s *Server) setupEsQuery(
 		q = q.Must(elastic.NewTermsQuery("stream_type", searchVals...))
 	}
 
+
 	if len(in.XId) > 0 {
 		searchVals := make([]interface{}, len(in.XId))
 		for i := 0; i < len(in.XId); i++ {
-			util.ReverseBytes(in.XId[i])
+			util.ReverseBytesInPlace(in.XId[i])
 			searchVals[i] = hex.Dump(in.XId[i])
 		}
 		if len(in.XId) == 1 && len(in.XId[0]) < 20 {
@@ -699,7 +700,7 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 func (r *record) recordToChannelOutput() *pb.Output {
 	// Don't nee dthe meta for this one
 	return &pb.Output{
-		TxHash: util.ToHash(r.Txid),
+		TxHash: util.TxIdToTxHash(r.Txid),
 		Nout:   r.Nout,
 		Height: r.Height,
 	}
@@ -707,7 +708,7 @@ func (r *record) recordToChannelOutput() *pb.Output {
 
 func (r *record) recordToOutput() *pb.Output {
 	return &pb.Output{
-		TxHash: util.ToHash(r.Txid),
+		TxHash: util.TxIdToTxHash(r.Txid),
 		Nout:   r.Nout,
 		Height: r.Height,
 		Meta: &pb.Output_Claim{

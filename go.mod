@@ -6,6 +6,7 @@ require (
 	github.com/akamensky/argparse v1.2.2
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/golang/protobuf v1.5.2
+	github.com/lbryio/lbry.go/v2 v2.7.2-0.20210625145058-2b155597bf57
 	github.com/olivere/elastic/v7 v7.0.24
 	golang.org/x/net v0.0.0-20210525063256-abc453219eb5 // indirect
 	golang.org/x/sys v0.0.0-20210525143221-35b2ab0089ea // indirect
