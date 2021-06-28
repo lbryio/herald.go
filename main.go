@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"github.com/lbryio/hub/util"
 	"log"
 	"net"
 	"os"
@@ -13,6 +12,7 @@ import (
 	"github.com/akamensky/argparse"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
+	"github.com/lbryio/lbry.go/v2/extras/util"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -183,6 +183,6 @@ func main() {
 	log.Printf("found %d results\n", r.GetTotal())
 
 	for _, t := range r.Txos {
-		fmt.Printf("%s:%d\n", util.FromHash(t.TxHash), t.Nout)
+		fmt.Printf("%s:%d\n", util.TxHashToTxId(t.TxHash), t.Nout)
 	}
 }
