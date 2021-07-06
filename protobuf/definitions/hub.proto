@@ -7,8 +7,19 @@ import "result.proto";
 package pb;
 
 service Hub {
+  rpc SubscribeHeaders (BlockRequest) returns (stream BlockHeaderOutput) {}
   rpc Search (SearchRequest) returns (Outputs) {}
+  rpc GetBlock (BlockRequest) returns (BlockOutput) {}
+  rpc GetBlockHeader (BlockRequest) returns (BlockHeaderOutput) {}
+  rpc GetServerHeight (EmptyMessage) returns (google.protobuf.UInt64Value) {}
+  rpc GetHeaders (BlockRequest) returns (stream BlockHeaderOutput) {}
+  rpc Ping (EmptyMessage) returns (google.protobuf.StringValue) {}
+  rpc Version (EmptyMessage) returns (google.protobuf.StringValue) {}
+  rpc Features (EmptyMessage) returns (google.protobuf.StringValue) {}
+  rpc Broadcast(EmptyMessage) returns (google.protobuf.UInt64Value) {}
 }
+
+message EmptyMessage {}
 
 message InvertibleField {
   bool invert = 1;
@@ -38,7 +49,7 @@ message SearchRequest {
   string last_take_over_height = 19;
   InvertibleField claim_id = 20;
   repeated string claim_name = 22;
-  repeated string normalized = 23;
+  repeated string normalized_name = 23;
   RangeField tx_position = 24;
   RangeField amount = 25;
   RangeField timestamp = 26;
@@ -54,7 +65,7 @@ message SearchRequest {
   repeated string author = 36;
   repeated string description = 37;
   repeated string claim_type = 38;
-  RangeField reposted = 39;
+  RangeField repost_count = 39;
   repeated string stream_type = 40;
   repeated string media_type = 41;
   RangeField fee_amount = 42;
@@ -64,7 +75,7 @@ message SearchRequest {
   RangeField censor_type = 46;
   string claims_in_channel = 47;
   RangeField channel_join = 48;
-  .google.protobuf.BoolValue signature_valid = 49;
+  .google.protobuf.BoolValue is_signature_valid = 49;
   RangeField effective_amount = 51;
   RangeField support_amount = 52;
   RangeField trending_group = 53;
@@ -78,7 +89,7 @@ message SearchRequest {
   repeated string signature = 61;
   repeated string signature_digest = 62;
   repeated string public_key_bytes = 63;
-  repeated string public_key_hash = 64;
+  // repeated string public_key_hash = 64;
   string public_key_id = 65;
   repeated bytes _id = 66;
   repeated string any_tags = 67;
@@ -93,4 +104,9 @@ message SearchRequest {
   .google.protobuf.BoolValue remove_duplicates = 76;
   .google.protobuf.BoolValue no_totals = 77;
   repeated string search_indices = 78;
+}
+
+message BlockRequest {
+  string blockhash = 1;
+  bool verbose = 2;
 }
