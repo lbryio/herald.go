@@ -18,8 +18,16 @@ type Server struct {
 	pb.UnimplementedHubServer
 }
 
+const (
+	ServeCmd = iota
+	SearchCmd = iota
+	GetblockCmd = iota
+	GetblockHeaderCmd = iota
+)
+
 type Args struct {
-	Serve bool
+	// TODO Make command types an enum
+	CmdType int
 	Host string
 	Port string
 	EsHost string

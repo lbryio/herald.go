@@ -43,12 +43,29 @@ func GetEnvironmentStandard() map[string]string {
 	})
 }
 
-func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
+/*
+func makeServeCmd(parser *argparse.Parser) *argparse.Command {
+	serveCmd := parser.NewCommand("serve", "start the hub server")
+
+	host := serveCmd.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
+	port := serveCmd.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
+	esHost := serveCmd.String("", "eshost", &argparse.Options{Required: false, Help: "host", Default: defaultEsHost})
+	esPort := serveCmd.String("", "esport", &argparse.Options{Required: false, Help: "port", Default: defaultEsPort})
+	dev := serveCmd.Flag("", "dev", &argparse.Options{Required: false, Help: "port", Default: false})
+
+	return serveCmd
+}
+ */
+
+func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *server.Args {
 
 	environment := GetEnvironmentStandard()
 	parser := argparse.NewParser("hub", "hub server and client")
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
+	searchCmd := parser.NewCommand("search", "claim search")
+	getblockCmd := parser.NewCommand("getblock", "get block")
+	getblockHeaderCmd := parser.NewCommand("getblockheader", "get block header")
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
@@ -66,6 +83,8 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	channelId := parser.String("", "channel_id", &argparse.Options{Required: false, Help: "channel id"})
 	channelIds := parser.StringList("", "channel_ids", &argparse.Options{Required: false, Help: "channel ids"})
 
+	hash := parser.String("", "hash", &argparse.Options{Required: false, Help: "block hash"})
+
 	// Now parse the arguments
 	err := parser.Parse(os.Args)
 	if err != nil {
@@ -74,7 +93,7 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 
 
 	args := &server.Args{
-		Serve: false,
+		CmdType: server.SearchCmd,
 		Host: *host,
 		Port: ":" + *port,
 		EsHost: *esHost,
@@ -102,7 +121,15 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	}
 
 	if serveCmd.Happened() {
-		args.Serve = true
+		args.CmdType = server.ServeCmd
+	} else if searchCmd.Happened() {
+		args.CmdType = server.SearchCmd
+	} else if getblockCmd.Happened() {
+		args.CmdType = server.GetblockCmd
+		blockReq.Verbose = true
+	} else if getblockHeaderCmd.Happened() {
+		args.CmdType = server.GetblockHeaderCmd
+		blockReq.Verbose = true
 	}
 
 	if *text != "" {
@@ -133,15 +160,20 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: *channelIds}
 	}
 
+	if *hash != "" {
+		blockReq.Blockhash = *hash
+	}
+
 	return args
 }
 
 func main() {
 	searchRequest := &pb.SearchRequest{}
+	blockReq := &pb.BlockRequest{}
 
-	args := parseArgs(searchRequest)
+	args := parseArgs(searchRequest, blockReq)
 
-	if args.Serve {
+	if args.CmdType == server.ServeCmd {
 
 		l, err := net.Listen("tcp", args.Port)
 		if err != nil {
@@ -174,15 +206,29 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	log.Println(args)
+	if args.CmdType == server.SearchCmd {
+		r, err := c.Search(ctx, searchRequest)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	r, err := c.Search(ctx, searchRequest)
-	if err != nil {
-		log.Fatal(err)
-	}
+		log.Printf("found %d results\n", r.GetTotal())
 
-	log.Printf("found %d results\n", r.GetTotal())
-
-	for _, t := range r.Txos {
-		fmt.Printf("%s:%d\n", util.TxHashToTxId(t.TxHash), t.Nout)
+		for _, t := range r.Txos {
+			fmt.Printf("%s:%d\n", util.TxHashToTxId(t.TxHash), t.Nout)
+		}
+	} else if args.CmdType == server.GetblockCmd {
+		r, err := c.GetBlock(ctx, blockReq)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println(r)
+	} else if args.CmdType == server.GetblockHeaderCmd {
+		r, err := c.GetBlockHeader(ctx, blockReq)
+		if err != nil {
+			log.Fatal(err)
+		}
+		log.Println(r)
 	}
 }

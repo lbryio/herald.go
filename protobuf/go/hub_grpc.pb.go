@@ -19,6 +19,8 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HubClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error)
+	GetBlock(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockOutput, error)
+	GetBlockHeader(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockHeaderOutput, error)
 }
 
 type hubClient struct {
@@ -38,11 +40,31 @@ func (c *hubClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *hubClient) GetBlock(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockOutput, error) {
+	out := new(BlockOutput)
+	err := c.cc.Invoke(ctx, "/pb.Hub/GetBlock", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) GetBlockHeader(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockHeaderOutput, error) {
+	out := new(BlockHeaderOutput)
+	err := c.cc.Invoke(ctx, "/pb.Hub/GetBlockHeader", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HubServer is the server API for Hub service.
 // All implementations must embed UnimplementedHubServer
 // for forward compatibility
 type HubServer interface {
 	Search(context.Context, *SearchRequest) (*Outputs, error)
+	GetBlock(context.Context, *BlockRequest) (*BlockOutput, error)
+	GetBlockHeader(context.Context, *BlockRequest) (*BlockHeaderOutput, error)
 	mustEmbedUnimplementedHubServer()
 }
 
@@ -52,6 +74,12 @@ type UnimplementedHubServer struct {
 
 func (UnimplementedHubServer) Search(context.Context, *SearchRequest) (*Outputs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedHubServer) GetBlock(context.Context, *BlockRequest) (*BlockOutput, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBlock not implemented")
+}
+func (UnimplementedHubServer) GetBlockHeader(context.Context, *BlockRequest) (*BlockHeaderOutput, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetBlockHeader not implemented")
 }
 func (UnimplementedHubServer) mustEmbedUnimplementedHubServer() {}
 
@@ -84,6 +112,42 @@ func _Hub_Search_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Hub_GetBlock_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).GetBlock(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/GetBlock",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).GetBlock(ctx, req.(*BlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_GetBlockHeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(BlockRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).GetBlockHeader(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/GetBlockHeader",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).GetBlockHeader(ctx, req.(*BlockRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Hub_ServiceDesc is the grpc.ServiceDesc for Hub service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -94,6 +158,14 @@ var Hub_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Search",
 			Handler:    _Hub_Search_Handler,
+		},
+		{
+			MethodName: "GetBlock",
+			Handler:    _Hub_GetBlock_Handler,
+		},
+		{
+			MethodName: "GetBlockHeader",
+			Handler:    _Hub_GetBlockHeader_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

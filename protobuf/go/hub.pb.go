@@ -745,6 +745,61 @@ func (x *SearchRequest) GetSearchIndices() []string {
 	return nil
 }
 
+type BlockRequest struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Blockhash string `protobuf:"bytes,1,opt,name=blockhash,proto3" json:"blockhash"`
+	Verbose   bool   `protobuf:"varint,2,opt,name=verbose,proto3" json:"verbose"`
+}
+
+func (x *BlockRequest) Reset() {
+	*x = BlockRequest{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_hub_proto_msgTypes[3]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *BlockRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*BlockRequest) ProtoMessage() {}
+
+func (x *BlockRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_hub_proto_msgTypes[3]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use BlockRequest.ProtoReflect.Descriptor instead.
+func (*BlockRequest) Descriptor() ([]byte, []int) {
+	return file_hub_proto_rawDescGZIP(), []int{3}
+}
+
+func (x *BlockRequest) GetBlockhash() string {
+	if x != nil {
+		return x.Blockhash
+	}
+	return ""
+}
+
+func (x *BlockRequest) GetVerbose() bool {
+	if x != nil {
+		return x.Verbose
+	}
+	return false
+}
+
 var File_hub_proto protoreflect.FileDescriptor
 
 var file_hub_proto_rawDesc = []byte{
@@ -947,13 +1002,24 @@ var file_hub_proto_rawDesc = []byte{
 	0x52, 0x08, 0x6e, 0x6f, 0x54, 0x6f, 0x74, 0x61, 0x6c, 0x73, 0x12, 0x25, 0x0a, 0x0e, 0x73, 0x65,
 	0x61, 0x72, 0x63, 0x68, 0x5f, 0x69, 0x6e, 0x64, 0x69, 0x63, 0x65, 0x73, 0x18, 0x4e, 0x20, 0x03,
 	0x28, 0x09, 0x52, 0x0d, 0x73, 0x65, 0x61, 0x72, 0x63, 0x68, 0x49, 0x6e, 0x64, 0x69, 0x63, 0x65,
-	0x73, 0x32, 0x31, 0x0a, 0x03, 0x48, 0x75, 0x62, 0x12, 0x2a, 0x0a, 0x06, 0x53, 0x65, 0x61, 0x72,
-	0x63, 0x68, 0x12, 0x11, 0x2e, 0x70, 0x62, 0x2e, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x0b, 0x2e, 0x70, 0x62, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75,
-	0x74, 0x73, 0x22, 0x00, 0x42, 0x26, 0x5a, 0x24, 0x67, 0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63,
-	0x6f, 0x6d, 0x2f, 0x6c, 0x62, 0x72, 0x79, 0x69, 0x6f, 0x2f, 0x68, 0x75, 0x62, 0x2f, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x67, 0x6f, 0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72,
-	0x6f, 0x74, 0x6f, 0x33,
+	0x73, 0x22, 0x46, 0x0a, 0x0c, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73,
+	0x74, 0x12, 0x1c, 0x0a, 0x09, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x68, 0x61, 0x73, 0x68, 0x18, 0x01,
+	0x20, 0x01, 0x28, 0x09, 0x52, 0x09, 0x62, 0x6c, 0x6f, 0x63, 0x6b, 0x68, 0x61, 0x73, 0x68, 0x12,
+	0x18, 0x0a, 0x07, 0x76, 0x65, 0x72, 0x62, 0x6f, 0x73, 0x65, 0x18, 0x02, 0x20, 0x01, 0x28, 0x08,
+	0x52, 0x07, 0x76, 0x65, 0x72, 0x62, 0x6f, 0x73, 0x65, 0x32, 0x9f, 0x01, 0x0a, 0x03, 0x48, 0x75,
+	0x62, 0x12, 0x2a, 0x0a, 0x06, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x12, 0x11, 0x2e, 0x70, 0x62,
+	0x2e, 0x53, 0x65, 0x61, 0x72, 0x63, 0x68, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x0b,
+	0x2e, 0x70, 0x62, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x73, 0x22, 0x00, 0x12, 0x2f, 0x0a,
+	0x08, 0x47, 0x65, 0x74, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x12, 0x10, 0x2e, 0x70, 0x62, 0x2e, 0x42,
+	0x6c, 0x6f, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x1a, 0x0f, 0x2e, 0x70, 0x62,
+	0x2e, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x22, 0x00, 0x12, 0x3b,
+	0x0a, 0x0e, 0x47, 0x65, 0x74, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x48, 0x65, 0x61, 0x64, 0x65, 0x72,
+	0x12, 0x10, 0x2e, 0x70, 0x62, 0x2e, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x52, 0x65, 0x71, 0x75, 0x65,
+	0x73, 0x74, 0x1a, 0x15, 0x2e, 0x70, 0x62, 0x2e, 0x42, 0x6c, 0x6f, 0x63, 0x6b, 0x48, 0x65, 0x61,
+	0x64, 0x65, 0x72, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x22, 0x00, 0x42, 0x26, 0x5a, 0x24, 0x67,
+	0x69, 0x74, 0x68, 0x75, 0x62, 0x2e, 0x63, 0x6f, 0x6d, 0x2f, 0x6c, 0x62, 0x72, 0x79, 0x69, 0x6f,
+	0x2f, 0x68, 0x75, 0x62, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x62, 0x75, 0x66, 0x2f, 0x67, 0x6f,
+	0x2f, 0x70, 0x62, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -969,22 +1035,25 @@ func file_hub_proto_rawDescGZIP() []byte {
 }
 
 var file_hub_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_hub_proto_msgTypes = make([]protoimpl.MessageInfo, 4)
 var file_hub_proto_goTypes = []interface{}{
 	(RangeField_Op)(0),            // 0: pb.RangeField.Op
 	(*InvertibleField)(nil),       // 1: pb.InvertibleField
 	(*RangeField)(nil),            // 2: pb.RangeField
 	(*SearchRequest)(nil),         // 3: pb.SearchRequest
-	(*wrapperspb.Int32Value)(nil), // 4: google.protobuf.Int32Value
-	(*wrapperspb.BoolValue)(nil),  // 5: google.protobuf.BoolValue
-	(*Outputs)(nil),               // 6: pb.Outputs
+	(*BlockRequest)(nil),          // 4: pb.BlockRequest
+	(*wrapperspb.Int32Value)(nil), // 5: google.protobuf.Int32Value
+	(*wrapperspb.BoolValue)(nil),  // 6: google.protobuf.BoolValue
+	(*Outputs)(nil),               // 7: pb.Outputs
+	(*BlockOutput)(nil),           // 8: pb.BlockOutput
+	(*BlockHeaderOutput)(nil),     // 9: pb.BlockHeaderOutput
 }
 var file_hub_proto_depIdxs = []int32{
 	0,  // 0: pb.RangeField.op:type_name -> pb.RangeField.Op
-	4,  // 1: pb.SearchRequest.amount_order:type_name -> google.protobuf.Int32Value
-	4,  // 2: pb.SearchRequest.limit:type_name -> google.protobuf.Int32Value
-	4,  // 3: pb.SearchRequest.offset:type_name -> google.protobuf.Int32Value
-	5,  // 4: pb.SearchRequest.is_controlling:type_name -> google.protobuf.BoolValue
+	5,  // 1: pb.SearchRequest.amount_order:type_name -> google.protobuf.Int32Value
+	5,  // 2: pb.SearchRequest.limit:type_name -> google.protobuf.Int32Value
+	5,  // 3: pb.SearchRequest.offset:type_name -> google.protobuf.Int32Value
+	6,  // 4: pb.SearchRequest.is_controlling:type_name -> google.protobuf.BoolValue
 	1,  // 5: pb.SearchRequest.claim_id:type_name -> pb.InvertibleField
 	2,  // 6: pb.SearchRequest.tx_position:type_name -> pb.RangeField
 	2,  // 7: pb.SearchRequest.amount:type_name -> pb.RangeField
@@ -1000,7 +1069,7 @@ var file_hub_proto_depIdxs = []int32{
 	2,  // 17: pb.SearchRequest.duration:type_name -> pb.RangeField
 	2,  // 18: pb.SearchRequest.censor_type:type_name -> pb.RangeField
 	2,  // 19: pb.SearchRequest.channel_join:type_name -> pb.RangeField
-	5,  // 20: pb.SearchRequest.signature_valid:type_name -> google.protobuf.BoolValue
+	6,  // 20: pb.SearchRequest.signature_valid:type_name -> google.protobuf.BoolValue
 	2,  // 21: pb.SearchRequest.effective_amount:type_name -> pb.RangeField
 	2,  // 22: pb.SearchRequest.support_amount:type_name -> pb.RangeField
 	2,  // 23: pb.SearchRequest.trending_group:type_name -> pb.RangeField
@@ -1009,16 +1078,20 @@ var file_hub_proto_depIdxs = []int32{
 	2,  // 26: pb.SearchRequest.trending_global:type_name -> pb.RangeField
 	1,  // 27: pb.SearchRequest.channel_id:type_name -> pb.InvertibleField
 	1,  // 28: pb.SearchRequest.channel_ids:type_name -> pb.InvertibleField
-	4,  // 29: pb.SearchRequest.tx_nout:type_name -> google.protobuf.Int32Value
-	5,  // 30: pb.SearchRequest.has_channel_signature:type_name -> google.protobuf.BoolValue
-	5,  // 31: pb.SearchRequest.has_source:type_name -> google.protobuf.BoolValue
-	4,  // 32: pb.SearchRequest.limit_claims_per_channel:type_name -> google.protobuf.Int32Value
-	5,  // 33: pb.SearchRequest.remove_duplicates:type_name -> google.protobuf.BoolValue
-	5,  // 34: pb.SearchRequest.no_totals:type_name -> google.protobuf.BoolValue
+	5,  // 29: pb.SearchRequest.tx_nout:type_name -> google.protobuf.Int32Value
+	6,  // 30: pb.SearchRequest.has_channel_signature:type_name -> google.protobuf.BoolValue
+	6,  // 31: pb.SearchRequest.has_source:type_name -> google.protobuf.BoolValue
+	5,  // 32: pb.SearchRequest.limit_claims_per_channel:type_name -> google.protobuf.Int32Value
+	6,  // 33: pb.SearchRequest.remove_duplicates:type_name -> google.protobuf.BoolValue
+	6,  // 34: pb.SearchRequest.no_totals:type_name -> google.protobuf.BoolValue
 	3,  // 35: pb.Hub.Search:input_type -> pb.SearchRequest
-	6,  // 36: pb.Hub.Search:output_type -> pb.Outputs
-	36, // [36:37] is the sub-list for method output_type
-	35, // [35:36] is the sub-list for method input_type
+	4,  // 36: pb.Hub.GetBlock:input_type -> pb.BlockRequest
+	4,  // 37: pb.Hub.GetBlockHeader:input_type -> pb.BlockRequest
+	7,  // 38: pb.Hub.Search:output_type -> pb.Outputs
+	8,  // 39: pb.Hub.GetBlock:output_type -> pb.BlockOutput
+	9,  // 40: pb.Hub.GetBlockHeader:output_type -> pb.BlockHeaderOutput
+	38, // [38:41] is the sub-list for method output_type
+	35, // [35:38] is the sub-list for method input_type
 	35, // [35:35] is the sub-list for extension type_name
 	35, // [35:35] is the sub-list for extension extendee
 	0,  // [0:35] is the sub-list for field type_name
@@ -1067,6 +1140,18 @@ func file_hub_proto_init() {
 				return nil
 			}
 		}
+		file_hub_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*BlockRequest); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1074,7 +1159,7 @@ func file_hub_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_hub_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   3,
+			NumMessages:   4,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

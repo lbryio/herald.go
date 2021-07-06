@@ -8,6 +8,8 @@ package pb;
 
 service Hub {
   rpc Search (SearchRequest) returns (Outputs) {}
+  rpc GetBlock (BlockRequest) returns (BlockOutput) {}
+  rpc GetBlockHeader (BlockRequest) returns (BlockHeaderOutput) {}
 }
 
 message InvertibleField {
@@ -93,4 +95,9 @@ message SearchRequest {
   .google.protobuf.BoolValue remove_duplicates = 76;
   .google.protobuf.BoolValue no_totals = 77;
   repeated string search_indices = 78;
+}
+
+message BlockRequest {
+  string blockhash = 1;
+  bool verbose = 2;
 }
