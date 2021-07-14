@@ -1,8 +1,8 @@
-import os
-import io
-import sys
-import json
 import argparse
+import io
+import json
+import os
+import sys
 import unittest
 from datetime import date, datetime
 from getpass import getpass
@@ -137,7 +137,7 @@ def release(args):
         current_version = Version.from_content(version_file)
         print(f'Current Version: {current_version}')
     except:
-        current_version = Version(0)
+        current_version = Version()
         version_file = repo.create_file("version.txt", message="add version file", content=str(current_version).encode('utf-8'))
 
 
@@ -151,10 +151,14 @@ def release(args):
         new_version = current_version.increment(args.action)
     print(f'    New Version: {new_version}')
 
-    previous_release = repo.release_from_tag(args.start_tag or current_version.tag)
+    tag = args.start_tag if args.start_tag else current_version.tag
 
-    print(f' Changelog From: {previous_release.tag_name} ({previous_release.created_at})')
-    print()
+    try:
+        previous_release = repo.release_from_tag(tag)
+    except github3.exceptions.NotFoundError:
+        previous_release = list(repo.releases())[-1]
+        print(f' Changelog From: {previous_release.tag_name} ({previous_release.created_at})')
+        print()
 
     incompats = []
     release_texts = []
@@ -221,23 +225,58 @@ def release(args):
             version_file.decoded.decode('utf-8').replace(str(current_version), str(new_version)).encode()
         )['commit']
 
-        repo.create_tag(
-            tag=new_version.tag,
-            message=new_version.tag,
-            sha=commit.sha,
-            obj_type='commit',
-            tagger=commit.committer
-        )
+        if args.action != "current":
+            repo.create_tag(
+                tag=new_version.tag,
+                message=new_version.tag,
+                sha=commit.sha,
+                obj_type='commit',
+                tagger=commit.committer
+            )
 
-        repo.create_release(
-            new_version.tag,
-            name=new_version.tag,
-            body=body.getvalue(),
-            draft=True,
-        )
-
-    return 0
-
+            repo.create_release(
+                new_version.tag,
+                name=new_version.tag,
+                body=body.getvalue(),
+                draft=True,
+            )
+        elif args.action == "current":
+            print("in args.action == current")
+            try:
+                print(new_version.tag)
+                # if we have the tag and release already don't do anything
+                release = repo.release_from_tag(new_version.tag)
+                if release.prerelease:
+                    release.edit(prerelease=False)
+                return
+            except Exception as e:
+                print(e)
+                try:
+                    # We need to do this to get draft and prerelease releases
+                    release = repo.releases().next()
+                    # Case me have a release and no tag
+                    if release.name == new_version.tag:
+                        if release.draft:
+                            release.edit(draft=False, prerelease=True)
+                        elif release.prerelease:
+                            release.edit(prerelease=False)
+                        return
+                    else:
+                        raise Exception("asdf")
+                except:
+                    repo.create_tag(
+                        tag=new_version.tag,
+                        message=new_version.tag,
+                        sha=commit.sha,
+                        obj_type='commit',
+                        tagger=commit.committer
+                    )
+                repo.create_release(
+                    new_version.tag,
+                    name=new_version.tag,
+                    body=body.getvalue(),
+                    draft=True,
+                )
 
 class TestReleaseTool(unittest.TestCase):
 
