@@ -1,8 +1,12 @@
 package server
 
 import (
+	"context"
+	"fmt"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 	"log"
 	"regexp"
+	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
@@ -17,6 +21,8 @@ type Server struct {
 	EsClient     *elastic.Client
 	pb.UnimplementedHubServer
 }
+
+const majorVersion = 0
 
 const (
 	ServeCmd = iota
@@ -34,6 +40,15 @@ type Args struct {
 	EsHost string
 	EsPort string
 	Dev bool
+}
+
+func getVersion(alphaBeta string) string {
+	strPortion := time.Now().Format("2006.01.02")
+	majorVersionDate := fmt.Sprintf("v%d.%s", majorVersion, strPortion)
+	if len(alphaBeta) > 0 {
+		return fmt.Sprintf("%s-%s", majorVersionDate, alphaBeta)
+	}
+	return majorVersionDate
 }
 
 /*
@@ -76,7 +91,7 @@ type Args struct {
 */
 
 func MakeHubServer(args *Args) *Server {
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(10))
 
 	multiSpaceRe, err := regexp.Compile("\\s{2,}")
 	if err != nil {
@@ -96,4 +111,12 @@ func MakeHubServer(args *Args) *Server {
 	}
 
 	return s
+}
+
+func (s *Server) Ping(context context.Context, args *pb.NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
+	return &wrapperspb.StringValue{Value: "Hello, wolrd!"}, nil
+}
+
+func (s *Server) Version(context context.Context, args *pb.NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
+	return &wrapperspb.StringValue{Value: getVersion("beta")}, nil
 }

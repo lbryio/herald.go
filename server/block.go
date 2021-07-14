@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"log"
+	"time"
 
 	zmq "github.com/go-zeromq/zmq4"
 	//"net/rpc/jsonrpc"
@@ -18,7 +19,7 @@ func (s *Server) SubscribeHeaders(request *pb.BlockRequest, stream pb.Hub_Subscr
 
 	//  Prepare our subscriber
 	log.Println("asdf")
-	sub := zmq.NewSub(context.Background())
+	sub := zmq.NewSub(context.Background(), zmq.WithDialerRetry(time.Second * 60), zmq.WithDialerTimeout(time.Second * 30))
 	defer sub.Close()
 
 	err := sub.Dial("tcp://localhost:28333")
@@ -29,17 +30,19 @@ func (s *Server) SubscribeHeaders(request *pb.BlockRequest, stream pb.Hub_Subscr
 	err = sub.SetOption(zmq.OptionSubscribe, "hashblockheader")
 	//err = sub.SetOption(zmq.OptionSubscribe, "hashblock")
 	if err != nil {
-		log.Fatalf("could not subscribe: %v", err)
+		//log.Fatalf("could not subscribe: %v", err)
+		return err
 	}
 
 	for {
 		// Read envelope
 		msg, err := sub.Recv()
 		if err != nil {
-			log.Fatalf("could not receive message: %v", err)
+			//log.Fatalf("could not receive message: %v", err)
+			return err
 		}
 		hash := hex.EncodeToString(msg.Frames[1][0:32])
-		var height uint32 =  binary.LittleEndian.Uint32(msg.Frames[1][32:])
+		height := binary.LittleEndian.Uint32(msg.Frames[1][32:])
 		log.Printf("[%s] %s\n", msg.Frames[0], hash)
 		stream.Send(&pb.BlockHeaderOutput{Hash: hash, Height: int64(height)})
 	}

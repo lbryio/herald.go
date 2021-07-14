@@ -7,6 +7,7 @@ import (
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
+	wrapperspb "google.golang.org/protobuf/types/known/wrapperspb"
 )
 
 // This is a compile-time assertion to ensure that this generated file
@@ -22,6 +23,12 @@ type HubClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error)
 	GetBlock(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockOutput, error)
 	GetBlockHeader(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockHeaderOutput, error)
+	GetServerHeight(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.UInt64Value, error)
+	GetHeaders(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (Hub_GetHeadersClient, error)
+	Ping(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.StringValue, error)
+	Version(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.StringValue, error)
+	Features(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.StringValue, error)
+	Broadcast(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.UInt64Value, error)
 }
 
 type hubClient struct {
@@ -91,6 +98,83 @@ func (c *hubClient) GetBlockHeader(ctx context.Context, in *BlockRequest, opts .
 	return out, nil
 }
 
+func (c *hubClient) GetServerHeight(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.UInt64Value, error) {
+	out := new(wrapperspb.UInt64Value)
+	err := c.cc.Invoke(ctx, "/pb.Hub/GetServerHeight", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) GetHeaders(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (Hub_GetHeadersClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Hub_ServiceDesc.Streams[1], "/pb.Hub/GetHeaders", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &hubGetHeadersClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Hub_GetHeadersClient interface {
+	Recv() (*BlockHeaderOutput, error)
+	grpc.ClientStream
+}
+
+type hubGetHeadersClient struct {
+	grpc.ClientStream
+}
+
+func (x *hubGetHeadersClient) Recv() (*BlockHeaderOutput, error) {
+	m := new(BlockHeaderOutput)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+func (c *hubClient) Ping(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.StringValue, error) {
+	out := new(wrapperspb.StringValue)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Ping", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) Version(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.StringValue, error) {
+	out := new(wrapperspb.StringValue)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Version", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) Features(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.StringValue, error) {
+	out := new(wrapperspb.StringValue)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Features", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) Broadcast(ctx context.Context, in *NoParamsThisIsSilly, opts ...grpc.CallOption) (*wrapperspb.UInt64Value, error) {
+	out := new(wrapperspb.UInt64Value)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Broadcast", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HubServer is the server API for Hub service.
 // All implementations must embed UnimplementedHubServer
 // for forward compatibility
@@ -99,6 +183,12 @@ type HubServer interface {
 	Search(context.Context, *SearchRequest) (*Outputs, error)
 	GetBlock(context.Context, *BlockRequest) (*BlockOutput, error)
 	GetBlockHeader(context.Context, *BlockRequest) (*BlockHeaderOutput, error)
+	GetServerHeight(context.Context, *NoParamsThisIsSilly) (*wrapperspb.UInt64Value, error)
+	GetHeaders(*BlockRequest, Hub_GetHeadersServer) error
+	Ping(context.Context, *NoParamsThisIsSilly) (*wrapperspb.StringValue, error)
+	Version(context.Context, *NoParamsThisIsSilly) (*wrapperspb.StringValue, error)
+	Features(context.Context, *NoParamsThisIsSilly) (*wrapperspb.StringValue, error)
+	Broadcast(context.Context, *NoParamsThisIsSilly) (*wrapperspb.UInt64Value, error)
 	mustEmbedUnimplementedHubServer()
 }
 
@@ -117,6 +207,24 @@ func (UnimplementedHubServer) GetBlock(context.Context, *BlockRequest) (*BlockOu
 }
 func (UnimplementedHubServer) GetBlockHeader(context.Context, *BlockRequest) (*BlockHeaderOutput, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetBlockHeader not implemented")
+}
+func (UnimplementedHubServer) GetServerHeight(context.Context, *NoParamsThisIsSilly) (*wrapperspb.UInt64Value, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetServerHeight not implemented")
+}
+func (UnimplementedHubServer) GetHeaders(*BlockRequest, Hub_GetHeadersServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetHeaders not implemented")
+}
+func (UnimplementedHubServer) Ping(context.Context, *NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedHubServer) Version(context.Context, *NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Version not implemented")
+}
+func (UnimplementedHubServer) Features(context.Context, *NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Features not implemented")
+}
+func (UnimplementedHubServer) Broadcast(context.Context, *NoParamsThisIsSilly) (*wrapperspb.UInt64Value, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Broadcast not implemented")
 }
 func (UnimplementedHubServer) mustEmbedUnimplementedHubServer() {}
 
@@ -206,6 +314,117 @@ func _Hub_GetBlockHeader_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Hub_GetServerHeight_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NoParamsThisIsSilly)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).GetServerHeight(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/GetServerHeight",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).GetServerHeight(ctx, req.(*NoParamsThisIsSilly))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_GetHeaders_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BlockRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(HubServer).GetHeaders(m, &hubGetHeadersServer{stream})
+}
+
+type Hub_GetHeadersServer interface {
+	Send(*BlockHeaderOutput) error
+	grpc.ServerStream
+}
+
+type hubGetHeadersServer struct {
+	grpc.ServerStream
+}
+
+func (x *hubGetHeadersServer) Send(m *BlockHeaderOutput) error {
+	return x.ServerStream.SendMsg(m)
+}
+
+func _Hub_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NoParamsThisIsSilly)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Ping(ctx, req.(*NoParamsThisIsSilly))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_Version_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NoParamsThisIsSilly)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Version(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Version",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Version(ctx, req.(*NoParamsThisIsSilly))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_Features_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NoParamsThisIsSilly)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Features(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Features",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Features(ctx, req.(*NoParamsThisIsSilly))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_Broadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(NoParamsThisIsSilly)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Broadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Broadcast",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Broadcast(ctx, req.(*NoParamsThisIsSilly))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Hub_ServiceDesc is the grpc.ServiceDesc for Hub service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -225,11 +444,36 @@ var Hub_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetBlockHeader",
 			Handler:    _Hub_GetBlockHeader_Handler,
 		},
+		{
+			MethodName: "GetServerHeight",
+			Handler:    _Hub_GetServerHeight_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _Hub_Ping_Handler,
+		},
+		{
+			MethodName: "Version",
+			Handler:    _Hub_Version_Handler,
+		},
+		{
+			MethodName: "Features",
+			Handler:    _Hub_Features_Handler,
+		},
+		{
+			MethodName: "Broadcast",
+			Handler:    _Hub_Broadcast_Handler,
+		},
 	},
 	Streams: []grpc.StreamDesc{
 		{
 			StreamName:    "SubscribeHeaders",
 			Handler:       _Hub_SubscribeHeaders_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetHeaders",
+			Handler:       _Hub_GetHeaders_Handler,
 			ServerStreams: true,
 		},
 	},

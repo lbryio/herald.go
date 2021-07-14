@@ -11,7 +11,15 @@ service Hub {
   rpc Search (SearchRequest) returns (Outputs) {}
   rpc GetBlock (BlockRequest) returns (BlockOutput) {}
   rpc GetBlockHeader (BlockRequest) returns (BlockHeaderOutput) {}
+  rpc GetServerHeight (NoParamsThisIsSilly) returns (google.protobuf.UInt64Value) {}
+  rpc GetHeaders (BlockRequest) returns (stream BlockHeaderOutput) {}
+  rpc Ping (NoParamsThisIsSilly) returns (google.protobuf.StringValue) {}
+  rpc Version (NoParamsThisIsSilly) returns (google.protobuf.StringValue) {}
+  rpc Features (NoParamsThisIsSilly) returns (google.protobuf.StringValue) {}
+  rpc Broadcast(NoParamsThisIsSilly) returns (google.protobuf.UInt64Value) {}
 }
+
+message NoParamsThisIsSilly {}
 
 message InvertibleField {
   bool invert = 1;
