@@ -3,10 +3,15 @@ package server
 import (
 	"context"
 	"fmt"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"log"
+	"net/http"
 	"regexp"
 	"time"
+	"unsafe"
 
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
@@ -31,6 +36,66 @@ const (
 	GetblockHeaderCmd = iota
 	SubscribeHeaderCmd = iota
 )
+
+var (
+	myCounters = map[string]prometheus.Metric{
+		"pings": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "pings",
+			Help: "Number of pings",
+		}),
+		"header_subs": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "header_subs",
+			Help: "Number of header subs",
+		}),
+		"zero_channels_counter": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "zero_channels_counter",
+			Help: "Number of times zero channels were returned in getUniqueChanne;s",
+		}),
+		"no_reposted_counter": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "no_reposted_counter",
+			Help: "Number of times zero reposted were returned in getClaimsForRepost",
+		}),
+		"get_unique_channels_errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "get_unique_channels_errors",
+			Help: "Number of errors",
+		}),
+		"json_errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "json_errors",
+			Help: "JSON parsing errors",
+		}),
+		"mget_errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "mget_errors",
+			Help: "Mget errors",
+		}),
+		"searches": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "searches",
+			Help: "Total number of searches",
+		}),
+		"client_creation_errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "client_creation_errors",
+			Help: "Number of errors",
+		}),
+		"search_errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "search_errors",
+			Help: "Number of errors",
+		}),
+		"fatal_errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "fatal_errors",
+			Help: "Number of errors",
+		}),
+		"errors": promauto.NewCounter(prometheus.CounterOpts{
+			Name: "errors",
+			Help: "Number of errors",
+		}),
+		"query_time": promauto.NewSummary(prometheus.SummaryOpts{
+			MaxAge: time.Hour,
+			Name: "query_time",
+			Help: "hourly summary of query time",
+		}),
+	}
+)
+
+
 
 type Args struct {
 	// TODO Make command types an enum
@@ -113,7 +178,30 @@ func MakeHubServer(args *Args) *Server {
 	return s
 }
 
+func (s *Server) RecordMetrics(typ string, data interface{}) {
+	metric := myCounters[typ]
+	if typ != "query_time" {
+		counter := *(*prometheus.Counter)(unsafe.Pointer(&metric))
+		counter.Inc()
+	}
+	summary := *(*prometheus.Summary)(unsafe.Pointer(&metric))
+	summary.Observe(float64(*(*int64)(unsafe.Pointer(&data))))
+}
+
+
+func (s *Server) PromethusEndpoint(port string, endpoint string) error {
+	http.Handle("/" + endpoint, promhttp.Handler())
+	log.Println(fmt.Sprintf("listening on :%s /%s", port, endpoint))
+	err := http.ListenAndServe(":" + port, nil)
+	if err != nil {
+		return err
+	}
+	log.Fatalln("Shouldn't happen??!?!")
+	return nil
+}
+
 func (s *Server) Ping(context context.Context, args *pb.NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
+	s.RecordMetrics("pings", nil)
 	return &wrapperspb.StringValue{Value: "Hello, wolrd!"}, nil
 }
 

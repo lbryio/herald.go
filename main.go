@@ -192,6 +192,7 @@ func main() {
 
 		log.Printf("listening on %s\n", l.Addr().String())
 		log.Println(s.Args)
+		go s.PromethusEndpoint("2112", "metrics")
 		if err := s.GrpcServer.Serve(l); err != nil {
 			log.Fatalf("failed to serve: %v", err)
 		}
