@@ -18,6 +18,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HubClient interface {
+	SubscribeHeaders(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (Hub_SubscribeHeadersClient, error)
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error)
 	GetBlock(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockOutput, error)
 	GetBlockHeader(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (*BlockHeaderOutput, error)
@@ -29,6 +30,38 @@ type hubClient struct {
 
 func NewHubClient(cc grpc.ClientConnInterface) HubClient {
 	return &hubClient{cc}
+}
+
+func (c *hubClient) SubscribeHeaders(ctx context.Context, in *BlockRequest, opts ...grpc.CallOption) (Hub_SubscribeHeadersClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Hub_ServiceDesc.Streams[0], "/pb.Hub/SubscribeHeaders", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &hubSubscribeHeadersClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Hub_SubscribeHeadersClient interface {
+	Recv() (*BlockHeaderOutput, error)
+	grpc.ClientStream
+}
+
+type hubSubscribeHeadersClient struct {
+	grpc.ClientStream
+}
+
+func (x *hubSubscribeHeadersClient) Recv() (*BlockHeaderOutput, error) {
+	m := new(BlockHeaderOutput)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
 }
 
 func (c *hubClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error) {
@@ -62,6 +95,7 @@ func (c *hubClient) GetBlockHeader(ctx context.Context, in *BlockRequest, opts .
 // All implementations must embed UnimplementedHubServer
 // for forward compatibility
 type HubServer interface {
+	SubscribeHeaders(*BlockRequest, Hub_SubscribeHeadersServer) error
 	Search(context.Context, *SearchRequest) (*Outputs, error)
 	GetBlock(context.Context, *BlockRequest) (*BlockOutput, error)
 	GetBlockHeader(context.Context, *BlockRequest) (*BlockHeaderOutput, error)
@@ -72,6 +106,9 @@ type HubServer interface {
 type UnimplementedHubServer struct {
 }
 
+func (UnimplementedHubServer) SubscribeHeaders(*BlockRequest, Hub_SubscribeHeadersServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeHeaders not implemented")
+}
 func (UnimplementedHubServer) Search(context.Context, *SearchRequest) (*Outputs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
 }
@@ -92,6 +129,27 @@ type UnsafeHubServer interface {
 
 func RegisterHubServer(s grpc.ServiceRegistrar, srv HubServer) {
 	s.RegisterService(&Hub_ServiceDesc, srv)
+}
+
+func _Hub_SubscribeHeaders_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(BlockRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(HubServer).SubscribeHeaders(m, &hubSubscribeHeadersServer{stream})
+}
+
+type Hub_SubscribeHeadersServer interface {
+	Send(*BlockHeaderOutput) error
+	grpc.ServerStream
+}
+
+type hubSubscribeHeadersServer struct {
+	grpc.ServerStream
+}
+
+func (x *hubSubscribeHeadersServer) Send(m *BlockHeaderOutput) error {
+	return x.ServerStream.SendMsg(m)
 }
 
 func _Hub_Search_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -168,6 +226,12 @@ var Hub_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Hub_GetBlockHeader_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeHeaders",
+			Handler:       _Hub_SubscribeHeaders_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "hub.proto",
 }

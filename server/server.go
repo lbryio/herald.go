@@ -23,6 +23,7 @@ const (
 	SearchCmd = iota
 	GetblockCmd = iota
 	GetblockHeaderCmd = iota
+	SubscribeHeaderCmd = iota
 )
 
 type Args struct {

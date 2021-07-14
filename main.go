@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -66,6 +67,7 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 	searchCmd := parser.NewCommand("search", "claim search")
 	getblockCmd := parser.NewCommand("getblock", "get block")
 	getblockHeaderCmd := parser.NewCommand("getblockheader", "get block header")
+	subscribeHeaderCmd := parser.NewCommand("subscribeheader", "get block header")
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
@@ -130,6 +132,9 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 	} else if getblockHeaderCmd.Happened() {
 		args.CmdType = server.GetblockHeaderCmd
 		blockReq.Verbose = true
+	} else if subscribeHeaderCmd.Happened() {
+		args.CmdType = server.SubscribeHeaderCmd
+		blockReq.Verbose = true
 	}
 
 	if *text != "" {
@@ -168,6 +173,7 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 }
 
 func main() {
+
 	searchRequest := &pb.SearchRequest{}
 	blockReq := &pb.BlockRequest{}
 
@@ -230,5 +236,22 @@ func main() {
 			log.Fatal(err)
 		}
 		log.Println(r)
+	} else if args.CmdType == server.SubscribeHeaderCmd {
+		ctx2, cancel2 := context.WithTimeout(context.Background(), time.Hour)
+		defer cancel2()
+		header, err := c.SubscribeHeaders(ctx2, blockReq)
+		if err != nil {
+			log.Fatal(err)
+		}
+		for {
+			x, err := header.Recv()
+			log.Println(x)
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				log.Fatalln(err)
+			}
+		}
 	}
 }

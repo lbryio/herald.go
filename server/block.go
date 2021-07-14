@@ -3,13 +3,47 @@ package server
 import (
 	"context"
 	"encoding/base64"
+	"encoding/binary"
+	"encoding/hex"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"log"
 
+	zmq "github.com/go-zeromq/zmq4"
 	//"net/rpc/jsonrpc"
 	"github.com/ybbus/jsonrpc/v2"
 )
 
+func (s *Server) SubscribeHeaders(request *pb.BlockRequest, stream pb.Hub_SubscribeHeadersServer) error {
+	//log.SetPrefix("psenvsub: ")
+
+	//  Prepare our subscriber
+	log.Println("asdf")
+	sub := zmq.NewSub(context.Background())
+	defer sub.Close()
+
+	err := sub.Dial("tcp://localhost:28333")
+	if err != nil {
+		log.Fatalf("could not dial: %v", err)
+	}
+
+	err = sub.SetOption(zmq.OptionSubscribe, "hashblockheader")
+	//err = sub.SetOption(zmq.OptionSubscribe, "hashblock")
+	if err != nil {
+		log.Fatalf("could not subscribe: %v", err)
+	}
+
+	for {
+		// Read envelope
+		msg, err := sub.Recv()
+		if err != nil {
+			log.Fatalf("could not receive message: %v", err)
+		}
+		hash := hex.EncodeToString(msg.Frames[1][0:32])
+		var height uint32 =  binary.LittleEndian.Uint32(msg.Frames[1][32:])
+		log.Printf("[%s] %s\n", msg.Frames[0], hash)
+		stream.Send(&pb.BlockHeaderOutput{Hash: hash, Height: int64(height)})
+	}
+}
 func (s *Server) GetBlock(ctx context.Context, blockReq *pb.BlockRequest) (*pb.BlockOutput, error) {
 
 	log.Println("In GetBlock")
@@ -47,7 +81,7 @@ func (s *Server) GetBlockHeader(ctx context.Context, blockReq *pb.BlockRequest) 
 
 	log.Println("Making call ...")
 	var r pb.BlockHeaderOutput
-	res, err := rpcClient.Call("getblock", blockReq.Blockhash)
+	res, err := rpcClient.Call("getblockheader", blockReq.Blockhash)
 	if err != nil {
 		log.Println(err)
 		return &pb.BlockHeaderOutput{Hash: "", Confirmations: 0}, err
