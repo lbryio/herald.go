@@ -23,6 +23,12 @@ AREA_RENAME = {
 }
 
 
+def build_upload_binary(release: github3.repos.release.Release) -> None:
+    #os.chdir(absolute_path)
+    os.system("go build .")
+    with open("./hub", "rb") as f:
+        release.upload_asset("binary", "hub", f)
+
 def get_github():
     config_path = os.path.expanduser('~/.lbry-release-tool.json')
     if os.path.exists(config_path):
@@ -241,13 +247,14 @@ def release(args):
                 draft=True,
             )
         elif args.action == "current":
-            print("in args.action == current")
             try:
                 print(new_version.tag)
                 # if we have the tag and release already don't do anything
                 release = repo.release_from_tag(new_version.tag)
                 if release.prerelease:
                     release.edit(prerelease=False)
+                else:
+                    build_upload_binary(release)
                 return
             except Exception as e:
                 print(e)
@@ -260,6 +267,8 @@ def release(args):
                             release.edit(draft=False, prerelease=True)
                         elif release.prerelease:
                             release.edit(prerelease=False)
+                        else:
+                            build_upload_binary(release)
                         return
                     else:
                         raise Exception("asdf")
