@@ -1,12 +1,15 @@
 name: "full-release"
-description: "full release on commit to master"
 on:
   push:
     branches:
       - master
-  jobs:
-    release:
-      runs-on: golang:1.16.6-alpine3.14
-      using: python:3.8.11-alpine3.14
-      steps:
-        - run: python3 scripts/version.py current --commit --commit --commit
+jobs:
+  release:
+    runs-on: golang:1.16.6-alpine3.14
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+        with:
+          python-version: '3.8'
+          architecture: 'x64'
+      - run: python3 scripts/version.py current --commit --commit --commit
