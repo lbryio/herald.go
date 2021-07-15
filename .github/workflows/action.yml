@@ -16,8 +16,8 @@ on:
       draft-release:
         runs-on: golang:1.16.6-alpine3.14
         using: python:3.8.11-alpine3.14
-          steps:
-              - run: python3 scripts/version.py current --commit # creates a draft release
+        steps:
+          - run: python3 scripts/version.py current --commit # creates a draft release
 
   push:
     branches:
@@ -25,7 +25,7 @@ on:
   jobs:
     full-release:
       runs-on: golang:1.16.6-alpine3.14
-        using: python:3.8.11-alpine3.14
-          steps:
-              - run: python3 scripts/version.py current --commit --commit ---commit
+      using: python:3.8.11-alpine3.14
+      steps:
+        - run: python3 scripts/version.py current --commit --commit ---commit
 
