@@ -1,0 +1,12 @@
+name: "full-release"
+description: "full release on commit to master"
+on:
+  push:
+    branches:
+      - master
+  jobs:
+    release:
+      runs-on: golang:1.16.6-alpine3.14
+      using: python:3.8.11-alpine3.14
+      steps:
+        - run: python3 scripts/version.py current --commit --commit --commit

@@ -1,0 +1,13 @@
+# draft-release.yml
+name: "draft-release"
+description: "draft release that runs on PRs"
+on:
+  pull_request:
+  jobs:
+    draft-release:
+      runs-on: golang:1.16.6-alpine3.14
+      using: python:3.8.11-alpine3.14
+      steps:
+        - run: python3 scripts/version.py current --commit # creates a draft release
+
+

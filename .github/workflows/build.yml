@@ -1,0 +1,11 @@
+name: 'Build Hub'
+description: 'Build job that runs on every commit'
+
+on:
+  push:
+  jobs:
+    build:
+      runs-on: golang:1.16.6-alpine3.14
+      steps:
+        - run: go build .
+        - run: ./protobuf/build.sh
