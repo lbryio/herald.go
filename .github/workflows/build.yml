@@ -17,6 +17,7 @@ jobs:
           cd /tmp && \
           wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.1/protobuf-all-3.17.1.tar.gz && \
           tar xfzv protobuf-all-3.17.1.tar.gz && \
+          cd protobuf-3.17.1 && \
           ./autogen.sh && \
           ./configure && \
           make && \
