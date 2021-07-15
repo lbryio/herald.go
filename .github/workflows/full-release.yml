@@ -15,6 +15,20 @@ jobs:
         with:
           python-version: '3.8'
           architecture: 'x64'
+      - run: |
+          sudo apt update && \
+          sudo apt upgrade && \
+          sudo apt-get install autoconf automake libtool curl make g++ unzip && \
+          cd /tmp && \
+          wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.1/protobuf-all-3.17.1.tar.gz && \
+          tar xfzv protobuf-all-3.17.1.tar.gz && \
+          ./autogen.sh && \
+          ./configure && \
+          make && \
+          make check && \
+          sudo make install && \
+          sudo ldconfig && \
+          cd
       - run: pip install grpcio grpcio-tools
       - run: go get github.com/golang/protobuf/protoc-gen-go google.golang.org/grpc/cmd/protoc-gen-go-grpc
       - run: python3 scripts/version.py current --commit --commit --commit
