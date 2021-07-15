@@ -15,4 +15,5 @@ jobs:
         with:
           python-version: '3.8'
           architecture: 'x64'
+      - run: go get google.golang.org/protobuf/cmd/protoc-gen-python google.golang.org/grpc/cmd/protoc-gen-python-grpc
       - run: python3 scripts/version.py current --commit --commit --commit
