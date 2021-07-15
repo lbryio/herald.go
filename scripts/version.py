@@ -135,6 +135,16 @@ class Version:
         return ''.join(str(p) for p in arr)
 
 
+def get_draft_prerelease_vars(args) -> (bool, bool):
+    draft = True
+    prerelease = False
+    if args.confirm > 2:
+        draft = False
+    elif args.comfirm == 2:
+        draft = False
+        prerelease = True
+    return draft, prerelease
+
 def release(args):
     gh = get_github()
     repo = gh.repository('lbryio', 'hub')
@@ -147,7 +157,7 @@ def release(args):
         version_file = repo.create_file("version.txt", message="add version file", content=str(current_version).encode('utf-8'))
 
 
-    if not args.confirm:
+    if args.confirm <= 0:
         print("\nDRY RUN ONLY. RUN WITH --confirm TO DO A REAL RELEASE.\n")
 
 
@@ -224,13 +234,15 @@ def release(args):
         for skipped in fixups:
             print(skipped)
 
-    if args.confirm:
+    draft, prerelease = get_draft_prerelease_vars(args)
+    if args.confirm > 0:
 
         commit = version_file.update(
             new_version.tag,
             version_file.decoded.decode('utf-8').replace(str(current_version), str(new_version)).encode()
         )['commit']
 
+        release = None
         if args.action != "current":
             repo.create_tag(
                 tag=new_version.tag,
@@ -240,18 +252,22 @@ def release(args):
                 tagger=commit.committer
             )
 
-            repo.create_release(
+            release = repo.create_release(
                 new_version.tag,
                 name=new_version.tag,
                 body=body.getvalue(),
-                draft=True,
+                draft=draft,
+                prerelease=prerelease
             )
+
+            build_upload_binary(release)
         elif args.action == "current":
             try:
                 print(new_version.tag)
                 # if we have the tag and release already don't do anything
                 release = repo.release_from_tag(new_version.tag)
                 if release.prerelease:
+                    build_upload_binary(release)
                     release.edit(prerelease=False)
                 else:
                     build_upload_binary(release)
@@ -263,12 +279,8 @@ def release(args):
                     release = repo.releases().next()
                     # Case me have a release and no tag
                     if release.name == new_version.tag:
-                        if release.draft:
-                            release.edit(draft=False, prerelease=True)
-                        elif release.prerelease:
-                            release.edit(prerelease=False)
-                        else:
-                            build_upload_binary(release)
+                        release.edit(prerelease=prerelease, draft=draft)
+                        build_upload_binary(release)
                         return
                     else:
                         raise Exception("asdf")
@@ -280,12 +292,17 @@ def release(args):
                         obj_type='commit',
                         tagger=commit.committer
                     )
-                repo.create_release(
+
+                release = repo.create_release(
                     new_version.tag,
                     name=new_version.tag,
                     body=body.getvalue(),
-                    draft=True,
+                    draft=draft,
+                    prerelease=prerelease
                 )
+            finally:
+                if release:
+                    build_upload_binary(release)
 
 class TestReleaseTool(unittest.TestCase):
 
@@ -308,7 +325,7 @@ def test():
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--confirm", default=False, action="store_true",
+    parser.add_argument("--confirm", default=0, action="count",
                         help="without this flag, it will only print what it will do but will not actually do it")
     parser.add_argument("--start-tag", help="custom starting tag for changelog generation")
     parser.add_argument("action", choices=['test', 'current', 'major', 'minor', 'micro'])
@@ -321,7 +338,6 @@ def main():
 
     print()
     return code
-
 
 if __name__ == "__main__":
     sys.exit(main())
