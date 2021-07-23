@@ -24,7 +24,15 @@ type Server struct {
 	MultiSpaceRe *regexp.Regexp
 	WeirdCharsRe *regexp.Regexp
 	EsClient     *elastic.Client
+	Servers      []*FederatedServer
 	pb.UnimplementedHubServer
+}
+
+type FederatedServer struct {
+	Address string
+	Port string
+	Ts time.Time
+	Ping int //?
 }
 
 const majorVersion = 0
@@ -167,12 +175,20 @@ func MakeHubServer(args *Args) *Server {
 	if err != nil {
 		log.Fatal(err)
 	}
-
+	self := &FederatedServer{
+		Address: "127.0.0.1",
+		Port: args.Port,
+		Ts: time.Now(),
+		Ping: 0,
+	}
+	servers := make([]*FederatedServer, 10)
+	servers = append(servers, self)
 	s := &Server {
 		GrpcServer: grpcServer,
 		Args: args,
 		MultiSpaceRe: multiSpaceRe,
 		WeirdCharsRe: weirdCharsRe,
+		Servers: servers,
 	}
 
 	return s
@@ -198,6 +214,13 @@ func (s *Server) PromethusEndpoint(port string, endpoint string) error {
 	}
 	log.Fatalln("Shouldn't happen??!?!")
 	return nil
+}
+
+func (s *Server) EHLO(context context.Context, args *FederatedServer) (*FederatedServer, error) {
+	s.RecordMetrics("federated_servers", nil)
+	s.Servers = append(s.Servers, args)
+
+	return s.Servers[0], nil
 }
 
 func (s *Server) Ping(context context.Context, args *pb.NoParamsThisIsSilly) (*wrapperspb.StringValue, error) {
