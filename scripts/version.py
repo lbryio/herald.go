@@ -140,7 +140,7 @@ def get_draft_prerelease_vars(args) -> (bool, bool):
     prerelease = False
     if args.confirm > 2:
         draft = False
-    elif args.comfirm == 2:
+    elif args.confirm == 2:
         draft = False
         prerelease = True
     return draft, prerelease
