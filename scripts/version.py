@@ -328,7 +328,7 @@ def main():
     parser.add_argument("--confirm", default=0, action="count",
                         help="without this flag, it will only print what it will do but will not actually do it")
     parser.add_argument("--start-tag", help="custom starting tag for changelog generation")
-    parser.add_argument("action", choices=['test', 'current', 'major', 'minor', 'micro'])
+    parser.add_argument("action", choices=['test', 'current', 'major', 'date', 'micro'])
     args = parser.parse_args()
 
     if args.action == "test":
