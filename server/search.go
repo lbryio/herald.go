@@ -26,30 +26,30 @@ import (
 const DefaultSearchSize = 1000
 
 type record struct {
-	Txid           		 string  `json:"tx_id"`
-	Nout           		 uint32  `json:"tx_nout"`
-	Height         		 uint32  `json:"height"`
-	ClaimId        		 string  `json:"claim_id"`
-	ChannelId      		 string  `json:"channel_id"`
-	RepostedClaimId 	 string  `json:"reposted_claim_id"`
-	CensorType      	 uint32  `json:"censor_type"`
-	CensoringChannelHash string  `json:"censoring_channel_hash"`
-	ShortUrl			 string  `json:"short_url"`
-	CanonicalUrl         string  `json:"canonical_url"`
-	IsControlling    	 bool    `json:"is_controlling"`
-	TakeOverHeight   	 uint32  `json:"last_take_over_height"`
-	CreationHeight   	 uint32  `json:"creation_height"`
-	ActivationHeight 	 uint32  `json:"activation_height"`
-	ExpirationHeight 	 uint32  `json:"expiration_height"`
-	ClaimsInChannel  	 uint32  `json:"claims_in_channel"`
-	Reposted         	 uint32  `json:"reposted"`
-	EffectiveAmount  	 uint64  `json:"effective_amount"`
-	SupportAmount    	 uint64  `json:"support_amount"`
-	TrendingGroup    	 uint32  `json:"trending_group"`
-	TrendingMixed    	 float32 `json:"trending_mixed"`
-	TrendingLocal    	 float32 `json:"trending_local"`
-	TrendingGlobal   	 float32 `json:"trending_global"`
-	Name 				 string  `json:"name"`
+	Txid               string  `json:"tx_id"`
+	Nout               uint32  `json:"tx_nout"`
+	Height             uint32  `json:"height"`
+	ClaimId            string  `json:"claim_id"`
+	ChannelId          string  `json:"channel_id"`
+	RepostedClaimId    string  `json:"reposted_claim_id"`
+	CensorType         uint32  `json:"censor_type"`
+	CensoringChannelId string  `json:"censoring_channel_id"`
+	ShortUrl           string  `json:"short_url"`
+	CanonicalUrl       string  `json:"canonical_url"`
+	IsControlling      bool    `json:"is_controlling"`
+	TakeOverHeight     uint32  `json:"last_take_over_height"`
+	CreationHeight     uint32  `json:"creation_height"`
+	ActivationHeight   uint32  `json:"activation_height"`
+	ExpirationHeight   uint32  `json:"expiration_height"`
+	ClaimsInChannel    uint32  `json:"claims_in_channel"`
+	RepostCount        uint32  `json:"repost_count"`
+	EffectiveAmount    uint64  `json:"effective_amount"`
+	SupportAmount      uint64  `json:"support_amount"`
+	TrendingGroup      uint32  `json:"trending_group"`
+	TrendingMixed      float32 `json:"trending_mixed"`
+	TrendingLocal      float32 `json:"trending_local"`
+	TrendingGlobal     float32 `json:"trending_global"`
+	Name               string  `json:"name"`
 }
 
 type orderField struct {
@@ -148,19 +148,25 @@ func (s *Server) recordErrorAndDie(err error) {
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
 	s.RecordMetrics("searches", nil)
 	t0 := time.Now()
-	var client *elastic.Client = nil
-	if s.EsClient == nil {
-		esUrl := s.Args.EsHost + ":" + s.Args.EsPort
-		tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
-		if err != nil {
-			s.recordErrorAndReturn(err, "client_creation_errors")
-			return nil, err
-		}
-		client = tmpClient
-		s.EsClient = client
-	} else {
-		client = s.EsClient
+	esUrl := s.Args.EsHost + ":" + s.Args.EsPort
+	tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
+	if err != nil {
+		s.recordErrorAndReturn(err, "client_creation_errors")
+		return nil, err
 	}
+	var client = tmpClient
+	//if s.EsClient == nil {
+	//	esUrl := s.Args.EsHost + ":" + s.Args.EsPort
+	//	tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
+	//	if err != nil {
+	//		s.recordErrorAndReturn(err, "client_creation_errors")
+	//		return nil, err
+	//	}
+	//	client = tmpClient
+	//	s.EsClient = client
+	//} else {
+	//	client = s.EsClient
+	//}
 
 	var from = 0
 	var pageSize = 10
@@ -197,7 +203,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		FetchSourceContext(fsc).
 		Query(q). // specify the query
 		From(0).Size(DefaultSearchSize)
-
 
 	for _, x := range orderBy {
 		search = search.Sort(x.Field, x.IsAsc)
@@ -360,9 +365,10 @@ func (s *Server) setupEsQuery(
 	}
 
 	replacements := map[string]string {
-		"name": "normalized",
+		"name": "normalized_name",
 		"txid": "tx_id",
-		"claim_hash": "_id",
+		//"claim_hash": "_id",
+		"reposted": "repost_count",
 	}
 
 	textFields := map[string]bool {
@@ -373,9 +379,10 @@ func (s *Server) setupEsQuery(
 		"description": true,
 		"claim_id": true,
 		"media_type": true,
-		"normalized": true,
+		"normalized_name": true,
 		"public_key_bytes": true,
 		"public_key_hash": true,
+		"public_key_id": true,
 		"short_url": true,
 		"signature": true,
 		"signature_digest": true,
@@ -410,7 +417,7 @@ func (s *Server) setupEsQuery(
 		for i := 0; i < len(in.Name); i++ {
 			normalized[i] = util.NormalizeName(in.Name[i])
 		}
-		in.Normalized = normalized
+		in.NormalizedName = normalized
 	}
 
 	if len(in.OrderBy) > 0 {
@@ -484,18 +491,18 @@ func (s *Server) setupEsQuery(
 
 	if in.PublicKeyId != "" {
 		value := hex.EncodeToString(base58.Decode(in.PublicKeyId)[1:21])
-		q = q.Must(elastic.NewTermQuery("public_key_hash.keyword", value))
+		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", value))
 	}
 
 	if in.HasChannelSignature != nil && in.HasChannelSignature.Value {
 		q = q.Must(elastic.NewExistsQuery("signature_digest"))
-		if in.SignatureValid != nil {
-			q = q.Must(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
+		if in.IsSignatureValid != nil {
+			q = q.Must(elastic.NewTermQuery("is_signature_valid", in.IsSignatureValid.Value))
 		}
-	} else if in.SignatureValid != nil {
+	} else if in.IsSignatureValid != nil {
 		q = q.MinimumNumberShouldMatch(1)
 		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
-		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
+		q = q.Should(elastic.NewTermQuery("is_signature_valid", in.IsSignatureValid.Value))
 	}
 
 	if in.HasSource != nil {
@@ -510,14 +517,13 @@ func (s *Server) setupEsQuery(
 		q = q.Must(elastic.NewTermQuery("tx_nout", in.TxNout.Value))
 	}
 
-	q = AddTermsField(q, in.PublicKeyHash, "public_key_hash.keyword")
 	q = AddTermsField(q, in.Author, "author.keyword")
 	q = AddTermsField(q, in.Title, "title.keyword")
 	q = AddTermsField(q, in.CanonicalUrl, "canonical_url.keyword")
 	q = AddTermsField(q, in.ClaimName, "claim_name.keyword")
 	q = AddTermsField(q, in.Description, "description.keyword")
 	q = AddTermsField(q, in.MediaType, "media_type.keyword")
-	q = AddTermsField(q, in.Normalized, "normalized.keyword")
+	q = AddTermsField(q, in.NormalizedName, "normalized_name.keyword")
 	q = AddTermsField(q, in.PublicKeyBytes, "public_key_bytes.keyword")
 	q = AddTermsField(q, in.ShortUrl, "short_url.keyword")
 	q = AddTermsField(q, in.Signature, "signature.keyword")
@@ -546,7 +552,7 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.ActivationHeight, "activation_height")
 	q = AddRangeField(q, in.ExpirationHeight, "expiration_height")
 	q = AddRangeField(q, in.ReleaseTime, "release_time")
-	q = AddRangeField(q, in.Reposted, "reposted")
+	q = AddRangeField(q, in.RepostCount, "repost_count")
 	q = AddRangeField(q, in.FeeAmount, "fee_amount")
 	q = AddRangeField(q, in.Duration, "duration")
 	q = AddRangeField(q, in.CensorType, "censor_type")
@@ -586,9 +592,9 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 				mget = mget.Add(nmget)
 				totalChannels++
 			}
-			if r.CensorType != 0 && !channelsSet[r.CensoringChannelHash] {
-				channelsSet[r.CensoringChannelHash] = true
-				nmget := elastic.NewMultiGetItem().Id(r.CensoringChannelHash).Index(searchIndex)
+			if r.CensorType != 0 && !channelsSet[r.CensoringChannelId] {
+				channelsSet[r.CensoringChannelId] = true
+				nmget := elastic.NewMultiGetItem().Id(r.CensoringChannelId).Index(searchIndex)
 				mget = mget.Add(nmget)
 				totalChannels++
 			}
@@ -608,7 +614,7 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 	channelTxos := make([]*pb.Output, totalChannels)
 	//repostedRecords := make([]*record, totalReposted)
 
-	log.Println("total channel", totalChannels)
+	//log.Println("total channel", totalChannels)
 	for i, doc := range res.Docs {
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
@@ -661,7 +667,7 @@ func (s * Server) getClaimsForReposts(ctx context.Context, client *elastic.Clien
 	repostedRecords := make([]*record, totalReposted)
 	respostedMap := make(map[string]*pb.Output)
 
-	log.Println("reposted records", totalReposted)
+	//log.Println("reposted records", totalReposted)
 	for i, doc := range res.Docs {
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
@@ -745,7 +751,7 @@ func (r *record) recordToOutput() *pb.Output {
 				ActivationHeight: r.ActivationHeight,
 				ExpirationHeight: r.ExpirationHeight,
 				ClaimsInChannel:  r.ClaimsInChannel,
-				Reposted:         r.Reposted,
+				Reposted:         r.RepostCount,
 				EffectiveAmount:  r.EffectiveAmount,
 				SupportAmount:    r.SupportAmount,
 				TrendingGroup:    r.TrendingGroup,
@@ -807,15 +813,15 @@ func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.B
 	blockedChannels := make(map[string]*pb.Blocked)
 	for _, r := range searchHits {
 		if r.CensorType != 0 {
-			if blockedChannels[r.CensoringChannelHash] == nil {
+			if blockedChannels[r.CensoringChannelId] == nil {
 				blockedObj := &pb.Blocked{
 					Count: 1,
 					Channel: nil,
 				}
-				blockedChannels[r.CensoringChannelHash] = blockedObj
+				blockedChannels[r.CensoringChannelId] = blockedObj
 				blockedHits = append(blockedHits, r)
 			} else {
-				blockedChannels[r.CensoringChannelHash].Count += 1
+				blockedChannels[r.CensoringChannelId].Count += 1
 			}
 		} else {
 			newHits = append(newHits, r)

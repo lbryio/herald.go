@@ -49,7 +49,7 @@ message SearchRequest {
   string last_take_over_height = 19;
   InvertibleField claim_id = 20;
   repeated string claim_name = 22;
-  repeated string normalized = 23;
+  repeated string normalized_name = 23;
   RangeField tx_position = 24;
   RangeField amount = 25;
   RangeField timestamp = 26;
@@ -65,7 +65,7 @@ message SearchRequest {
   repeated string author = 36;
   repeated string description = 37;
   repeated string claim_type = 38;
-  RangeField reposted = 39;
+  RangeField repost_count = 39;
   repeated string stream_type = 40;
   repeated string media_type = 41;
   RangeField fee_amount = 42;
@@ -75,7 +75,7 @@ message SearchRequest {
   RangeField censor_type = 46;
   string claims_in_channel = 47;
   RangeField channel_join = 48;
-  .google.protobuf.BoolValue signature_valid = 49;
+  .google.protobuf.BoolValue is_signature_valid = 49;
   RangeField effective_amount = 51;
   RangeField support_amount = 52;
   RangeField trending_group = 53;
@@ -89,7 +89,7 @@ message SearchRequest {
   repeated string signature = 61;
   repeated string signature_digest = 62;
   repeated string public_key_bytes = 63;
-  repeated string public_key_hash = 64;
+  // repeated string public_key_hash = 64;
   string public_key_id = 65;
   repeated bytes _id = 66;
   repeated string any_tags = 67;

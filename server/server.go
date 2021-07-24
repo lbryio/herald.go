@@ -3,19 +3,17 @@ package server
 import (
 	"context"
 	"fmt"
+	pb "github.com/lbryio/hub/protobuf/go"
+	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/wrapperspb"
 	"log"
 	"net/http"
 	"regexp"
 	"time"
-	"unsafe"
-
-	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/olivere/elastic/v7"
-	"google.golang.org/grpc"
 )
 
 type Server struct {
@@ -195,6 +193,8 @@ func MakeHubServer(args *Args) *Server {
 }
 
 func (s *Server) RecordMetrics(typ string, data interface{}) {
+	return
+	/*
 	metric := myCounters[typ]
 	if typ != "query_time" {
 		counter := *(*prometheus.Counter)(unsafe.Pointer(&metric))
@@ -202,6 +202,7 @@ func (s *Server) RecordMetrics(typ string, data interface{}) {
 	}
 	summary := *(*prometheus.Summary)(unsafe.Pointer(&metric))
 	summary.Observe(float64(*(*int64)(unsafe.Pointer(&data))))
+	 */
 }
 
 
