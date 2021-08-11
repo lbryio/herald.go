@@ -454,12 +454,12 @@ func (s *Server) setupEsQuery(
 	if in.HasChannelSignature != nil && in.HasChannelSignature.Value {
 		q = q.Must(elastic.NewExistsQuery("signature_digest"))
 		if in.SignatureValid != nil {
-			q = q.Must(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
+			q = q.Must(elastic.NewTermQuery("is_signature_valid", in.SignatureValid.Value))
 		}
 	} else if in.SignatureValid != nil {
 		q = q.MinimumNumberShouldMatch(1)
 		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
-		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
+		q = q.Should(elastic.NewTermQuery("is_signature_valid", in.SignatureValid.Value))
 	}
 
 	if in.HasSource != nil {
