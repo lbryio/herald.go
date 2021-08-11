@@ -32,7 +32,7 @@ type record struct {
 	ChannelId            string  `json:"channel_id"`
 	RepostedClaimId      string  `json:"reposted_claim_id"`
 	CensorType           uint32  `json:"censor_type"`
-	CensoringChannelHash string  `json:"censoring_channel_hash"`
+	CensoringChannelHash string  `json:"censoring_channel_id"`
 	ShortUrl             string  `json:"short_url"`
 	CanonicalUrl         string  `json:"canonical_url"`
 	IsControlling        bool    `json:"is_controlling"`
