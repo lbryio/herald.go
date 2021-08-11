@@ -153,26 +153,12 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var pageSize = 10
 	var orderBy []orderField
 	var searchIndices = []string{}
+	searchIndices = make([]string, 0, 1)
+	searchIndices = append(searchIndices, s.Args.EsIndex)
 
 	q := elastic.NewBoolQuery()
 
 	q = s.setupEsQuery(q, in, &pageSize, &from, &orderBy)
-
-	if s.Args.Dev && len(in.SearchIndices) == 0 {
-		// If we're running in dev mode ignore the mainnet claims index
-		indices, err := client.IndexNames()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		var numIndices = len(indices)
-		searchIndices = make([]string, 0, numIndices)
-		for i := 0; i < numIndices; i++ {
-			if indices[i] == "claims" {
-				continue
-			}
-			searchIndices = append(searchIndices, indices[i])
-		}
-	}
 
 	if len(in.SearchIndices) > 0 {
 		searchIndices = in.SearchIndices
@@ -184,7 +170,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		FetchSourceContext(fsc).
 		Query(q). // specify the query
 		From(0).Size(DefaultSearchSize)
-
 
 	for _, x := range orderBy {
 		search = search.Sort(x.Field, x.IsAsc)

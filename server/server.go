@@ -11,7 +11,7 @@ import (
 
 type Server struct {
 	GrpcServer   *grpc.Server
-	Args 	     *Args
+	Args         *Args
 	MultiSpaceRe *regexp.Regexp
 	WeirdCharsRe *regexp.Regexp
 	EsClient     *elastic.Client
@@ -19,12 +19,12 @@ type Server struct {
 }
 
 type Args struct {
-	Serve bool
-	Host string
-	Port string
-	EsHost string
-	EsPort string
-	Dev bool
+	Serve   bool
+	Host    string
+	Port    string
+	EsHost  string
+	EsPort  string
+	EsIndex string
 }
 
 /*
@@ -79,9 +79,9 @@ func MakeHubServer(args *Args) *Server {
 		log.Fatal(err)
 	}
 
-	s := &Server {
-		GrpcServer: grpcServer,
-		Args: args,
+	s := &Server{
+		GrpcServer:   grpcServer,
+		Args:         args,
 		MultiSpaceRe: multiSpaceRe,
 		WeirdCharsRe: weirdCharsRe,
 	}

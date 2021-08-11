@@ -18,12 +18,12 @@ import (
 )
 
 const (
-	defaultHost = "0.0.0.0"
-	defaultPort = "50051"
-	defaultEsHost = "http://localhost"
-	defaultEsPort = "9200"
+	defaultHost    = "0.0.0.0"
+	defaultPort    = "50051"
+	defaultEsHost  = "http://localhost"
+	defaultEsIndex = "claims"
+	defaultEsPort  = "9200"
 )
-
 
 func GetEnvironment(data []string, getkeyval func(item string) (key, val string)) map[string]string {
 	items := make(map[string]string)
@@ -53,8 +53,8 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "host", Default: defaultEsHost})
+	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "host", Default: defaultEsIndex})
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "port", Default: defaultEsPort})
-	dev := parser.Flag("", "dev", &argparse.Options{Required: false, Help: "port", Default: false})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -72,14 +72,13 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 		log.Fatalln(parser.Usage(err))
 	}
 
-
 	args := &server.Args{
-		Serve: false,
-		Host: *host,
-		Port: ":" + *port,
-		EsHost: *esHost,
-		EsPort: *esPort,
-		Dev: *dev,
+		Serve:   false,
+		Host:    *host,
+		Port:    ":" + *port,
+		EsHost:  *esHost,
+		EsPort:  *esPort,
+		EsIndex: *esIndex,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
@@ -95,8 +94,8 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	}
 
 	/*
-	Verify no invalid argument combinations
-	 */
+		Verify no invalid argument combinations
+	*/
 	if len(*channelIds) > 0 && *channelId != "" {
 		log.Fatal("Cannot specify both channel_id and channel_ids")
 	}
@@ -108,7 +107,7 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	if *text != "" {
 		searchRequest.Text = *text
 	}
-	if *name!= "" {
+	if *name != "" {
 		searchRequest.Name = []string{*name}
 	}
 	if *claimType != "" {
@@ -173,7 +172,6 @@ func main() {
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-
 
 	r, err := c.Search(ctx, searchRequest)
 	if err != nil {
