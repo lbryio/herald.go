@@ -50,11 +50,11 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
 
-	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
-	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
-	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "host", Default: defaultEsHost})
-	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "host", Default: defaultEsIndex})
-	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "port", Default: defaultEsPort})
+	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: defaultHost})
+	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: defaultPort})
+	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: defaultEsHost})
+	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: defaultEsPort})
+	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: defaultEsIndex})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
