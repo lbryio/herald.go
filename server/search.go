@@ -41,7 +41,7 @@ type record struct {
 	ActivationHeight     uint32  `json:"activation_height"`
 	ExpirationHeight     uint32  `json:"expiration_height"`
 	ClaimsInChannel      uint32  `json:"claims_in_channel"`
-	Reposted             uint32  `json:"reposted"`
+	Reposted             uint32  `json:"repost_count"`
 	EffectiveAmount      uint64  `json:"effective_amount"`
 	SupportAmount        uint64  `json:"support_amount"`
 	TrendingGroup        uint32  `json:"trending_group"`
@@ -508,7 +508,7 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.ActivationHeight, "activation_height")
 	q = AddRangeField(q, in.ExpirationHeight, "expiration_height")
 	q = AddRangeField(q, in.ReleaseTime, "release_time")
-	q = AddRangeField(q, in.Reposted, "reposted")
+	q = AddRangeField(q, in.Reposted, "repost_count")
 	q = AddRangeField(q, in.FeeAmount, "fee_amount")
 	q = AddRangeField(q, in.Duration, "duration")
 	q = AddRangeField(q, in.CensorType, "censor_type")
