@@ -108,22 +108,22 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 		searchRequest.Text = *text
 	}
 	if *name != "" {
-		searchRequest.Name = []string{*name}
+		searchRequest.ClaimName = *name
 	}
 	if *claimType != "" {
 		searchRequest.ClaimType = []string{*claimType}
 	}
 	if *id != "" {
-		searchRequest.XId = [][]byte{[]byte(*id)}
+		searchRequest.ClaimId = &pb.InvertibleField{Invert: false, Value: []string{*id}}
 	}
 	if *author != "" {
-		searchRequest.Author = []string{*author}
+		searchRequest.Author = *author
 	}
 	if *title != "" {
-		searchRequest.Title = []string{*title}
+		searchRequest.Title = *title
 	}
 	if *description != "" {
-		searchRequest.Description = []string{*description}
+		searchRequest.Description = *description
 	}
 	if *channelId != "" {
 		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: []string{*channelId}}
