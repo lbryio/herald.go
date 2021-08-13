@@ -10,6 +10,7 @@ import (
 	"math"
 	"reflect"
 	"strings"
+	"time"
 
 	//"github.com/lbryio/hub/schema"
 
@@ -328,6 +329,7 @@ func (s *Server) checkQuery(in *pb.SearchRequest) error {
 	}
 	for name, failed := range checks {
 		if failed {
+			time.Sleep(2) // throttle
 			return errors.New(fmt.Sprintf("%s cant have more than %d items.", name, limit))
 		}
 	}
