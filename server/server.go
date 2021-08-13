@@ -25,6 +25,7 @@ type Args struct {
 	EsHost  string
 	EsPort  string
 	EsIndex string
+	Debug   bool
 }
 
 /*

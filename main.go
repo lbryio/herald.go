@@ -49,6 +49,7 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	parser := argparse.NewParser("hub", "hub server and client")
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
+	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: defaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: defaultPort})
@@ -79,6 +80,7 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 		EsHost:  *esHost,
 		EsPort:  *esPort,
 		EsIndex: *esIndex,
+		Debug:   *debug,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
