@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -164,6 +165,10 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	q := elastic.NewBoolQuery()
 
+	err := s.checkQuery(in)
+	if err != nil {
+		return nil, err
+	}
 	q = s.setupEsQuery(q, in, &pageSize, &from, &orderBy)
 
 	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
@@ -307,6 +312,26 @@ func (s *Server) postProcessResults(
 	}
 
 	return txos, extraTxos, blocked
+}
+
+func (s *Server) checkQuery(in *pb.SearchRequest) error {
+	limit := 2048
+	checks := map[string]bool{
+		"claim_ids":       in.ClaimId != nil && !in.ClaimId.Invert && len(in.ClaimId.Value) > limit,
+		"not_claim_ids":   in.ClaimId != nil && in.ClaimId.Invert && len(in.ClaimId.Value) > limit,
+		"channel_ids":     in.ChannelId != nil && !in.ChannelId.Invert && len(in.ChannelId.Value) > limit,
+		"not_channel_ids": in.ChannelId != nil && in.ChannelId.Invert && len(in.ChannelId.Value) > limit,
+		"not_tags":        len(in.NotTags) > limit,
+		"all_tags":        len(in.AllTags) > limit,
+		"any_tags":        len(in.AnyTags) > limit,
+		"any_languages":   len(in.AnyLanguages) > limit,
+	}
+	for name, failed := range checks {
+		if failed {
+			return errors.New(fmt.Sprintf("%s cant have more than %d items.", name, limit))
+		}
+	}
+	return nil
 }
 
 func (s *Server) setupEsQuery(
