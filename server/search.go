@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"log"
 	"math"
-	"os"
 	"reflect"
 	"strings"
 	"time"
@@ -144,28 +143,11 @@ func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name st
 // 8) return streams referenced by repost and all channel referenced in extra_txos
 //*/
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
-	var client *elastic.Client = nil
-	if s.EsClient == nil {
-		esUrl := s.Args.EsHost + ":" + s.Args.EsPort
-		opts := []elastic.ClientOptionFunc{elastic.SetSniff(false), elastic.SetURL(esUrl)}
-		if s.Args.Debug {
-			opts = append(opts, elastic.SetTraceLog(log.New(os.Stderr, "[[ELASTIC]]", 0)))
-		}
-		tmpClient, err := elastic.NewClient(opts...)
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		client = tmpClient
-		s.EsClient = client
-	} else {
-		client = s.EsClient
-	}
-
 	var from = 0
 	var pageSize = 10
 	var orderBy []orderField
 	var searchIndices = []string{}
+	client := s.EsClient
 	searchIndices = make([]string, 0, 1)
 	searchIndices = append(searchIndices, s.Args.EsIndex)
 

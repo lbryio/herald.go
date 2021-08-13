@@ -2,6 +2,7 @@ package server
 
 import (
 	"log"
+	"os"
 	"regexp"
 
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -80,11 +81,21 @@ func MakeHubServer(args *Args) *Server {
 		log.Fatal(err)
 	}
 
+	esUrl := args.EsHost + ":" + args.EsPort
+	opts := []elastic.ClientOptionFunc{elastic.SetSniff(false), elastic.SetURL(esUrl)}
+	if args.Debug {
+		opts = append(opts, elastic.SetTraceLog(log.New(os.Stderr, "[[ELASTIC]]", 0)))
+	}
+	client, err := elastic.NewClient(opts...)
+	if err != nil {
+		log.Fatal(err)
+	}
 	s := &Server{
 		GrpcServer:   grpcServer,
 		Args:         args,
 		MultiSpaceRe: multiSpaceRe,
 		WeirdCharsRe: weirdCharsRe,
+		EsClient:     client,
 	}
 
 	return s
