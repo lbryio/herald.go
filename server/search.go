@@ -178,8 +178,12 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}
 
 	searchResult, err := search.Do(ctx) // execute
-	if err != nil {
-		log.Println(err)
+	if err != nil && elastic.IsNotFound(err) {
+		log.Println("Index returned 404! Check writer. Index: ", searchIndices)
+		return &pb.Outputs{}, nil
+
+	} else if err != nil {
+		log.Println("Error executing query: ", err)
 		return nil, err
 	}
 
