@@ -2,6 +2,7 @@ package server
 
 import (
 	"log"
+	"os"
 	"regexp"
 
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -11,7 +12,7 @@ import (
 
 type Server struct {
 	GrpcServer   *grpc.Server
-	Args 	     *Args
+	Args         *Args
 	MultiSpaceRe *regexp.Regexp
 	WeirdCharsRe *regexp.Regexp
 	EsClient     *elastic.Client
@@ -19,12 +20,13 @@ type Server struct {
 }
 
 type Args struct {
-	Serve bool
-	Host string
-	Port string
-	EsHost string
-	EsPort string
-	Dev bool
+	Serve   bool
+	Host    string
+	Port    string
+	EsHost  string
+	EsPort  string
+	EsIndex string
+	Debug   bool
 }
 
 /*
@@ -79,11 +81,21 @@ func MakeHubServer(args *Args) *Server {
 		log.Fatal(err)
 	}
 
-	s := &Server {
-		GrpcServer: grpcServer,
-		Args: args,
+	esUrl := args.EsHost + ":" + args.EsPort
+	opts := []elastic.ClientOptionFunc{elastic.SetSniff(false), elastic.SetURL(esUrl)}
+	if args.Debug {
+		opts = append(opts, elastic.SetTraceLog(log.New(os.Stderr, "[[ELASTIC]]", 0)))
+	}
+	client, err := elastic.NewClient(opts...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s := &Server{
+		GrpcServer:   grpcServer,
+		Args:         args,
 		MultiSpaceRe: multiSpaceRe,
 		WeirdCharsRe: weirdCharsRe,
+		EsClient:     client,
 	}
 
 	return s

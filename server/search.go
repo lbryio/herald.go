@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
 	"reflect"
 	"strings"
+	"time"
 
 	//"github.com/lbryio/hub/schema"
 
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/golang/protobuf/ptypes/wrappers"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
@@ -25,30 +26,30 @@ import (
 const DefaultSearchSize = 1000
 
 type record struct {
-	Txid           		 string  `json:"tx_id"`
-	Nout           		 uint32  `json:"tx_nout"`
-	Height         		 uint32  `json:"height"`
-	ClaimId        		 string  `json:"claim_id"`
-	ChannelId      		 string  `json:"channel_id"`
-	RepostedClaimId 	 string  `json:"reposted_claim_id"`
-	CensorType      	 uint32  `json:"censor_type"`
-	CensoringChannelHash string  `json:"censoring_channel_hash"`
-	ShortUrl			 string  `json:"short_url"`
-	CanonicalUrl         string  `json:"canonical_url"`
-	IsControlling    	 bool    `json:"is_controlling"`
-	TakeOverHeight   	 uint32  `json:"last_take_over_height"`
-	CreationHeight   	 uint32  `json:"creation_height"`
-	ActivationHeight 	 uint32  `json:"activation_height"`
-	ExpirationHeight 	 uint32  `json:"expiration_height"`
-	ClaimsInChannel  	 uint32  `json:"claims_in_channel"`
-	Reposted         	 uint32  `json:"reposted"`
-	EffectiveAmount  	 uint64  `json:"effective_amount"`
-	SupportAmount    	 uint64  `json:"support_amount"`
-	TrendingGroup    	 uint32  `json:"trending_group"`
-	TrendingMixed    	 float32 `json:"trending_mixed"`
-	TrendingLocal    	 float32 `json:"trending_local"`
-	TrendingGlobal   	 float32 `json:"trending_global"`
-	Name 				 string  `json:"name"`
+	Txid               string  `json:"tx_id"`
+	Nout               uint32  `json:"tx_nout"`
+	Height             uint32  `json:"height"`
+	ClaimId            string  `json:"claim_id"`
+	ChannelId          string  `json:"channel_id"`
+	RepostedClaimId    string  `json:"reposted_claim_id"`
+	CensorType         uint32  `json:"censor_type"`
+	CensoringChannelId string  `json:"censoring_channel_id"`
+	ShortUrl           string  `json:"short_url"`
+	CanonicalUrl       string  `json:"canonical_url"`
+	IsControlling      bool    `json:"is_controlling"`
+	TakeOverHeight     uint32  `json:"last_take_over_height"`
+	CreationHeight     uint32  `json:"creation_height"`
+	ActivationHeight   uint32  `json:"activation_height"`
+	ExpirationHeight   uint32  `json:"expiration_height"`
+	ClaimsInChannel    uint32  `json:"claims_in_channel"`
+	Reposted           uint32  `json:"repost_count"`
+	EffectiveAmount    uint64  `json:"effective_amount"`
+	SupportAmount      uint64  `json:"support_amount"`
+	TrendingGroup      uint32  `json:"trending_group"`
+	TrendingMixed      float32 `json:"trending_mixed"`
+	TrendingLocal      float32 `json:"trending_local"`
+	TrendingGlobal     float32 `json:"trending_global"`
+	Name               string  `json:"name"`
 }
 
 type orderField struct {
@@ -70,6 +71,13 @@ func AddTermsField(q *elastic.BoolQuery, arr []string, name string) *elastic.Boo
 	}
 	searchVals := StrArrToInterface(arr)
 	return q.Must(elastic.NewTermsQuery(name, searchVals...))
+}
+
+func AddTermField(q *elastic.BoolQuery, value string, name string) *elastic.BoolQuery {
+	if value != "" {
+		return q.Must(elastic.NewTermQuery(name, value))
+	}
+	return q
 }
 
 func AddIndividualTermFields(q *elastic.BoolQuery, arr []string, name string, invert bool) *elastic.BoolQuery {
@@ -135,48 +143,21 @@ func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name st
 // 8) return streams referenced by repost and all channel referenced in extra_txos
 //*/
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
-	var client *elastic.Client = nil
-	if s.EsClient == nil {
-		esUrl := s.Args.EsHost + ":" + s.Args.EsPort
-		tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
-		if err != nil {
-			log.Println(err)
-			return nil, err
-		}
-		client = tmpClient
-		s.EsClient = client
-	} else {
-		client = s.EsClient
-	}
-
 	var from = 0
 	var pageSize = 10
 	var orderBy []orderField
 	var searchIndices = []string{}
+	client := s.EsClient
+	searchIndices = make([]string, 0, 1)
+	searchIndices = append(searchIndices, s.Args.EsIndex)
 
 	q := elastic.NewBoolQuery()
 
+	err := s.checkQuery(in)
+	if err != nil {
+		return nil, err
+	}
 	q = s.setupEsQuery(q, in, &pageSize, &from, &orderBy)
-
-	if s.Args.Dev && len(in.SearchIndices) == 0 {
-		// If we're running in dev mode ignore the mainnet claims index
-		indices, err := client.IndexNames()
-		if err != nil {
-			log.Fatalln(err)
-		}
-		var numIndices = len(indices)
-		searchIndices = make([]string, 0, numIndices)
-		for i := 0; i < numIndices; i++ {
-			if indices[i] == "claims" {
-				continue
-			}
-			searchIndices = append(searchIndices, indices[i])
-		}
-	}
-
-	if len(in.SearchIndices) > 0 {
-		searchIndices = in.SearchIndices
-	}
 
 	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
 	search := client.Search().
@@ -185,14 +166,17 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		Query(q). // specify the query
 		From(0).Size(DefaultSearchSize)
 
-
 	for _, x := range orderBy {
 		search = search.Sort(x.Field, x.IsAsc)
 	}
 
 	searchResult, err := search.Do(ctx) // execute
-	if err != nil {
-		log.Println(err)
+	if err != nil && elastic.IsNotFound(err) {
+		log.Println("Index returned 404! Check writer. Index: ", searchIndices)
+		return &pb.Outputs{}, nil
+
+	} else if err != nil {
+		log.Println("Error executing query: ", err)
 		return nil, err
 	}
 
@@ -200,12 +184,12 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 	txos, extraTxos, blocked := s.postProcessResults(ctx, client, searchResult, in, pageSize, from, searchIndices)
 
-	if in.NoTotals != nil && !in.NoTotals.Value {
+	if in.NoTotals {
 		return &pb.Outputs{
-			Txos:   txos,
+			Txos:      txos,
 			ExtraTxos: extraTxos,
-			Offset: uint32(int64(from) + searchResult.TotalHits()),
-			Blocked: blocked,
+			Offset:    uint32(int64(from) + searchResult.TotalHits()),
+			Blocked:   blocked,
 		}, nil
 	}
 
@@ -214,11 +198,11 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		blockedTotal += b.Count
 	}
 	return &pb.Outputs{
-		Txos:   txos,
-		ExtraTxos: extraTxos,
-		Total:  uint32(searchResult.TotalHits()),
-		Offset: uint32(int64(from) + searchResult.TotalHits()),
-		Blocked: blocked,
+		Txos:         txos,
+		ExtraTxos:    extraTxos,
+		Total:        uint32(searchResult.TotalHits()),
+		Offset:       uint32(int64(from) + searchResult.TotalHits()),
+		Blocked:      blocked,
 		BlockedTotal: blockedTotal,
 	}, nil
 }
@@ -233,7 +217,6 @@ func (s *Server) normalizeTag(tag string) string {
 
 	return string(res)
 }
-
 
 func (s *Server) cleanTags(tags []string) []string {
 	cleanedTags := make([]string, len(tags))
@@ -269,18 +252,18 @@ func (s *Server) postProcessResults(
 	//printJsonFullResults(searchResult)
 	records, blockedRecords, blockedMap = removeBlocked(records)
 
-	if in.RemoveDuplicates != nil {
+	if in.RemoveDuplicates {
 		records = removeDuplicates(records)
 	}
 
-	if in.LimitClaimsPerChannel != nil && in.LimitClaimsPerChannel.Value > 0 {
-		records = searchAhead(records, pageSize, int(in.LimitClaimsPerChannel.Value))
+	if in.LimitClaimsPerChannel > 0 {
+		records = searchAhead(records, pageSize, int(in.LimitClaimsPerChannel))
 	}
 
 	finalLength := int(math.Min(float64(len(records)), float64(pageSize)))
 	txos = make([]*pb.Output, 0, finalLength)
 	var j = 0
-	for i := from; i < from + finalLength && i < len(records) && j < finalLength; i++ {
+	for i := from; i < from+finalLength && i < len(records) && j < finalLength; i++ {
 		t := records[i]
 		res := t.recordToOutput()
 		txos = append(txos, res)
@@ -319,80 +302,91 @@ func (s *Server) postProcessResults(
 	return txos, extraTxos, blocked
 }
 
+func (s *Server) checkQuery(in *pb.SearchRequest) error {
+	limit := 2048
+	checks := map[string]bool{
+		"claim_ids":       in.ClaimId != nil && !in.ClaimId.Invert && len(in.ClaimId.Value) > limit,
+		"not_claim_ids":   in.ClaimId != nil && in.ClaimId.Invert && len(in.ClaimId.Value) > limit,
+		"channel_ids":     in.ChannelId != nil && !in.ChannelId.Invert && len(in.ChannelId.Value) > limit,
+		"not_channel_ids": in.ChannelId != nil && in.ChannelId.Invert && len(in.ChannelId.Value) > limit,
+		"not_tags":        len(in.NotTags) > limit,
+		"all_tags":        len(in.AllTags) > limit,
+		"any_tags":        len(in.AnyTags) > limit,
+		"any_languages":   len(in.AnyLanguages) > limit,
+	}
+	for name, failed := range checks {
+		if failed {
+			time.Sleep(2) // throttle
+			return errors.New(fmt.Sprintf("%s cant have more than %d items.", name, limit))
+		}
+	}
+	return nil
+}
+
 func (s *Server) setupEsQuery(
 	q *elastic.BoolQuery,
 	in *pb.SearchRequest,
 	pageSize *int,
 	from *int,
 	orderBy *[]orderField) *elastic.BoolQuery {
-	claimTypes := map[string]int {
-		"stream": 1,
-		"channel": 2,
-		"repost": 3,
+	claimTypes := map[string]int{
+		"stream":     1,
+		"channel":    2,
+		"repost":     3,
 		"collection": 4,
 	}
 
-	streamTypes := map[string]int {
-		"video": 1,
-		"audio": 2,
-		"image": 3,
+	streamTypes := map[string]int{
+		"video":    1,
+		"audio":    2,
+		"image":    3,
 		"document": 4,
-		"binary": 5,
-		"model": 6,
+		"binary":   5,
+		"model":    6,
 	}
 
-	replacements := map[string]string {
-		"name": "normalized",
-		"txid": "tx_id",
+	replacements := map[string]string{
+		"name":       "normalized_name",
+		"txid":       "tx_id",
 		"claim_hash": "_id",
 	}
 
-	textFields := map[string]bool {
-		"author": true,
-		"canonical_url": true,
-		"channel_id": true,
-		"claim_name": true,
-		"description": true,
-		"claim_id": true,
-		"media_type": true,
-		"normalized": true,
-		"public_key_bytes": true,
-		"public_key_hash": true,
-		"short_url": true,
-		"signature": true,
-		"signature_digest": true,
-		"stream_type": true,
-		"title": true,
-		"tx_id": true,
-		"fee_currency": true,
+	textFields := map[string]bool{
+		"author":            true,
+		"canonical_url":     true,
+		"channel_id":        true,
+		"claim_name":        true,
+		"description":       true,
+		"claim_id":          true,
+		"media_type":        true,
+		"normalized_name":   true,
+		"public_key_bytes":  true,
+		"public_key_id":     true,
+		"short_url":         true,
+		"signature":         true,
+		"signature_digest":  true,
+		"stream_type":       true,
+		"title":             true,
+		"tx_id":             true,
+		"fee_currency":      true,
 		"reposted_claim_id": true,
-		"tags": true,
+		"tags":              true,
 	}
 
-	if in.IsControlling != nil {
-		q = q.Must(elastic.NewTermQuery("is_controlling", in.IsControlling.Value))
+	if in.IsControlling {
+		q = q.Must(elastic.NewTermQuery("is_controlling", in.IsControlling))
 	}
 
-	if in.AmountOrder != nil {
-		in.Limit.Value = 1
-		in.OrderBy = []string{"effective_amount"}
-		in.Offset = &wrappers.Int32Value{Value: in.AmountOrder.Value - 1}
+	if in.Limit > 0 {
+		*pageSize = int(in.Limit)
 	}
 
-	if in.Limit != nil {
-		*pageSize = int(in.Limit.Value)
+	if in.Offset > 0 {
+		*from = int(in.Offset)
 	}
 
-	if in.Offset != nil {
-		*from = int(in.Offset.Value)
-	}
-
-	if len(in.Name) > 0 {
-		normalized := make([]string, len(in.Name))
-		for i := 0; i < len(in.Name); i++ {
-			normalized[i] = util.NormalizeName(in.Name[i])
-		}
-		in.Normalized = normalized
+	if len(in.ClaimName) > 0 {
+		in.NormalizedName = util.NormalizeName(in.ClaimName)
 	}
 
 	if len(in.OrderBy) > 0 {
@@ -432,21 +426,6 @@ func (s *Server) setupEsQuery(
 		q = q.Must(elastic.NewTermsQuery("stream_type", searchVals...))
 	}
 
-
-	if len(in.XId) > 0 {
-		searchVals := make([]interface{}, len(in.XId))
-		for i := 0; i < len(in.XId); i++ {
-			util.ReverseBytesInPlace(in.XId[i])
-			searchVals[i] = hex.Dump(in.XId[i])
-		}
-		if len(in.XId) == 1 && len(in.XId[0]) < 20 {
-			q = q.Must(elastic.NewPrefixQuery("_id", string(in.XId[0])))
-		} else {
-			q = q.Must(elastic.NewTermsQuery("_id", searchVals...))
-		}
-	}
-
-
 	if in.ClaimId != nil {
 		searchVals := StrArrToInterface(in.ClaimId.Value)
 		if len(in.ClaimId.Value) == 1 && len(in.ClaimId.Value[0]) < 20 {
@@ -466,18 +445,18 @@ func (s *Server) setupEsQuery(
 
 	if in.PublicKeyId != "" {
 		value := hex.EncodeToString(base58.Decode(in.PublicKeyId)[1:21])
-		q = q.Must(elastic.NewTermQuery("public_key_hash.keyword", value))
+		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", value))
 	}
 
-	if in.HasChannelSignature != nil && in.HasChannelSignature.Value {
+	if in.HasChannelSignature {
 		q = q.Must(elastic.NewExistsQuery("signature_digest"))
-		if in.SignatureValid != nil {
-			q = q.Must(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
+		if in.IsSignatureValid != nil {
+			q = q.Must(elastic.NewTermQuery("is_signature_valid", in.IsSignatureValid.Value))
 		}
-	} else if in.SignatureValid != nil {
+	} else if in.IsSignatureValid != nil {
 		q = q.MinimumNumberShouldMatch(1)
 		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
-		q = q.Should(elastic.NewTermQuery("signature_valid", in.SignatureValid.Value))
+		q = q.Should(elastic.NewTermQuery("is_signature_valid", in.IsSignatureValid.Value))
 	}
 
 	if in.HasSource != nil {
@@ -492,22 +471,20 @@ func (s *Server) setupEsQuery(
 		q = q.Must(elastic.NewTermQuery("tx_nout", in.TxNout.Value))
 	}
 
-	q = AddTermsField(q, in.PublicKeyHash, "public_key_hash.keyword")
-	q = AddTermsField(q, in.Author, "author.keyword")
-	q = AddTermsField(q, in.Title, "title.keyword")
-	q = AddTermsField(q, in.CanonicalUrl, "canonical_url.keyword")
-	q = AddTermsField(q, in.ClaimName, "claim_name.keyword")
-	q = AddTermsField(q, in.Description, "description.keyword")
+	q = AddTermField(q, in.Author, "author.keyword")
+	q = AddTermField(q, in.Title, "title.keyword")
+	q = AddTermField(q, in.CanonicalUrl, "canonical_url.keyword")
+	q = AddTermField(q, in.ClaimName, "claim_name.keyword")
+	q = AddTermField(q, in.Description, "description.keyword")
 	q = AddTermsField(q, in.MediaType, "media_type.keyword")
-	q = AddTermsField(q, in.Normalized, "normalized.keyword")
-	q = AddTermsField(q, in.PublicKeyBytes, "public_key_bytes.keyword")
-	q = AddTermsField(q, in.ShortUrl, "short_url.keyword")
-	q = AddTermsField(q, in.Signature, "signature.keyword")
-	q = AddTermsField(q, in.SignatureDigest, "signature_digest.keyword")
-	q = AddTermsField(q, in.TxId, "tx_id.keyword")
-	q = AddTermsField(q, in.FeeCurrency, "fee_currency.keyword")
-	q = AddTermsField(q, in.RepostedClaimId, "reposted_claim_id.keyword")
-
+	q = AddTermField(q, in.NormalizedName, "normalized_name.keyword")
+	q = AddTermField(q, in.PublicKeyBytes, "public_key_bytes.keyword")
+	q = AddTermField(q, in.ShortUrl, "short_url.keyword")
+	q = AddTermField(q, in.Signature, "signature.keyword")
+	q = AddTermField(q, in.SignatureDigest, "signature_digest.keyword")
+	q = AddTermField(q, in.TxId, "tx_id.keyword")
+	q = AddTermField(q, in.FeeCurrency, "fee_currency.keyword")
+	q = AddTermField(q, in.RepostedClaimId, "reposted_claim_id.keyword")
 
 	q = AddTermsField(q, s.cleanTags(in.AnyTags), "tags.keyword")
 	q = AddIndividualTermFields(q, s.cleanTags(in.AllTags), "tags.keyword", false)
@@ -516,8 +493,6 @@ func (s *Server) setupEsQuery(
 	q = AddIndividualTermFields(q, in.AllLanguages, "languages", false)
 
 	q = AddInvertibleField(q, in.ChannelId, "channel_id.keyword")
-	q = AddInvertibleField(q, in.ChannelIds, "channel_id.keyword")
-
 
 	q = AddRangeField(q, in.TxPosition, "tx_position")
 	q = AddRangeField(q, in.Amount, "amount")
@@ -528,7 +503,7 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.ActivationHeight, "activation_height")
 	q = AddRangeField(q, in.ExpirationHeight, "expiration_height")
 	q = AddRangeField(q, in.ReleaseTime, "release_time")
-	q = AddRangeField(q, in.Reposted, "reposted")
+	q = AddRangeField(q, in.RepostCount, "repost_count")
 	q = AddRangeField(q, in.FeeAmount, "fee_amount")
 	q = AddRangeField(q, in.Duration, "duration")
 	q = AddRangeField(q, in.CensorType, "censor_type")
@@ -568,9 +543,9 @@ func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Co
 				mget = mget.Add(nmget)
 				totalChannels++
 			}
-			if r.CensorType != 0 && !channelsSet[r.CensoringChannelHash] {
-				channelsSet[r.CensoringChannelHash] = true
-				nmget := elastic.NewMultiGetItem().Id(r.CensoringChannelHash).Index(searchIndex)
+			if r.CensorType != 0 && !channelsSet[r.CensoringChannelId] {
+				channelsSet[r.CensoringChannelId] = true
+				nmget := elastic.NewMultiGetItem().Id(r.CensoringChannelId).Index(searchIndex)
 				mget = mget.Add(nmget)
 				totalChannels++
 			}
@@ -608,13 +583,13 @@ func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Co
 func getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
 
 	var totalReposted = 0
-	var mget = client.Mget()//.StoredFields("_id")
+	var mget = client.Mget() //.StoredFields("_id")
 	/*
-	var nmget = elastic.NewMultiGetItem()
-	for _, index := range searchIndices {
-		nmget = nmget.Index(index)
-	}
-	 */
+		var nmget = elastic.NewMultiGetItem()
+		for _, index := range searchIndices {
+			nmget = nmget.Index(index)
+		}
+	*/
 	for _, r := range records {
 		for _, searchIndex := range searchIndices {
 			if r.RepostedClaimId != "" {
@@ -656,7 +631,7 @@ func getClaimsForReposts(ctx context.Context, client *elastic.Client, records []
 }
 
 func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*record {
-	finalHits := make([]*record, 0 , len(searchHits))
+	finalHits := make([]*record, 0, len(searchHits))
 	var channelCounters map[string]int
 	channelCounters = make(map[string]int)
 	nextPageHitsMaybeCheckLater := deque.New()
@@ -665,7 +640,7 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 		searchHitsQ.PushRight(rec)
 	}
 	for !searchHitsQ.Empty() || !nextPageHitsMaybeCheckLater.Empty() {
-		if len(finalHits) > 0 && len(finalHits) % pageSize == 0 {
+		if len(finalHits) > 0 && len(finalHits)%pageSize == 0 {
 			channelCounters = make(map[string]int)
 		} else if len(finalHits) != 0 {
 			// means last page was incomplete and we are left with bad replacements
@@ -674,7 +649,7 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 
 		for i := 0; i < nextPageHitsMaybeCheckLater.Size(); i++ {
 			rec := nextPageHitsMaybeCheckLater.PopLeft().(*record)
-			if perChannelPerPage > 0  && channelCounters[rec.ChannelId] < perChannelPerPage {
+			if perChannelPerPage > 0 && channelCounters[rec.ChannelId] < perChannelPerPage {
 				finalHits = append(finalHits, rec)
 				channelCounters[rec.ChannelId] = channelCounters[rec.ChannelId] + 1
 			}
@@ -686,7 +661,7 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 			} else if channelCounters[hit.ChannelId] < perChannelPerPage {
 				finalHits = append(finalHits, hit)
 				channelCounters[hit.ChannelId] = channelCounters[hit.ChannelId] + 1
-				if len(finalHits) % pageSize == 0 {
+				if len(finalHits)%pageSize == 0 {
 					break
 				}
 			} else {
@@ -752,13 +727,12 @@ func removeDuplicates(searchHits []*record) []*record {
 		hitHeight := hit.Height
 		hitId := hit.getHitId()
 
-
 		if knownIds[hitId] == nil {
 			knownIds[hitId] = hit
 		} else {
 			prevHit := knownIds[hitId]
 			if hitHeight < prevHit.Height {
-				knownIds[hitId]	= hit
+				knownIds[hitId] = hit
 				dropped[prevHit] = true
 			} else {
 				dropped[hit] = true
@@ -766,7 +740,7 @@ func removeDuplicates(searchHits []*record) []*record {
 		}
 	}
 
-	deduped := make([]*record, len(searchHits) - len(dropped))
+	deduped := make([]*record, len(searchHits)-len(dropped))
 
 	var i = 0
 	for _, hit := range searchHits {
@@ -785,15 +759,15 @@ func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.B
 	blockedChannels := make(map[string]*pb.Blocked)
 	for _, r := range searchHits {
 		if r.CensorType != 0 {
-			if blockedChannels[r.CensoringChannelHash] == nil {
+			if blockedChannels[r.CensoringChannelId] == nil {
 				blockedObj := &pb.Blocked{
-					Count: 1,
+					Count:   1,
 					Channel: nil,
 				}
-				blockedChannels[r.CensoringChannelHash] = blockedObj
+				blockedChannels[r.CensoringChannelId] = blockedObj
 				blockedHits = append(blockedHits, r)
 			} else {
-				blockedChannels[r.CensoringChannelHash].Count += 1
+				blockedChannels[r.CensoringChannelId].Count += 1
 			}
 		} else {
 			newHits = append(newHits, r)
