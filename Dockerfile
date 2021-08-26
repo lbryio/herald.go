@@ -1,5 +1,10 @@
-FROM debian:10-slim
+FROM golang:alpine as stage1
 
 EXPOSE 50051
-COPY ./hub /hub
+RUN mkdir /app
+WORKDIR /app
+COPY . /app
+RUN go build
+FROM alpine:latest
+COPY --from=stage1 /app/hub /hub
 ENTRYPOINT ["/hub", "serve"]
