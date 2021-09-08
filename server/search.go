@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -146,7 +145,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var from = 0
 	var pageSize = 10
 	var orderBy []orderField
-	var searchIndices = []string{}
+	var searchIndices []string
 	client := s.EsClient
 	searchIndices = make([]string, 0, 1)
 	searchIndices = append(searchIndices, s.Args.EsIndex)
@@ -269,9 +268,6 @@ func (s *Server) postProcessResults(
 		txos = append(txos, res)
 		j += 1
 	}
-
-	//printJsonFullRecords(blockedRecords)
-
 	//Get claims for reposts
 	repostClaims, repostRecords, repostedMap := getClaimsForReposts(ctx, client, records, searchIndices)
 	//get all unique channels
@@ -317,7 +313,7 @@ func (s *Server) checkQuery(in *pb.SearchRequest) error {
 	for name, failed := range checks {
 		if failed {
 			time.Sleep(2) // throttle
-			return errors.New(fmt.Sprintf("%s cant have more than %d items.", name, limit))
+			return fmt.Errorf("%s cant have more than %d items", name, limit)
 		}
 	}
 	return nil
@@ -672,15 +668,6 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 	return finalHits
 }
 
-func (r *record) recordToChannelOutput() *pb.Output {
-	// Don't nee dthe meta for this one
-	return &pb.Output{
-		TxHash: util.TxIdToTxHash(r.Txid),
-		Nout:   r.Nout,
-		Height: r.Height,
-	}
-}
-
 func (r *record) recordToOutput() *pb.Output {
 	return &pb.Output{
 		TxHash: util.TxIdToTxHash(r.Txid),
@@ -775,36 +762,4 @@ func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.B
 	}
 
 	return newHits, blockedHits, blockedChannels
-}
-
-func printJsonFullRecords(records []*record) {
-	// or if you want more control
-	for _, r := range records {
-		// hit.Index contains the name of the index
-
-		b, err := json.MarshalIndent(r, "", "  ")
-		if err != nil {
-			fmt.Println("error:", err)
-		}
-		fmt.Println(string(b))
-	}
-}
-
-func printJsonFullResults(searchResult *elastic.SearchResult) {
-	// or if you want more control
-	for _, hit := range searchResult.Hits.Hits {
-		// hit.Index contains the name of the index
-
-		var t map[string]interface{} // or could be a Record
-		err := json.Unmarshal(hit.Source, &t)
-		if err != nil {
-			return
-		}
-
-		b, err := json.MarshalIndent(t, "", "  ")
-		if err != nil {
-			fmt.Println("error:", err)
-		}
-		fmt.Println(string(b))
-	}
 }

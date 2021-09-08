@@ -71,7 +71,7 @@ type Args struct {
 func MakeHubServer(args *Args) *Server {
 	grpcServer := grpc.NewServer()
 
-	multiSpaceRe, err := regexp.Compile("\\s{2,}")
+	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
 	if err != nil {
 		log.Fatal(err)
 	}
