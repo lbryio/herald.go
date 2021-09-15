@@ -129,7 +129,10 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *e
 	if rq == nil {
 		return q
 	}
-	releaseTimeInt, _ := strconv.ParseInt(rq.Value[0], 10, 32)
+	releaseTimeInt, err := strconv.ParseInt(rq.Value[0], 10, 32)
+	if err != nil {
+		return q
+	}
 	if releaseTimeInt < 0 {
 		releaseTimeInt *= - 1
 	}
