@@ -18,12 +18,12 @@ import (
 )
 
 const (
-	defaultHost = "0.0.0.0"
-	defaultPort = "50051"
-	defaultEsHost = "http://localhost"
-	defaultEsPort = "9200"
+	defaultHost    = "0.0.0.0"
+	defaultPort    = "50051"
+	defaultEsHost  = "http://localhost"
+	defaultEsIndex = "claims"
+	defaultEsPort  = "9200"
 )
-
 
 func GetEnvironment(data []string, getkeyval func(item string) (key, val string)) map[string]string {
 	items := make(map[string]string)
@@ -64,12 +64,13 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
 	searchCmd := parser.NewCommand("search", "claim search")
+	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 
-	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
-	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
-	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "host", Default: defaultEsHost})
-	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "port", Default: defaultEsPort})
-	dev := parser.Flag("", "dev", &argparse.Options{Required: false, Help: "port", Default: false})
+	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: defaultHost})
+	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: defaultPort})
+	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: defaultEsHost})
+	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: defaultEsPort})
+	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: defaultEsIndex})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -89,14 +90,14 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 		log.Fatalln(parser.Usage(err))
 	}
 
-
 	args := &server.Args{
 		CmdType: server.SearchCmd,
-		Host: *host,
-		Port: ":" + *port,
-		EsHost: *esHost,
-		EsPort: *esPort,
-		Dev: *dev,
+		Host:    *host,
+		Port:    ":" + *port,
+		EsHost:  *esHost,
+		EsPort:  *esPort,
+		EsIndex: *esIndex,
+		Debug:   *debug,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
@@ -112,8 +113,8 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 	}
 
 	/*
-	Verify no invalid argument combinations
-	 */
+		Verify no invalid argument combinations
+	*/
 	if len(*channelIds) > 0 && *channelId != "" {
 		log.Fatal("Cannot specify both channel_id and channel_ids")
 	}
@@ -127,23 +128,23 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 	if *text != "" {
 		searchRequest.Text = *text
 	}
-	if *name!= "" {
-		searchRequest.Name = []string{*name}
+	if *name != "" {
+		searchRequest.ClaimName = *name
 	}
 	if *claimType != "" {
 		searchRequest.ClaimType = []string{*claimType}
 	}
 	if *id != "" {
-		searchRequest.XId = [][]byte{[]byte(*id)}
+		searchRequest.ClaimId = &pb.InvertibleField{Invert: false, Value: []string{*id}}
 	}
 	if *author != "" {
-		searchRequest.Author = []string{*author}
+		searchRequest.Author = *author
 	}
 	if *title != "" {
-		searchRequest.Title = []string{*title}
+		searchRequest.Title = *title
 	}
 	if *description != "" {
-		searchRequest.Description = []string{*description}
+		searchRequest.Description = *description
 	}
 	if *channelId != "" {
 		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: []string{*channelId}}

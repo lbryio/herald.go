@@ -1,7 +1,6 @@
 syntax = "proto3";
 
 option go_package = "github.com/lbryio/hub/protobuf/go/pb";
-import "google/protobuf/wrappers.proto";
 import "result.proto";
 
 package pb;
@@ -26,6 +25,14 @@ message InvertibleField {
   repeated string value = 2;
 }
 
+message BoolValue {
+  bool value = 1;
+}
+
+message UInt32Value {
+  uint32 value = 1;
+}
+
 message RangeField {
   enum Op {
     EQ = 0;
@@ -39,74 +46,62 @@ message RangeField {
 }
 
 message SearchRequest {
-  string text = 1;
-  repeated string name = 2;
-  .google.protobuf.Int32Value amount_order = 3;
-  .google.protobuf.Int32Value limit = 4;
+  InvertibleField claim_id = 1;
+  InvertibleField channel_id = 2;
+  string text = 3;
+  uint32 limit = 4;
   repeated string order_by = 5;
-  .google.protobuf.Int32Value offset = 6;
-  .google.protobuf.BoolValue is_controlling = 7;
-  string last_take_over_height = 19;
-  InvertibleField claim_id = 20;
-  repeated string claim_name = 22;
-  repeated string normalized_name = 23;
-  RangeField tx_position = 24;
-  RangeField amount = 25;
-  RangeField timestamp = 26;
-  RangeField creation_timestamp = 27;
-  RangeField height = 28;
-  RangeField creation_height = 29;
-  RangeField activation_height = 30;
-  RangeField expiration_height = 31;
-  RangeField release_time = 32;
-  repeated string short_url = 33;
-  repeated string canonical_url = 34;
-  repeated string title = 35;
-  repeated string author = 36;
-  repeated string description = 37;
-  repeated string claim_type = 38;
-  RangeField repost_count = 39;
-  repeated string stream_type = 40;
-  repeated string media_type = 41;
-  RangeField fee_amount = 42;
-  repeated string fee_currency = 43;
-  RangeField duration = 44;
-  string reposted_claim_hash = 45;
-  RangeField censor_type = 46;
-  string claims_in_channel = 47;
-  RangeField channel_join = 48;
-  .google.protobuf.BoolValue is_signature_valid = 49;
-  RangeField effective_amount = 51;
-  RangeField support_amount = 52;
-  RangeField trending_group = 53;
-  RangeField trending_mixed = 54;
-  RangeField trending_local = 55;
-  RangeField trending_global = 56;
-  InvertibleField channel_id = 57;
-  InvertibleField channel_ids = 58;
-  repeated string tx_id = 59;
-  .google.protobuf.Int32Value tx_nout = 60;
-  repeated string signature = 61;
-  repeated string signature_digest = 62;
-  repeated string public_key_bytes = 63;
-  // repeated string public_key_hash = 64;
-  string public_key_id = 65;
-  repeated bytes _id = 66;
-  repeated string any_tags = 67;
-  repeated string all_tags = 68;
-  repeated string not_tags = 69;
-  repeated string reposted_claim_id = 70;
-  .google.protobuf.BoolValue has_channel_signature = 71;
-  .google.protobuf.BoolValue has_source = 72;
-  .google.protobuf.Int32Value limit_claims_per_channel = 73;
-  repeated string any_languages = 74;
-  repeated string all_languages = 75;
-  .google.protobuf.BoolValue remove_duplicates = 76;
-  .google.protobuf.BoolValue no_totals = 77;
-  repeated string search_indices = 78;
-}
-
-message BlockRequest {
-  string blockhash = 1;
-  bool verbose = 2;
+  uint32 offset = 6;
+  bool is_controlling = 7;
+  string last_take_over_height = 8;
+  string claim_name = 9;
+  string normalized_name = 10;
+  RangeField tx_position = 11;
+  RangeField amount = 12;
+  RangeField timestamp = 13;
+  RangeField creation_timestamp = 14;
+  RangeField height = 15;
+  RangeField creation_height = 16;
+  RangeField activation_height = 17;
+  RangeField expiration_height = 18;
+  RangeField release_time = 19;
+  string short_url = 20;
+  string canonical_url = 21;
+  string title = 22;
+  string author = 23;
+  string description = 24;
+  repeated string claim_type = 25;
+  RangeField repost_count = 26;
+  repeated string stream_type = 27;
+  repeated string media_type = 28;
+  RangeField fee_amount = 29;
+  string fee_currency = 30;
+  RangeField duration = 31;
+  string reposted_claim_id = 32;
+  RangeField censor_type = 33;
+  string claims_in_channel = 34;
+  RangeField channel_join = 35;
+  BoolValue is_signature_valid = 36;
+  RangeField effective_amount = 37;
+  RangeField support_amount = 38;
+  RangeField trending_group = 39;
+  RangeField trending_mixed = 40;
+  RangeField trending_local = 41;
+  RangeField trending_global = 42;
+  string tx_id = 43;
+  UInt32Value tx_nout = 44;
+  string signature = 45;
+  string signature_digest = 46;
+  string public_key_bytes = 47;
+  string public_key_id = 48;
+  repeated string any_tags = 49;
+  repeated string all_tags = 50;
+  repeated string not_tags = 51;
+  bool has_channel_signature = 52;
+  BoolValue has_source = 53;
+  uint32 limit_claims_per_channel = 54;
+  repeated string any_languages = 55;
+  repeated string all_languages = 56;
+  bool remove_duplicates = 57;
+  bool no_totals = 58;
 }

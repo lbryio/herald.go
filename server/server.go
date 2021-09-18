@@ -1,8 +1,10 @@
 package server
 
 import (
-	"context"
-	"fmt"
+	"log"
+	"os"
+	"regexp"
+
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -16,7 +18,7 @@ import (
 
 type Server struct {
 	GrpcServer   *grpc.Server
-	Args 	     *Args
+	Args         *Args
 	MultiSpaceRe *regexp.Regexp
 	WeirdCharsRe *regexp.Regexp
 	EsClient     *elastic.Client
@@ -41,11 +43,12 @@ const (
 type Args struct {
 	// TODO Make command types an enum
 	CmdType int
-	Host string
-	Port string
-	EsHost string
-	EsPort string
-	Dev bool
+	Host    string
+	Port    string
+	EsHost  string
+	EsPort  string
+	EsIndex string
+	Debug   bool
 }
 
 func getVersion(alphaBeta string) string {
@@ -99,7 +102,7 @@ func getVersion(alphaBeta string) string {
 func MakeHubServer(args *Args) *Server {
 	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(10))
 
-	multiSpaceRe, err := regexp.Compile("\\s{2,}")
+	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -116,12 +119,22 @@ func MakeHubServer(args *Args) *Server {
 	}
 	servers := make([]*FederatedServer, 10)
 	servers = append(servers, self)
-	s := &Server {
-		GrpcServer: grpcServer,
-		Args: args,
+
+	esUrl := args.EsHost + ":" + args.EsPort
+	opts := []elastic.ClientOptionFunc{elastic.SetSniff(false), elastic.SetURL(esUrl)}
+	if args.Debug {
+		opts = append(opts, elastic.SetTraceLog(log.New(os.Stderr, "[[ELASTIC]]", 0)))
+	}
+	client, err := elastic.NewClient(opts...)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s := &Server{
+		GrpcServer:   grpcServer,
+		Args:         args,
 		MultiSpaceRe: multiSpaceRe,
 		WeirdCharsRe: weirdCharsRe,
-		Servers: servers,
+		EsClient:     client,
 	}
 
 	return s
