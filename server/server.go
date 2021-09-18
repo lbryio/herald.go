@@ -1,6 +1,8 @@
 package server
 
 import (
+	"context"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -9,10 +11,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/wrapperspb"
-	"log"
 	"net/http"
-	"regexp"
 	"time"
 )
 
@@ -157,10 +156,10 @@ func (s *Server) Hello(context context.Context, args *FederatedServer) (*Federat
 	return s.Servers[0], nil
 }
 
-func (s *Server) Ping(context context.Context, args *pb.EmptyMessage) (*wrapperspb.StringValue, error) {
-	return &wrapperspb.StringValue{Value: "Hello, world!"}, nil
+func (s *Server) Ping(context context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
+	return &pb.StringValue{Value: "Hello, world!"}, nil
 }
 
-func (s *Server) Version(context context.Context, args *pb.EmptyMessage) (*wrapperspb.StringValue, error) {
-	return &wrapperspb.StringValue{Value: getVersion("beta")}, nil
+func (s *Server) Version(context context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
+	return &pb.StringValue{Value: getVersion("beta")}, nil
 }

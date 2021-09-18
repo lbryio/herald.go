@@ -154,25 +154,6 @@ func (s *Server) recordErrorAndDie(err error) {
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
 	// TODO record metric search_counter
 	t0 := time.Now()
-	esUrl := s.Args.EsHost + ":" + s.Args.EsPort
-	tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
-	if err != nil {
-		s.recordErrorAndReturn(err, "client_creation_error_counter")
-		return nil, err
-	}
-	var client = tmpClient
-	//if s.EsClient == nil {
-	//	esUrl := s.Args.EsHost + ":" + s.Args.EsPort
-	//	tmpClient, err := elastic.NewClient(elastic.SetURL(esUrl), elastic.SetSniff(false))
-	//	if err != nil {
-	//		s.recordErrorAndReturn(err, "client_creation_errors")
-	//		return nil, err
-	//	}
-	//	client = tmpClient
-	//	s.EsClient = client
-	//} else {
-	//	client = s.EsClient
-	//}
 
 	var from = 0
 	var pageSize = 10
@@ -222,7 +203,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	log.Printf("delta: %d\n", delta)
 	// TODO record metric query_time
 
-	if in.NoTotals != nil && !in.NoTotals.Value {
+	if in.NoTotals {
 		return &pb.Outputs{
 			Txos:      txos,
 			ExtraTxos: extraTxos,

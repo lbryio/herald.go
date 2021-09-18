@@ -57,7 +57,7 @@ func makeServeCmd(parser *argparse.Parser) *argparse.Command {
 }
  */
 
-func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *server.Args {
+func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 
 	environment := GetEnvironmentStandard()
 	parser := argparse.NewParser("hub", "hub server and client")
@@ -81,8 +81,6 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 	description := parser.String("", "description", &argparse.Options{Required: false, Help: "description"})
 	channelId := parser.String("", "channel_id", &argparse.Options{Required: false, Help: "channel id"})
 	channelIds := parser.StringList("", "channel_ids", &argparse.Options{Required: false, Help: "channel ids"})
-
-	hash := parser.String("", "hash", &argparse.Options{Required: false, Help: "block hash"})
 
 	// Now parse the arguments
 	err := parser.Parse(os.Args)
@@ -153,9 +151,6 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: *channelIds}
 	}
 
-	if *hash != "" {
-		blockReq.Blockhash = *hash
-	}
 
 	return args
 }
@@ -163,9 +158,8 @@ func parseArgs(searchRequest *pb.SearchRequest, blockReq *pb.BlockRequest) *serv
 func main() {
 
 	searchRequest := &pb.SearchRequest{}
-	blockReq := &pb.BlockRequest{}
 
-	args := parseArgs(searchRequest, blockReq)
+	args := parseArgs(searchRequest)
 
 	if args.CmdType == server.ServeCmd {
 
