@@ -73,10 +73,7 @@ message SearchRequest {
   BoolValue is_signature_valid = 36;
   RangeField effective_amount = 37;
   RangeField support_amount = 38;
-  RangeField trending_group = 39;
-  RangeField trending_mixed = 40;
-  RangeField trending_local = 41;
-  RangeField trending_global = 42;
+  RangeField trending_score = 39;
   string tx_id = 43;
   UInt32Value tx_nout = 44;
   string signature = 45;
