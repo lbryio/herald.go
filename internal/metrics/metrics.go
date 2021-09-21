@@ -13,7 +13,7 @@ var (
 	})
 	ZeroChannelsCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "zero_channels_counter",
-		Help: "Number of times zero channels were returned in getUniqueChanne;s",
+		Help: "Number of times zero channels were returned in getUniqueChannels",
 	})
 	NoRepostedCounter = promauto.NewCounter(prometheus.CounterOpts{
 		Name: "no_reposted_counter",
