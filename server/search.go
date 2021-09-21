@@ -2,18 +2,17 @@ package server
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
 	"math"
 	"reflect"
+	"strconv"
 	"strings"
 	"time"
 
 	//"github.com/lbryio/hub/schema"
 
-	"github.com/btcsuite/btcutil/base58"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
@@ -44,11 +43,8 @@ type record struct {
 	RepostCount        uint32  `json:"repost_count"`
 	EffectiveAmount    uint64  `json:"effective_amount"`
 	SupportAmount      uint64  `json:"support_amount"`
-	TrendingGroup      uint32  `json:"trending_group"`
-	TrendingMixed      float32 `json:"trending_mixed"`
-	TrendingLocal      float32 `json:"trending_local"`
-	TrendingGlobal     float32 `json:"trending_global"`
-	Name               string  `json:"name"`
+	TrendingScore      float64 `json:"TrendingScore"`
+	ClaimName          string  `json:"claim_name"`
 }
 
 type orderField struct {
@@ -94,7 +90,6 @@ func AddRangeField(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elasti
 	if rq == nil {
 		return q
 	}
-
 	if len(rq.Value) > 1 {
 		if rq.Op != pb.RangeField_EQ {
 			return q
@@ -138,6 +133,31 @@ func (s *Server) recordErrorAndReturn(err error, typ string) (interface{}, error
 func (s *Server) recordErrorAndDie(err error) {
 	// TODO record metric fatal_error_counter
 	log.Fatalln(err)
+}
+
+func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elastic.BoolQuery {
+	if rq == nil {
+		return q
+	}
+	releaseTimeInt, err := strconv.ParseInt(rq.Value[0], 10, 32)
+	if err != nil {
+		return q
+	}
+	if releaseTimeInt < 0 {
+		releaseTimeInt *= - 1
+	}
+	releaseTime := strconv.Itoa(int(((releaseTimeInt / 360) + 1) * 360))
+	if rq.Op == pb.RangeField_EQ {
+		return q.Must(elastic.NewTermQuery(name, releaseTime))
+	} else if rq.Op == pb.RangeField_LT {
+		return q.Must(elastic.NewRangeQuery(name).Lt(releaseTime))
+	} else if rq.Op == pb.RangeField_LTE {
+		return q.Must(elastic.NewRangeQuery(name).Lte(releaseTime))
+	} else if rq.Op == pb.RangeField_GT {
+		return q.Must(elastic.NewRangeQuery(name).Gt(releaseTime))
+	} else { // pb.RangeField_GTE
+		return q.Must(elastic.NewRangeQuery(name).Gte(releaseTime))
+	}
 }
 
 // Search /*
@@ -363,8 +383,14 @@ func (s *Server) setupEsQuery(
 
 	replacements := map[string]string{
 		"name":       "normalized_name",
+		"normalized": "normalized_name",
+		"claim_name": "normalized_name",
 		"txid":       "tx_id",
-		"claim_hash": "_id",
+		"nout":	      "tx_nout",
+		"reposted":   "repost_count",
+		"valid_channel_signature": "is_signature_valid",
+		"claim_id":   "_id",
+		"signature_digest": "signature",
 	}
 
 	textFields := map[string]bool{
@@ -380,7 +406,6 @@ func (s *Server) setupEsQuery(
 		"public_key_id":     true,
 		"short_url":         true,
 		"signature":         true,
-		"signature_digest":  true,
 		"stream_type":       true,
 		"title":             true,
 		"tx_id":             true,
@@ -460,18 +485,17 @@ func (s *Server) setupEsQuery(
 	}
 
 	if in.PublicKeyId != "" {
-		value := hex.EncodeToString(base58.Decode(in.PublicKeyId)[1:21])
-		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", value))
+		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", in.PublicKeyId))
 	}
 
 	if in.HasChannelSignature {
-		q = q.Must(elastic.NewExistsQuery("signature_digest"))
+		q = q.Must(elastic.NewExistsQuery("signature"))
 		if in.IsSignatureValid != nil {
 			q = q.Must(elastic.NewTermQuery("is_signature_valid", in.IsSignatureValid.Value))
 		}
 	} else if in.IsSignatureValid != nil {
 		q = q.MinimumNumberShouldMatch(1)
-		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature_digest")))
+		q = q.Should(elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery("signature")))
 		q = q.Should(elastic.NewTermQuery("is_signature_valid", in.IsSignatureValid.Value))
 	}
 
@@ -494,12 +518,10 @@ func (s *Server) setupEsQuery(
 	q = AddTermField(q, in.Description, "description.keyword")
 	q = AddTermsField(q, in.MediaType, "media_type.keyword")
 	q = AddTermField(q, in.NormalizedName, "normalized_name.keyword")
-	q = AddTermField(q, in.PublicKeyBytes, "public_key_bytes.keyword")
 	q = AddTermField(q, in.ShortUrl, "short_url.keyword")
 	q = AddTermField(q, in.Signature, "signature.keyword")
-	q = AddTermField(q, in.SignatureDigest, "signature_digest.keyword")
 	q = AddTermField(q, in.TxId, "tx_id.keyword")
-	q = AddTermField(q, in.FeeCurrency, "fee_currency.keyword")
+	q = AddTermField(q, strings.ToUpper(in.FeeCurrency), "fee_currency.keyword")
 	q = AddTermField(q, in.RepostedClaimId, "reposted_claim_id.keyword")
 
 	q = AddTermsField(q, s.cleanTags(in.AnyTags), "tags.keyword")
@@ -518,7 +540,7 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.CreationHeight, "creation_height")
 	q = AddRangeField(q, in.ActivationHeight, "activation_height")
 	q = AddRangeField(q, in.ExpirationHeight, "expiration_height")
-	q = AddRangeField(q, in.ReleaseTime, "release_time")
+	q = RoundUpReleaseTime(q, in.ReleaseTime, "release_time")
 	q = AddRangeField(q, in.RepostCount, "repost_count")
 	q = AddRangeField(q, in.FeeAmount, "fee_amount")
 	q = AddRangeField(q, in.Duration, "duration")
@@ -526,10 +548,7 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.ChannelJoin, "channel_join")
 	q = AddRangeField(q, in.EffectiveAmount, "effective_amount")
 	q = AddRangeField(q, in.SupportAmount, "support_amount")
-	q = AddRangeField(q, in.TrendingGroup, "trending_group")
-	q = AddRangeField(q, in.TrendingMixed, "trending_mixed")
-	q = AddRangeField(q, in.TrendingLocal, "trending_local")
-	q = AddRangeField(q, in.TrendingGlobal, "trending_global")
+	q = AddRangeField(q, in.TrendingScore, "trending_score")
 
 	if in.Text != "" {
 		textQuery := elastic.NewSimpleQueryStringQuery(in.Text).
@@ -712,10 +731,7 @@ func (r *record) recordToOutput() *pb.Output {
 				Reposted:         r.RepostCount,
 				EffectiveAmount:  r.EffectiveAmount,
 				SupportAmount:    r.SupportAmount,
-				TrendingGroup:    r.TrendingGroup,
-				TrendingMixed:    r.TrendingMixed,
-				TrendingLocal:    r.TrendingLocal,
-				TrendingGlobal:   r.TrendingGlobal,
+				TrendingScore:    r.TrendingScore,
 			},
 		},
 	}
