@@ -55,7 +55,7 @@ func makeServeCmd(parser *argparse.Parser) *argparse.Command {
 
 	return serveCmd
 }
- */
+*/
 
 func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 
@@ -150,7 +150,6 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	if len(*channelIds) > 0 {
 		searchRequest.ChannelId = &pb.InvertibleField{Invert: false, Value: *channelIds}
 	}
-
 
 	return args
 }

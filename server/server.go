@@ -7,12 +7,13 @@ import (
 	"os"
 	"regexp"
 
+	"net/http"
+	"time"
+
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
-	"net/http"
-	"time"
 )
 
 type Server struct {
@@ -27,15 +28,15 @@ type Server struct {
 
 type FederatedServer struct {
 	Address string
-	Port string
-	Ts time.Time
-	Ping int //?
+	Port    string
+	Ts      time.Time
+	Ping    int //?
 }
 
 const majorVersion = 0
 
 const (
-	ServeCmd = iota
+	ServeCmd  = iota
 	SearchCmd = iota
 )
 
@@ -112,9 +113,9 @@ func MakeHubServer(args *Args) *Server {
 	}
 	self := &FederatedServer{
 		Address: "127.0.0.1",
-		Port: args.Port,
-		Ts: time.Now(),
-		Ping: 0,
+		Port:    args.Port,
+		Ts:      time.Now(),
+		Ping:    0,
 	}
 	servers := make([]*FederatedServer, 10)
 	servers = append(servers, self)
@@ -140,9 +141,9 @@ func MakeHubServer(args *Args) *Server {
 }
 
 func (s *Server) PromethusEndpoint(port string, endpoint string) error {
-	http.Handle("/" + endpoint, promhttp.Handler())
+	http.Handle("/"+endpoint, promhttp.Handler())
 	log.Println(fmt.Sprintf("listening on :%s /%s", port, endpoint))
-	err := http.ListenAndServe(":" + port, nil)
+	err := http.ListenAndServe(":"+port, nil)
 	if err != nil {
 		return err
 	}
