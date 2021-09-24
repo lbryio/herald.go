@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -33,8 +34,6 @@ type FederatedServer struct {
 	Ping    int //?
 }
 
-const majorVersion = 0
-
 const (
 	ServeCmd  = iota
 	SearchCmd = iota
@@ -51,13 +50,8 @@ type Args struct {
 	Debug   bool
 }
 
-func getVersion(alphaBeta string) string {
-	strPortion := time.Now().Format("2006.01.02")
-	majorVersionDate := fmt.Sprintf("v%d.%s", majorVersion, strPortion)
-	if len(alphaBeta) > 0 {
-		return fmt.Sprintf("%s-%s", majorVersionDate, alphaBeta)
-	}
-	return majorVersionDate
+func getVersion() string {
+	return meta.Version
 }
 
 /*
@@ -162,5 +156,5 @@ func (s *Server) Ping(context context.Context, args *pb.EmptyMessage) (*pb.Strin
 }
 
 func (s *Server) Version(context context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
-	return &pb.StringValue{Value: getVersion("beta")}, nil
+	return &pb.StringValue{Value: getVersion()}, nil
 }
