@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMPORT_PATH="github.com/lbryio/hub/app"
+IMPORT_PATH="github.com/lbryio/hub"
 
 function print_and_die() {
   echo "$1"
@@ -21,7 +21,7 @@ echo "using tag $LATEST_TAG"
 # Checkout latest tag
 git checkout "$LATEST_TAG"
 
-CGO_ENABLED=0 go build -v -ldflags "-X ${IMPORT_PATH}/meta.version=${VERSION}"
+CGO_ENABLED=0 go build -v -ldflags "-X ${IMPORT_PATH}/meta.Version=${VERSION}"
 docker build . -t lbry/hub:latest
 docker tag lbry/hub:latest lbry/hub:"$LATEST_TAG"
 docker push lbry/hub:latest
