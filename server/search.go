@@ -124,6 +124,16 @@ func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name st
 		return q.Must(elastic.NewTermsQuery(name, searchVals...))
 	}
 }
+func (s *Server) recordErrorAndReturn(err error, typ string) (interface{}, error) {
+	// TODO record metric
+	log.Println(err)
+	return nil, err
+}
+
+func (s *Server) recordErrorAndDie(err error) {
+	// TODO record metric fatal_error_counter
+	log.Fatalln(err)
+}
 
 func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elastic.BoolQuery {
 	if rq == nil {
@@ -162,6 +172,9 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *e
 // 8) return streams referenced by repost and all channel referenced in extra_txos
 //*/
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
+	// TODO record metric search_counter
+	t0 := time.Now()
+
 	var from = 0
 	var pageSize = 10
 	var orderBy []orderField
@@ -195,6 +208,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		return &pb.Outputs{}, nil
 
 	} else if err != nil {
+		s.recordErrorAndReturn(err, "search_errors")
 		log.Println("Error executing query: ", err)
 		return nil, err
 	}
@@ -202,6 +216,12 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
 
 	txos, extraTxos, blocked := s.postProcessResults(ctx, client, searchResult, in, pageSize, from, searchIndices)
+
+	t1 := time.Now()
+
+	delta := t1.Unix() - t0.Unix()
+	log.Printf("delta: %d\n", delta)
+	// TODO record metric query_time
 
 	if in.NoTotals {
 		return &pb.Outputs{
@@ -289,9 +309,9 @@ func (s *Server) postProcessResults(
 		j += 1
 	}
 	//Get claims for reposts
-	repostClaims, repostRecords, repostedMap := getClaimsForReposts(ctx, client, records, searchIndices)
+	repostClaims, repostRecords, repostedMap := s.getClaimsForReposts(ctx, client, records, searchIndices)
 	//get all unique channels
-	channels, channelMap := getUniqueChannels(append(append(records, repostRecords...), blockedRecords...), client, ctx, searchIndices)
+	channels, channelMap := s.getUniqueChannels(append(append(records, repostRecords...), blockedRecords...), client, ctx, searchIndices)
 	//add these to extra txos
 	extraTxos := append(repostClaims, channels...)
 
@@ -545,7 +565,7 @@ func (s *Server) setupEsQuery(
 	return q
 }
 
-func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Context, searchIndices []string) ([]*pb.Output, map[string]*pb.Output) {
+func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ctx context.Context, searchIndices []string) ([]*pb.Output, map[string]*pb.Output) {
 	channels := make(map[string]*pb.Output)
 	channelsSet := make(map[string]bool)
 	var mget = client.Mget()
@@ -567,23 +587,25 @@ func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Co
 		}
 	}
 	if totalChannels == 0 {
+		s.recordErrorAndReturn(nil, "zero_channels_counter")
 		return []*pb.Output{}, make(map[string]*pb.Output)
 	}
 
 	res, err := mget.Do(ctx)
 	if err != nil {
-		log.Println(err)
+		s.recordErrorAndReturn(err, "get_unique_channels_errors")
 		return []*pb.Output{}, make(map[string]*pb.Output)
 	}
 
 	channelTxos := make([]*pb.Output, totalChannels)
 	//repostedRecords := make([]*record, totalReposted)
 
-	log.Println("total channel", totalChannels)
+	//log.Println("total channel", totalChannels)
 	for i, doc := range res.Docs {
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
 		if err != nil {
+			s.recordErrorAndReturn(err, "json_errors")
 			return []*pb.Output{}, make(map[string]*pb.Output)
 		}
 		channelTxos[i] = r.recordToOutput()
@@ -595,7 +617,7 @@ func getUniqueChannels(records []*record, client *elastic.Client, ctx context.Co
 	return channelTxos, channels
 }
 
-func getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
+func (s * Server) getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
 
 	var totalReposted = 0
 	var mget = client.Mget() //.StoredFields("_id")
@@ -617,12 +639,13 @@ func getClaimsForReposts(ctx context.Context, client *elastic.Client, records []
 	}
 	//mget = mget.Add(nmget)
 	if totalReposted == 0 {
+		// TODO record metric no_reposted_counter
 		return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 	}
 
 	res, err := mget.Do(ctx)
 	if err != nil {
-		log.Println(err)
+		s.recordErrorAndReturn(err, "mget_error_counter")
 		return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 	}
 
@@ -630,11 +653,12 @@ func getClaimsForReposts(ctx context.Context, client *elastic.Client, records []
 	repostedRecords := make([]*record, totalReposted)
 	respostedMap := make(map[string]*pb.Output)
 
-	log.Println("reposted records", totalReposted)
+	//log.Println("reposted records", totalReposted)
 	for i, doc := range res.Docs {
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
 		if err != nil {
+			s.recordErrorAndReturn(err, "json_error_counter")
 			return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 		}
 		claims[i] = r.recordToOutput()

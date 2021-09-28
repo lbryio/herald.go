@@ -43,12 +43,27 @@ func GetEnvironmentStandard() map[string]string {
 	})
 }
 
+/*
+func makeServeCmd(parser *argparse.Parser) *argparse.Command {
+	serveCmd := parser.NewCommand("serve", "start the hub server")
+
+	host := serveCmd.String("", "rpchost", &argparse.Options{Required: false, Help: "host", Default: defaultHost})
+	port := serveCmd.String("", "rpcport", &argparse.Options{Required: false, Help: "port", Default: defaultPort})
+	esHost := serveCmd.String("", "eshost", &argparse.Options{Required: false, Help: "host", Default: defaultEsHost})
+	esPort := serveCmd.String("", "esport", &argparse.Options{Required: false, Help: "port", Default: defaultEsPort})
+	dev := serveCmd.Flag("", "dev", &argparse.Options{Required: false, Help: "port", Default: false})
+
+	return serveCmd
+}
+*/
+
 func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 
 	environment := GetEnvironmentStandard()
 	parser := argparse.NewParser("hub", "hub server and client")
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
+	searchCmd := parser.NewCommand("search", "claim search")
 	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: defaultHost})
@@ -74,7 +89,7 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	}
 
 	args := &server.Args{
-		Serve:   false,
+		CmdType: server.SearchCmd,
 		Host:    *host,
 		Port:    ":" + *port,
 		EsHost:  *esHost,
@@ -103,7 +118,9 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	}
 
 	if serveCmd.Happened() {
-		args.Serve = true
+		args.CmdType = server.ServeCmd
+	} else if searchCmd.Happened() {
+		args.CmdType = server.SearchCmd
 	}
 
 	if *text != "" {
@@ -138,11 +155,12 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 }
 
 func main() {
+
 	searchRequest := &pb.SearchRequest{}
 
 	args := parseArgs(searchRequest)
 
-	if args.Serve {
+	if args.CmdType == server.ServeCmd {
 
 		l, err := net.Listen("tcp", args.Port)
 		if err != nil {
@@ -155,6 +173,7 @@ func main() {
 
 		log.Printf("listening on %s\n", l.Addr().String())
 		log.Println(s.Args)
+		go s.PromethusEndpoint("2112", "metrics")
 		if err := s.GrpcServer.Serve(l); err != nil {
 			log.Fatalf("failed to serve: %v", err)
 		}
@@ -175,14 +194,20 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
-	r, err := c.Search(ctx, searchRequest)
-	if err != nil {
-		log.Fatal(err)
-	}
+	log.Println(args)
+	switch args.CmdType {
+	case server.SearchCmd:
+		r, err := c.Search(ctx, searchRequest)
+		if err != nil {
+			log.Fatal(err)
+		}
 
-	log.Printf("found %d results\n", r.GetTotal())
+		log.Printf("found %d results\n", r.GetTotal())
 
-	for _, t := range r.Txos {
-		fmt.Printf("%s:%d\n", util.TxHashToTxId(t.TxHash), t.Nout)
+		for _, t := range r.Txos {
+			fmt.Printf("%s:%d\n", util.TxHashToTxId(t.TxHash), t.Nout)
+		}
+	default:
+		log.Fatalln("Unknown Command Type!")
 	}
 }

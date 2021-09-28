@@ -19,6 +19,10 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type HubClient interface {
 	Search(ctx context.Context, in *SearchRequest, opts ...grpc.CallOption) (*Outputs, error)
+	Ping(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
+	Version(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
+	Features(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
+	Broadcast(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*UInt32Value, error)
 }
 
 type hubClient struct {
@@ -38,11 +42,51 @@ func (c *hubClient) Search(ctx context.Context, in *SearchRequest, opts ...grpc.
 	return out, nil
 }
 
+func (c *hubClient) Ping(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error) {
+	out := new(StringValue)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Ping", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) Version(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error) {
+	out := new(StringValue)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Version", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) Features(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error) {
+	out := new(StringValue)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Features", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *hubClient) Broadcast(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*UInt32Value, error) {
+	out := new(UInt32Value)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Broadcast", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // HubServer is the server API for Hub service.
 // All implementations must embed UnimplementedHubServer
 // for forward compatibility
 type HubServer interface {
 	Search(context.Context, *SearchRequest) (*Outputs, error)
+	Ping(context.Context, *EmptyMessage) (*StringValue, error)
+	Version(context.Context, *EmptyMessage) (*StringValue, error)
+	Features(context.Context, *EmptyMessage) (*StringValue, error)
+	Broadcast(context.Context, *EmptyMessage) (*UInt32Value, error)
 	mustEmbedUnimplementedHubServer()
 }
 
@@ -52,6 +96,18 @@ type UnimplementedHubServer struct {
 
 func (UnimplementedHubServer) Search(context.Context, *SearchRequest) (*Outputs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Search not implemented")
+}
+func (UnimplementedHubServer) Ping(context.Context, *EmptyMessage) (*StringValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
+}
+func (UnimplementedHubServer) Version(context.Context, *EmptyMessage) (*StringValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Version not implemented")
+}
+func (UnimplementedHubServer) Features(context.Context, *EmptyMessage) (*StringValue, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Features not implemented")
+}
+func (UnimplementedHubServer) Broadcast(context.Context, *EmptyMessage) (*UInt32Value, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Broadcast not implemented")
 }
 func (UnimplementedHubServer) mustEmbedUnimplementedHubServer() {}
 
@@ -84,6 +140,78 @@ func _Hub_Search_Handler(srv interface{}, ctx context.Context, dec func(interfac
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Hub_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmptyMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Ping(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Ping",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Ping(ctx, req.(*EmptyMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_Version_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmptyMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Version(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Version",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Version(ctx, req.(*EmptyMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_Features_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmptyMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Features(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Features",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Features(ctx, req.(*EmptyMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Hub_Broadcast_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmptyMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Broadcast(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Broadcast",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Broadcast(ctx, req.(*EmptyMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Hub_ServiceDesc is the grpc.ServiceDesc for Hub service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -94,6 +222,22 @@ var Hub_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Search",
 			Handler:    _Hub_Search_Handler,
+		},
+		{
+			MethodName: "Ping",
+			Handler:    _Hub_Ping_Handler,
+		},
+		{
+			MethodName: "Version",
+			Handler:    _Hub_Version_Handler,
+		},
+		{
+			MethodName: "Features",
+			Handler:    _Hub_Features_Handler,
+		},
+		{
+			MethodName: "Broadcast",
+			Handler:    _Hub_Broadcast_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

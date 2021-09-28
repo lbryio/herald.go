@@ -50,10 +50,17 @@ Install Go 1.14+
 Download `protoc` from https://github.com/protocolbuffers/protobuf/releases and make sure it is
 executable and in your path.
 
-Install Go plugin for protoc:
+Install Go plugin for protoc and python:
 
 ```
 go get google.golang.org/protobuf/cmd/protoc-gen-go google.golang.org/grpc/cmd/protoc-gen-go-grpc
+pip install grpcio grpcio-tools github3.py
+```
+
+Lastly the hub needs protobuf version 3.17.1, it may work with newer version but this is what it's built with, on ubuntu systems you'll have to install this from source see the GitHub actions in `.github/workflows` for an example of this.
+
+```
+https://github.com/protocolbuffers/protobuf/releases/download/v3.17.1/protobuf-all-3.17.1.tar.gz
 ```
 
 If you can run `./protobuf/build.sh` without errors, you have `go` and `protoc` installed correctly. 
