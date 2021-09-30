@@ -179,43 +179,61 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var pageSize = 10
 	var orderBy []orderField
 	var searchIndices []string
+	var searchResult *elastic.SearchResult = nil
 	client := s.EsClient
 	searchIndices = make([]string, 0, 1)
 	searchIndices = append(searchIndices, s.Args.EsIndex)
 
-	q := elastic.NewBoolQuery()
+	cacheHit := false
+	var cachedRecords []*record
+	/*
+		TODO: cache based on search request params
+			include from value and number of results.
+			When another search request comes in with same search params
+			and same or increased offset (which we currently don't even use?)
+			that will be a cache hit.
+	*/
 
-	err := s.checkQuery(in)
-	if err != nil {
-		return nil, err
+	if !cacheHit {
+		q := elastic.NewBoolQuery()
+
+		err := s.checkQuery(in)
+		if err != nil {
+			return nil, err
+		}
+		q = s.setupEsQuery(q, in, &pageSize, &from, &orderBy)
+
+		fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
+		search := client.Search().
+			Index(searchIndices...).
+			FetchSourceContext(fsc).
+			Query(q). // specify the query
+			From(0).Size(DefaultSearchSize)
+
+		for _, x := range orderBy {
+			search = search.Sort(x.Field, x.IsAsc)
+		}
+
+		searchResult, err = search.Do(ctx) // execute
+		if err != nil && elastic.IsNotFound(err) {
+			log.Println("Index returned 404! Check writer. Index: ", searchIndices)
+			return &pb.Outputs{}, nil
+
+		} else if err != nil {
+			s.recordErrorAndReturn(err, "search_errors")
+			log.Println("Error executing query: ", err)
+			return nil, err
+		}
+
+		log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
+
+		cachedRecords = make([]*record, 0, 0)
+	} else {
+		//TODO fill cached records here
+		cachedRecords = make([]*record, 0, 0)
 	}
-	q = s.setupEsQuery(q, in, &pageSize, &from, &orderBy)
 
-	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
-	search := client.Search().
-		Index(searchIndices...).
-		FetchSourceContext(fsc).
-		Query(q). // specify the query
-		From(0).Size(DefaultSearchSize)
-
-	for _, x := range orderBy {
-		search = search.Sort(x.Field, x.IsAsc)
-	}
-
-	searchResult, err := search.Do(ctx) // execute
-	if err != nil && elastic.IsNotFound(err) {
-		log.Println("Index returned 404! Check writer. Index: ", searchIndices)
-		return &pb.Outputs{}, nil
-
-	} else if err != nil {
-		s.recordErrorAndReturn(err, "search_errors")
-		log.Println("Error executing query: ", err)
-		return nil, err
-	}
-
-	log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
-
-	txos, extraTxos, blocked := s.postProcessResults(ctx, client, searchResult, in, pageSize, from, searchIndices)
+	txos, extraTxos, blocked := s.postProcessResults(ctx, client, searchResult, in, pageSize, from, searchIndices, cachedRecords)
 
 	t1 := time.Now()
 
@@ -272,20 +290,25 @@ func (s *Server) postProcessResults(
 	in *pb.SearchRequest,
 	pageSize int,
 	from int,
-	searchIndices []string) ([]*pb.Output, []*pb.Output, []*pb.Blocked) {
+	searchIndices []string,
+	cachedRecords []*record) ([]*pb.Output, []*pb.Output, []*pb.Blocked) {
 	var txos []*pb.Output
 	var records []*record
 	var blockedRecords []*record
 	var blocked []*pb.Blocked
 	var blockedMap map[string]*pb.Blocked
 
-	records = make([]*record, 0, searchResult.TotalHits())
+	if len(cachedRecords) < 0 {
+		records = make([]*record, 0, searchResult.TotalHits())
 
-	var r record
-	for _, item := range searchResult.Each(reflect.TypeOf(r)) {
-		if t, ok := item.(record); ok {
-			records = append(records, &t)
+		var r record
+		for _, item := range searchResult.Each(reflect.TypeOf(r)) {
+			if t, ok := item.(record); ok {
+				records = append(records, &t)
+			}
 		}
+	} else {
+		records = cachedRecords
 	}
 
 	//printJsonFullResults(searchResult)
@@ -617,7 +640,7 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 	return channelTxos, channels
 }
 
-func (s * Server) getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
+func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
 
 	var totalReposted = 0
 	var mget = client.Mget() //.StoredFields("_id")
