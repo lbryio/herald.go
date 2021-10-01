@@ -2,8 +2,10 @@ package server
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/btcsuite/btcutil/base58"
 	"log"
 	"math"
 	"reflect"
@@ -18,6 +20,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/karalabe/cookiejar.v1/collections/deque"
 )
 
@@ -182,19 +185,36 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var searchResult *elastic.SearchResult = nil
 	client := s.EsClient
 	searchIndices = make([]string, 0, 1)
-	searchIndices = append(searchIndices, s.Args.EsIndex)
+	//searchIndices = append(searchIndices, s.Args.EsIndex)
 
-	cacheHit := false
-	var cachedRecords []*record
+	indices, _ := client.IndexNames()
+	for _, index := range indices {
+		if index != "claims" {
+			log.Println(index)
+			searchIndices = append(searchIndices, index)
+		}
+	}
+
+	//cacheHit := false
+	var records []*record
+
+	cacheKey := s.serializeSearchRequest(in)
+
 	/*
-		TODO: cache based on search request params
+			cache based on search request params
 			include from value and number of results.
 			When another search request comes in with same search params
 			and same or increased offset (which we currently don't even use?)
 			that will be a cache hit.
+			FIXME: For now the cache is turned off when in debugging mode
+				(for unit tests) because it breaks on some of them.
+			FIXME: Currently the cache just skips the initial search,
+				the mgets and post processing are still done. There's probably
+				a more efficient way to store the final result.
 	*/
 
-	if !cacheHit {
+	if val, err := s.QueryCache.Get(cacheKey); err != nil || s.Args.Debug {
+
 		q := elastic.NewBoolQuery()
 
 		err := s.checkQuery(in)
@@ -227,13 +247,17 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 
 		log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
 
-		cachedRecords = make([]*record, 0, 0)
+		records = s.searchResultToRecords(searchResult)
+		err = s.QueryCache.Set(cacheKey, records)
+		if err != nil {
+			//FIXME: Should this be fatal?
+			log.Println("Error storing records in cache: ", err)
+		}
 	} else {
-		//TODO fill cached records here
-		cachedRecords = make([]*record, 0, 0)
+		records = val.([]*record)
 	}
 
-	txos, extraTxos, blocked := s.postProcessResults(ctx, client, searchResult, in, pageSize, from, searchIndices, cachedRecords)
+	txos, extraTxos, blocked := s.postProcessResults(ctx, client, records, in, pageSize, from, searchIndices)
 
 	t1 := time.Now()
 
@@ -283,33 +307,32 @@ func (s *Server) cleanTags(tags []string) []string {
 	return cleanedTags
 }
 
+func (s *Server) searchResultToRecords(
+	searchResult *elastic.SearchResult) []*record {
+	records := make([]*record, 0, searchResult.TotalHits())
+
+	var r record
+	for _, item := range searchResult.Each(reflect.TypeOf(r)) {
+		if t, ok := item.(record); ok {
+			records = append(records, &t)
+		}
+	}
+
+	return records
+}
+
 func (s *Server) postProcessResults(
 	ctx context.Context,
 	client *elastic.Client,
-	searchResult *elastic.SearchResult,
+	records []*record,
 	in *pb.SearchRequest,
 	pageSize int,
 	from int,
-	searchIndices []string,
-	cachedRecords []*record) ([]*pb.Output, []*pb.Output, []*pb.Blocked) {
+	searchIndices []string) ([]*pb.Output, []*pb.Output, []*pb.Blocked) {
 	var txos []*pb.Output
-	var records []*record
 	var blockedRecords []*record
 	var blocked []*pb.Blocked
 	var blockedMap map[string]*pb.Blocked
-
-	if len(cachedRecords) < 0 {
-		records = make([]*record, 0, searchResult.TotalHits())
-
-		var r record
-		for _, item := range searchResult.Each(reflect.TypeOf(r)) {
-			if t, ok := item.(record); ok {
-				records = append(records, &t)
-			}
-		}
-	} else {
-		records = cachedRecords
-	}
 
 	//printJsonFullResults(searchResult)
 	records, blockedRecords, blockedMap = removeBlocked(records)
@@ -508,7 +531,9 @@ func (s *Server) setupEsQuery(
 	}
 
 	if in.PublicKeyId != "" {
-		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", in.PublicKeyId))
+		value := hex.EncodeToString(base58.Decode(in.PublicKeyId)[1:21])
+		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", value))
+		// q = q.Must(elastic.NewTermQuery("public_key_id.keyword", in.PublicKeyId))
 	}
 
 	if in.HasChannelSignature {
@@ -544,7 +569,8 @@ func (s *Server) setupEsQuery(
 	q = AddTermField(q, in.ShortUrl, "short_url.keyword")
 	q = AddTermField(q, in.Signature, "signature.keyword")
 	q = AddTermField(q, in.TxId, "tx_id.keyword")
-	q = AddTermField(q, strings.ToUpper(in.FeeCurrency), "fee_currency.keyword")
+	// q = AddTermField(q, strings.ToUpper(in.FeeCurrency), "fee_currency.keyword")
+	q = AddTermField(q, in.FeeCurrency, "fee_currency.keyword")
 	q = AddTermField(q, in.RepostedClaimId, "reposted_claim_id.keyword")
 
 	q = AddTermsField(q, s.cleanTags(in.AnyTags), "tags.keyword")
@@ -692,6 +718,20 @@ func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client
 	return claims, repostedRecords, respostedMap
 }
 
+/*
+	Takes a search request and serializes into a string for use as a key into the
+	internal cache for the hub.
+*/
+func (s *Server) serializeSearchRequest(request *pb.SearchRequest) string {
+	bytes, err := protojson.Marshal(request)
+	if err != nil {
+		return ""
+	}
+	str := string((*s.S256).Sum(bytes))
+	log.Println(str)
+	return str
+}
+
 func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*record {
 	finalHits := make([]*record, 0, len(searchHits))
 	var channelCounters map[string]int
@@ -826,3 +866,4 @@ func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.B
 
 	return newHits, blockedHits, blockedChannels
 }
+

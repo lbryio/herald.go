@@ -2,14 +2,16 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"log"
+	"net/http"
 	"os"
 	"regexp"
-
-	"net/http"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
@@ -24,6 +26,8 @@ type Server struct {
 	WeirdCharsRe *regexp.Regexp
 	EsClient     *elastic.Client
 	Servers      []*FederatedServer
+	QueryCache   *ttlcache.Cache
+	S256		 *hash.Hash
 	pb.UnimplementedHubServer
 }
 
@@ -123,12 +127,21 @@ func MakeHubServer(args *Args) *Server {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	cache := ttlcache.NewCache()
+	err = cache.SetTTL(5 * time.Minute)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s256 := sha256.New()
 	s := &Server{
 		GrpcServer:   grpcServer,
 		Args:         args,
 		MultiSpaceRe: multiSpaceRe,
 		WeirdCharsRe: weirdCharsRe,
 		EsClient:     client,
+		QueryCache:   cache,
+		S256:         &s256,
 	}
 
 	return s
