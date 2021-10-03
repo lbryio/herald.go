@@ -20,14 +20,17 @@ import (
 )
 
 type Server struct {
-	GrpcServer   *grpc.Server
-	Args         *Args
-	MultiSpaceRe *regexp.Regexp
-	WeirdCharsRe *regexp.Regexp
-	EsClient     *elastic.Client
-	Servers      []*FederatedServer
-	QueryCache   *ttlcache.Cache
-	S256		 *hash.Hash
+	GrpcServer   	 *grpc.Server
+	Args         	 *Args
+	MultiSpaceRe 	 *regexp.Regexp
+	WeirdCharsRe 	 *regexp.Regexp
+	EsClient     	 *elastic.Client
+	Servers      	 []*FederatedServer
+	QueryCache   	 *ttlcache.Cache
+	S256		 	 *hash.Hash
+	LastRefreshCheck time.Time
+	RefreshDelta     time.Duration
+	NumESRefreshes   int64
 	pb.UnimplementedHubServer
 }
 
@@ -134,14 +137,22 @@ func MakeHubServer(args *Args) *Server {
 		log.Fatal(err)
 	}
 	s256 := sha256.New()
+	var refreshDelta = time.Second * 2
+	if args.Debug {
+		refreshDelta = time.Second * 0
+	}
+
 	s := &Server{
-		GrpcServer:   grpcServer,
-		Args:         args,
-		MultiSpaceRe: multiSpaceRe,
-		WeirdCharsRe: weirdCharsRe,
-		EsClient:     client,
-		QueryCache:   cache,
-		S256:         &s256,
+		GrpcServer:       grpcServer,
+		Args:         	  args,
+		MultiSpaceRe: 	  multiSpaceRe,
+		WeirdCharsRe: 	  weirdCharsRe,
+		EsClient:     	  client,
+		QueryCache:   	  cache,
+		S256:         	  &s256,
+		LastRefreshCheck: time.Now(),
+		RefreshDelta: 	  refreshDelta,
+		NumESRefreshes:   0,
 	}
 
 	return s
