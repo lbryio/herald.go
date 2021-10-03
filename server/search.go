@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
 	"log"
 	"math"
 	"reflect"
@@ -15,6 +14,7 @@ import (
 
 	//"github.com/lbryio/hub/schema"
 
+	"github.com/btcsuite/btcutil/base58"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
@@ -185,16 +185,16 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var searchResult *elastic.SearchResult = nil
 	client := s.EsClient
 	searchIndices = make([]string, 0, 1)
-	//searchIndices = append(searchIndices, s.Args.EsIndex)
+	searchIndices = append(searchIndices, s.Args.EsIndex)
 
 	//Code for debugging locally
-	indices, _ := client.IndexNames()
-	for _, index := range indices {
-		if index != "claims" {
-			log.Println(index)
-			searchIndices = append(searchIndices, index)
-		}
-	}
+	//indices, _ := client.IndexNames()
+	//for _, index := range indices {
+	//	if index != "claims" {
+	//		log.Println(index)
+	//		searchIndices = append(searchIndices, index)
+	//	}
+	//}
 
 	// If it's been more than RefreshDelta time since we last checked if the
 	// es index has been refreshed, we check (this is 2 seconds in prod,
