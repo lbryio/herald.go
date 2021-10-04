@@ -18,6 +18,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
+	"google.golang.org/protobuf/encoding/protojson"
 	"gopkg.in/karalabe/cookiejar.v1/collections/deque"
 )
 
@@ -179,43 +180,100 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	var pageSize = 10
 	var orderBy []orderField
 	var searchIndices []string
+	var searchResult *elastic.SearchResult = nil
 	client := s.EsClient
 	searchIndices = make([]string, 0, 1)
 	searchIndices = append(searchIndices, s.Args.EsIndex)
 
-	q := elastic.NewBoolQuery()
+	//Code for debugging locally
+	//indices, _ := client.IndexNames()
+	//for _, index := range indices {
+	//	if index != "claims" {
+	//		log.Println(index)
+	//		searchIndices = append(searchIndices, index)
+	//	}
+	//}
 
-	err := s.checkQuery(in)
-	if err != nil {
-		return nil, err
-	}
-	q = s.setupEsQuery(q, in, &pageSize, &from, &orderBy)
-
-	fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
-	search := client.Search().
-		Index(searchIndices...).
-		FetchSourceContext(fsc).
-		Query(q). // specify the query
-		From(0).Size(DefaultSearchSize)
-
-	for _, x := range orderBy {
-		search = search.Sort(x.Field, x.IsAsc)
-	}
-
-	searchResult, err := search.Do(ctx) // execute
-	if err != nil && elastic.IsNotFound(err) {
-		log.Println("Index returned 404! Check writer. Index: ", searchIndices)
-		return &pb.Outputs{}, nil
-
-	} else if err != nil {
-		s.recordErrorAndReturn(err, "search_errors")
-		log.Println("Error executing query: ", err)
-		return nil, err
+	// If it's been more than RefreshDelta time since we last checked if the
+	// es index has been refreshed, we check (this is 2 seconds in prod,
+	// 0 seconds in debug / unit testing). If the index has been refreshed
+	// a different number of times since we last checked, we purge the cache
+	if time.Now().After(s.LastRefreshCheck.Add(s.RefreshDelta)) {
+		res, err := client.IndexStats(searchIndices[0]).Do(ctx)
+		if err != nil {
+			log.Printf("Error on ES index stats\n%v\n", err)
+		}
+		numRefreshes := res.Indices[searchIndices[0]].Primaries.Refresh.Total
+		if numRefreshes != s.NumESRefreshes {
+			_ = s.QueryCache.Purge()
+			s.NumESRefreshes = numRefreshes
+		}
 	}
 
-	log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
+	var records []*record
 
-	txos, extraTxos, blocked := s.postProcessResults(ctx, client, searchResult, in, pageSize, from, searchIndices)
+	cacheKey := s.serializeSearchRequest(in)
+
+	setPageVars(in, &pageSize, &from)
+
+	/*
+			cache based on search request params
+			include from value and number of results.
+			When another search request comes in with same search params
+			and same or increased offset (which we currently don't even use?)
+			that will be a cache hit.
+			FIXME: For now the cache is turned off when in debugging mode
+				(for unit tests) because it breaks on some of them.
+			FIXME: Currently the cache just skips the initial search,
+				the mgets and post processing are still done. There's probably
+				a more efficient way to store the final result.
+	*/
+
+	if val, err := s.QueryCache.Get(cacheKey); err != nil {
+
+		q := elastic.NewBoolQuery()
+
+		err := s.checkQuery(in)
+		if err != nil {
+			return nil, err
+		}
+		q = s.setupEsQuery(q, in, &orderBy)
+
+		fsc := elastic.NewFetchSourceContext(true).Exclude("description", "title")
+		search := client.Search().
+			Index(searchIndices...).
+			FetchSourceContext(fsc).
+			Query(q). // specify the query
+			From(0).Size(DefaultSearchSize)
+
+		for _, x := range orderBy {
+			search = search.Sort(x.Field, x.IsAsc)
+		}
+
+		searchResult, err = search.Do(ctx) // execute
+		if err != nil && elastic.IsNotFound(err) {
+			log.Println("Index returned 404! Check writer. Index: ", searchIndices)
+			return &pb.Outputs{}, nil
+
+		} else if err != nil {
+			s.recordErrorAndReturn(err, "search_errors")
+			log.Println("Error executing query: ", err)
+			return nil, err
+		}
+
+		log.Printf("%s: found %d results in %dms\n", in.Text, len(searchResult.Hits.Hits), searchResult.TookInMillis)
+
+		records = s.searchResultToRecords(searchResult)
+		err = s.QueryCache.Set(cacheKey, records)
+		if err != nil {
+			//FIXME: Should this be fatal?
+			log.Println("Error storing records in cache: ", err)
+		}
+	} else {
+		records = val.([]*record)
+	}
+
+	txos, extraTxos, blocked := s.postProcessResults(ctx, client, records, in, pageSize, from, searchIndices)
 
 	t1 := time.Now()
 
@@ -265,21 +323,9 @@ func (s *Server) cleanTags(tags []string) []string {
 	return cleanedTags
 }
 
-func (s *Server) postProcessResults(
-	ctx context.Context,
-	client *elastic.Client,
-	searchResult *elastic.SearchResult,
-	in *pb.SearchRequest,
-	pageSize int,
-	from int,
-	searchIndices []string) ([]*pb.Output, []*pb.Output, []*pb.Blocked) {
-	var txos []*pb.Output
-	var records []*record
-	var blockedRecords []*record
-	var blocked []*pb.Blocked
-	var blockedMap map[string]*pb.Blocked
-
-	records = make([]*record, 0, searchResult.TotalHits())
+func (s *Server) searchResultToRecords(
+	searchResult *elastic.SearchResult) []*record {
+	records := make([]*record, 0, searchResult.TotalHits())
 
 	var r record
 	for _, item := range searchResult.Each(reflect.TypeOf(r)) {
@@ -287,6 +333,22 @@ func (s *Server) postProcessResults(
 			records = append(records, &t)
 		}
 	}
+
+	return records
+}
+
+func (s *Server) postProcessResults(
+	ctx context.Context,
+	client *elastic.Client,
+	records []*record,
+	in *pb.SearchRequest,
+	pageSize int,
+	from int,
+	searchIndices []string) ([]*pb.Output, []*pb.Output, []*pb.Blocked) {
+	var txos []*pb.Output
+	var blockedRecords []*record
+	var blocked []*pb.Blocked
+	var blockedMap map[string]*pb.Blocked
 
 	//printJsonFullResults(searchResult)
 	records, blockedRecords, blockedMap = removeBlocked(records)
@@ -353,17 +415,26 @@ func (s *Server) checkQuery(in *pb.SearchRequest) error {
 	for name, failed := range checks {
 		if failed {
 			time.Sleep(2) // throttle
-			return fmt.Errorf("%s cant have more than %d items", name, limit)
+			return fmt.Errorf("%s cant have more than %d items.", name, limit)
 		}
 	}
 	return nil
 }
 
+func setPageVars(in *pb.SearchRequest, pageSize *int, from *int) {
+	if in.Limit > 0 {
+		log.Printf("############ limit: %d\n", in.Limit)
+		*pageSize = int(in.Limit)
+	}
+
+	if in.Offset > 0 {
+		*from = int(in.Offset)
+	}
+}
+
 func (s *Server) setupEsQuery(
 	q *elastic.BoolQuery,
 	in *pb.SearchRequest,
-	pageSize *int,
-	from *int,
 	orderBy *[]orderField) *elastic.BoolQuery {
 	claimTypes := map[string]int{
 		"stream":     1,
@@ -416,14 +487,6 @@ func (s *Server) setupEsQuery(
 
 	if in.IsControlling {
 		q = q.Must(elastic.NewTermQuery("is_controlling", in.IsControlling))
-	}
-
-	if in.Limit > 0 {
-		*pageSize = int(in.Limit)
-	}
-
-	if in.Offset > 0 {
-		*from = int(in.Offset)
 	}
 
 	if len(in.ClaimName) > 0 {
@@ -617,7 +680,7 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 	return channelTxos, channels
 }
 
-func (s * Server) getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
+func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
 
 	var totalReposted = 0
 	var mget = client.Mget() //.StoredFields("_id")
@@ -667,6 +730,29 @@ func (s * Server) getClaimsForReposts(ctx context.Context, client *elastic.Clien
 	}
 
 	return claims, repostedRecords, respostedMap
+}
+
+/*
+	Takes a search request and serializes into a string for use as a key into the
+	internal cache for the hub.
+*/
+func (s *Server) serializeSearchRequest(request *pb.SearchRequest) string {
+	// Save the offest / limit and set to zero, cache hits should happen regardless
+	// and they're used in post processing
+	//offset, limit := request.Offset, request.Limit
+	//request.Offset = 0
+	//request.Limit = 0
+
+	bytes, err := protojson.Marshal(request)
+	if err != nil {
+		return ""
+	}
+	str := string((*s.S256).Sum(bytes))
+	// log.Println(str)
+	//request.Offset = offset
+	//request.Limit = limit
+
+	return str
 }
 
 func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*record {
@@ -803,3 +889,4 @@ func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.B
 
 	return newHits, blockedHits, blockedChannels
 }
+

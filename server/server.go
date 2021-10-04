@@ -2,14 +2,16 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"hash"
 	"log"
+	"net/http"
 	"os"
 	"regexp"
-
-	"net/http"
 	"time"
 
+	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
@@ -18,12 +20,17 @@ import (
 )
 
 type Server struct {
-	GrpcServer   *grpc.Server
-	Args         *Args
-	MultiSpaceRe *regexp.Regexp
-	WeirdCharsRe *regexp.Regexp
-	EsClient     *elastic.Client
-	Servers      []*FederatedServer
+	GrpcServer   	 *grpc.Server
+	Args         	 *Args
+	MultiSpaceRe 	 *regexp.Regexp
+	WeirdCharsRe 	 *regexp.Regexp
+	EsClient     	 *elastic.Client
+	Servers      	 []*FederatedServer
+	QueryCache   	 *ttlcache.Cache
+	S256		 	 *hash.Hash
+	LastRefreshCheck time.Time
+	RefreshDelta     time.Duration
+	NumESRefreshes   int64
 	pb.UnimplementedHubServer
 }
 
@@ -41,13 +48,15 @@ const (
 
 type Args struct {
 	// TODO Make command types an enum
-	CmdType int
-	Host    string
-	Port    string
-	EsHost  string
-	EsPort  string
-	EsIndex string
-	Debug   bool
+	CmdType      int
+	Host         string
+	Port         string
+	EsHost       string
+	EsPort       string
+	EsIndex      string
+	Debug        bool
+	RefreshDelta int
+	CacheTTL     int
 }
 
 func getVersion() string {
@@ -123,12 +132,29 @@ func MakeHubServer(args *Args) *Server {
 	if err != nil {
 		log.Fatal(err)
 	}
+
+	cache := ttlcache.NewCache()
+	err = cache.SetTTL(time.Duration(args.CacheTTL) * time.Minute)
+	if err != nil {
+		log.Fatal(err)
+	}
+	s256 := sha256.New()
+	var refreshDelta = time.Second * time.Duration(args.RefreshDelta)
+	if args.Debug {
+		refreshDelta = time.Second * 0
+	}
+
 	s := &Server{
-		GrpcServer:   grpcServer,
-		Args:         args,
-		MultiSpaceRe: multiSpaceRe,
-		WeirdCharsRe: weirdCharsRe,
-		EsClient:     client,
+		GrpcServer:       grpcServer,
+		Args:         	  args,
+		MultiSpaceRe: 	  multiSpaceRe,
+		WeirdCharsRe: 	  weirdCharsRe,
+		EsClient:     	  client,
+		QueryCache:   	  cache,
+		S256:         	  &s256,
+		LastRefreshCheck: time.Now(),
+		RefreshDelta: 	  refreshDelta,
+		NumESRefreshes:   0,
 	}
 
 	return s

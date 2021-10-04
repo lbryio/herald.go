@@ -48,7 +48,7 @@ message SearchRequest {
   InvertibleField claim_id = 1;
   InvertibleField channel_id = 2;
   string text = 3;
-  uint32 limit = 4;
+  int32 limit = 4;
   repeated string order_by = 5;
   uint32 offset = 6;
   bool is_controlling = 7;
@@ -95,7 +95,7 @@ message SearchRequest {
   repeated string not_tags = 51;
   bool has_channel_signature = 52;
   BoolValue has_source = 53;
-  uint32 limit_claims_per_channel = 54;
+  int32 limit_claims_per_channel = 54;
   repeated string any_languages = 55;
   repeated string all_languages = 56;
   bool remove_duplicates = 57;

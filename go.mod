@@ -3,6 +3,7 @@ module github.com/lbryio/hub
 go 1.16
 
 require (
+	github.com/ReneKroon/ttlcache/v2 v2.8.1
 	github.com/akamensky/argparse v1.2.2
 	github.com/btcsuite/btcutil v1.0.2
 	github.com/lbryio/lbry.go/v2 v2.7.2-0.20210625145058-2b155597bf57
