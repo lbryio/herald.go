@@ -199,8 +199,10 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	// 0 seconds in debug / unit testing). If the index has been refreshed
 	// a different number of times since we last checked, we purge the cache
 	if time.Now().After(s.LastRefreshCheck.Add(s.RefreshDelta)) {
-		// FIXME: Should this be on all indices
-		res, _ := client.IndexStats(searchIndices[0]).Do(ctx)
+		res, err := client.IndexStats(searchIndices[0]).Do(ctx)
+		if err != nil {
+			log.Printf("Error on ES index stats\n%v\n", err)
+		}
 		numRefreshes := res.Indices[searchIndices[0]].Primaries.Refresh.Total
 		if numRefreshes != s.NumESRefreshes {
 			_ = s.QueryCache.Purge()

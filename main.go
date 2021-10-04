@@ -18,11 +18,13 @@ import (
 )
 
 const (
-	defaultHost    = "0.0.0.0"
-	defaultPort    = "50051"
-	defaultEsHost  = "http://localhost"
-	defaultEsIndex = "claims"
-	defaultEsPort  = "9200"
+	defaultHost    	    = "0.0.0.0"
+	defaultPort    	    = "50051"
+	defaultEsHost  	    = "http://localhost"
+	defaultEsIndex 	    = "claims"
+	defaultEsPort       = "9200"
+	defaultRefreshDelta = 5
+	defaultCacheTTL     = 5
 )
 
 func GetEnvironment(data []string, getkeyval func(item string) (key, val string)) map[string]string {
@@ -71,6 +73,8 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: defaultEsHost})
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: defaultEsPort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: defaultEsIndex})
+	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: defaultRefreshDelta})
+	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: defaultCacheTTL})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -89,13 +93,15 @@ func parseArgs(searchRequest *pb.SearchRequest) *server.Args {
 	}
 
 	args := &server.Args{
-		CmdType: server.SearchCmd,
-		Host:    *host,
-		Port:    ":" + *port,
-		EsHost:  *esHost,
-		EsPort:  *esPort,
-		EsIndex: *esIndex,
-		Debug:   *debug,
+		CmdType:      server.SearchCmd,
+		Host:         *host,
+		Port:         ":" + *port,
+		EsHost:       *esHost,
+		EsPort:       *esPort,
+		EsIndex:      *esIndex,
+		Debug:        *debug,
+		RefreshDelta: *refreshDelta,
+		CacheTTL:     *cacheTTL,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {

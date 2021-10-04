@@ -48,13 +48,15 @@ const (
 
 type Args struct {
 	// TODO Make command types an enum
-	CmdType int
-	Host    string
-	Port    string
-	EsHost  string
-	EsPort  string
-	EsIndex string
-	Debug   bool
+	CmdType      int
+	Host         string
+	Port         string
+	EsHost       string
+	EsPort       string
+	EsIndex      string
+	Debug        bool
+	RefreshDelta int
+	CacheTTL     int
 }
 
 func getVersion() string {
@@ -132,12 +134,12 @@ func MakeHubServer(args *Args) *Server {
 	}
 
 	cache := ttlcache.NewCache()
-	err = cache.SetTTL(5 * time.Minute)
+	err = cache.SetTTL(time.Duration(args.CacheTTL) * time.Minute)
 	if err != nil {
 		log.Fatal(err)
 	}
 	s256 := sha256.New()
-	var refreshDelta = time.Second * 2
+	var refreshDelta = time.Second * time.Duration(args.RefreshDelta)
 	if args.Debug {
 		refreshDelta = time.Second * 0
 	}
