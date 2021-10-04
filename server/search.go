@@ -2,7 +2,6 @@ package server
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -14,7 +13,6 @@ import (
 
 	//"github.com/lbryio/hub/schema"
 
-	"github.com/btcsuite/btcutil/base58"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
@@ -548,9 +546,7 @@ func (s *Server) setupEsQuery(
 	}
 
 	if in.PublicKeyId != "" {
-		value := hex.EncodeToString(base58.Decode(in.PublicKeyId)[1:21])
-		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", value))
-		// q = q.Must(elastic.NewTermQuery("public_key_id.keyword", in.PublicKeyId))
+		q = q.Must(elastic.NewTermQuery("public_key_id.keyword", in.PublicKeyId))
 	}
 
 	if in.HasChannelSignature {
@@ -586,8 +582,7 @@ func (s *Server) setupEsQuery(
 	q = AddTermField(q, in.ShortUrl, "short_url.keyword")
 	q = AddTermField(q, in.Signature, "signature.keyword")
 	q = AddTermField(q, in.TxId, "tx_id.keyword")
-	// q = AddTermField(q, strings.ToUpper(in.FeeCurrency), "fee_currency.keyword")
-	q = AddTermField(q, in.FeeCurrency, "fee_currency.keyword")
+	q = AddTermField(q, strings.ToUpper(in.FeeCurrency), "fee_currency.keyword")
 	q = AddTermField(q, in.RepostedClaimId, "reposted_claim_id.keyword")
 
 	q = AddTermsField(q, s.cleanTags(in.AnyTags), "tags.keyword")
