@@ -13,9 +13,11 @@ import (
 
 	//"github.com/lbryio/hub/schema"
 
+	"github.com/lbryio/hub/internal/metrics"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -44,7 +46,7 @@ type record struct {
 	RepostCount        uint32  `json:"repost_count"`
 	EffectiveAmount    uint64  `json:"effective_amount"`
 	SupportAmount      uint64  `json:"support_amount"`
-	TrendingScore      float64 `json:"TrendingScore"`
+	TrendingScore      float64 `json:"trending_score"`
 	ClaimName          string  `json:"claim_name"`
 }
 
@@ -125,14 +127,10 @@ func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name st
 		return q.Must(elastic.NewTermsQuery(name, searchVals...))
 	}
 }
-func (s *Server) recordErrorAndReturn(err error, typ string) (interface{}, error) {
-	// TODO record metric
-	log.Println(err)
-	return nil, err
-}
 
 func (s *Server) recordErrorAndDie(err error) {
 	// TODO record metric fatal_error_counter
+	metrics.FatalErrorCounter.Inc()
 	log.Fatalln(err)
 }
 
@@ -173,8 +171,16 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *e
 // 8) return streams referenced by repost and all channel referenced in extra_txos
 //*/
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
-	// TODO record metric search_counter
-	t0 := time.Now()
+	metrics.RequestsCount.With(prometheus.Labels{"method": "search"}).Inc()
+	metrics.SessionCount.Inc()
+	defer func() {metrics.SessionCount.Dec()}()
+	defer func(t time.Time) {
+		delta := time.Since(t).Seconds()
+		metrics.
+			QueryTime.
+			With(prometheus.Labels{"method": "search"}).
+			Observe(delta)
+	}(time.Now())
 
 	var from = 0
 	var pageSize = 10
@@ -256,7 +262,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 			return &pb.Outputs{}, nil
 
 		} else if err != nil {
-			s.recordErrorAndReturn(err, "search_errors")
+			metrics.SearchErrorCounter.Inc()
 			log.Println("Error executing query: ", err)
 			return nil, err
 		}
@@ -274,12 +280,6 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}
 
 	txos, extraTxos, blocked := s.postProcessResults(ctx, client, records, in, pageSize, from, searchIndices)
-
-	t1 := time.Now()
-
-	delta := t1.Unix() - t0.Unix()
-	log.Printf("delta: %d\n", delta)
-	// TODO record metric query_time
 
 	if in.NoTotals {
 		return &pb.Outputs{
@@ -650,13 +650,14 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 		}
 	}
 	if totalChannels == 0 {
-		s.recordErrorAndReturn(nil, "zero_channels_counter")
+		metrics.ZeroChannelsCounter.Inc()
 		return []*pb.Output{}, make(map[string]*pb.Output)
 	}
 
 	res, err := mget.Do(ctx)
 	if err != nil {
-		s.recordErrorAndReturn(err, "get_unique_channels_errors")
+		metrics.GetUniqueChannelsErrorCounter.Inc()
+		log.Println(err)
 		return []*pb.Output{}, make(map[string]*pb.Output)
 	}
 
@@ -668,7 +669,8 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
 		if err != nil {
-			s.recordErrorAndReturn(err, "json_errors")
+			metrics.JsonErrorCounter.Inc()
+			log.Println(err)
 			return []*pb.Output{}, make(map[string]*pb.Output)
 		}
 		channelTxos[i] = r.recordToOutput()
@@ -702,13 +704,14 @@ func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client
 	}
 	//mget = mget.Add(nmget)
 	if totalReposted == 0 {
-		// TODO record metric no_reposted_counter
+		metrics.NoRepostedCounter.Inc()
 		return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 	}
 
 	res, err := mget.Do(ctx)
 	if err != nil {
-		s.recordErrorAndReturn(err, "mget_error_counter")
+		metrics.MgetErrorCounter.Inc()
+		log.Println(err)
 		return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 	}
 
@@ -721,7 +724,8 @@ func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
 		if err != nil {
-			s.recordErrorAndReturn(err, "json_error_counter")
+			metrics.JsonErrorCounter.Inc()
+			log.Println(err)
 			return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 		}
 		claims[i] = r.recordToOutput()
