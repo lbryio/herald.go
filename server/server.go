@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/lbryio/hub/internal/metrics"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
@@ -178,6 +179,7 @@ func (s *Server) Hello(context context.Context, args *FederatedServer) (*Federat
 }
 
 func (s *Server) Ping(context context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
+	metrics.PingsCounter.Inc()
 	return &pb.StringValue{Value: "Hello, world!"}, nil
 }
 
