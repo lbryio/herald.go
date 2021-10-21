@@ -129,8 +129,7 @@ func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name st
 }
 
 func (s *Server) recordErrorAndDie(err error) {
-	// TODO record metric fatal_error_counter
-	metrics.FatalErrorCounter.Inc()
+	metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "fatal"}).Inc()
 	log.Fatalln(err)
 }
 
@@ -172,8 +171,6 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *e
 //*/
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
 	metrics.RequestsCount.With(prometheus.Labels{"method": "search"}).Inc()
-	metrics.SessionCount.Inc()
-	defer func() {metrics.SessionCount.Dec()}()
 	defer func(t time.Time) {
 		delta := time.Since(t).Seconds()
 		metrics.
@@ -262,7 +259,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 			return &pb.Outputs{}, nil
 
 		} else if err != nil {
-			metrics.SearchErrorCounter.Inc()
+			metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "search"}).Inc()
 			log.Println("Error executing query: ", err)
 			return nil, err
 		}
@@ -650,13 +647,12 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 		}
 	}
 	if totalChannels == 0 {
-		metrics.ZeroChannelsCounter.Inc()
 		return []*pb.Output{}, make(map[string]*pb.Output)
 	}
 
 	res, err := mget.Do(ctx)
 	if err != nil {
-		metrics.GetUniqueChannelsErrorCounter.Inc()
+		metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "get_unique_channels"}).Inc()
 		log.Println(err)
 		return []*pb.Output{}, make(map[string]*pb.Output)
 	}
@@ -669,7 +665,7 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
 		if err != nil {
-			metrics.JsonErrorCounter.Inc()
+			metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "json"}).Inc()
 			log.Println(err)
 			return []*pb.Output{}, make(map[string]*pb.Output)
 		}
@@ -704,13 +700,12 @@ func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client
 	}
 	//mget = mget.Add(nmget)
 	if totalReposted == 0 {
-		metrics.NoRepostedCounter.Inc()
 		return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 	}
 
 	res, err := mget.Do(ctx)
 	if err != nil {
-		metrics.MgetErrorCounter.Inc()
+		metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "mget"}).Inc()
 		log.Println(err)
 		return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 	}
@@ -724,7 +719,7 @@ func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client
 		var r record
 		err := json.Unmarshal(doc.Source, &r)
 		if err != nil {
-			metrics.JsonErrorCounter.Inc()
+			metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "json"}).Inc()
 			log.Println(err)
 			return []*pb.Output{}, []*record{}, make(map[string]*pb.Output)
 		}
