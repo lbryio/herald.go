@@ -12,9 +12,11 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/lbryio/hub/internal/metrics"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
 )
@@ -178,9 +180,11 @@ func (s *Server) Hello(context context.Context, args *FederatedServer) (*Federat
 }
 
 func (s *Server) Ping(context context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "ping"}).Inc()
 	return &pb.StringValue{Value: "Hello, world!"}, nil
 }
 
 func (s *Server) Version(context context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "version"}).Inc()
 	return &pb.StringValue{Value: getVersion()}, nil
 }
