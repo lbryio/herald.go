@@ -8,12 +8,27 @@ package pb;
 service Hub {
   rpc Search (SearchRequest) returns (Outputs) {}
   rpc Ping (EmptyMessage) returns (StringValue) {}
+  rpc Hello (HelloMessage) returns (HelloMessage) {}
+  rpc AddPeer (ServerMessage) returns (StringValue) {}
+  rpc PeerSubscribeStreaming (ServerMessage) returns (stream ServerMessage) {}
+  rpc PeerSubscribe (ServerMessage) returns (StringValue) {}
   rpc Version (EmptyMessage) returns (StringValue) {}
   rpc Features (EmptyMessage) returns (StringValue) {}
   rpc Broadcast(EmptyMessage) returns (UInt32Value) {}
 }
 
 message EmptyMessage {}
+
+message ServerMessage {
+  string address = 1;
+  string port = 2;
+}
+
+message HelloMessage {
+  string port = 1;
+  string host = 2;
+  repeated ServerMessage servers = 3;
+}
 
 message InvertibleField {
   bool invert = 1;

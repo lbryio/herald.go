@@ -24,7 +24,11 @@ AREA_RENAME = {
 
 def build_upload_binary(release: github3.repos.release.Release) -> None:
     # os.chdir(absolute_path)
-    os.system("go build .")
+    # os.system("go build .")
+    cmd = f'CGO_ENABLED=0 go build -v -ldflags "-X github.com/lbryio/hub/meta.Version={release.name}"'
+    print(cmd)
+    # os.system("go build .")
+    os.system(cmd)
     with open("./hub", "rb") as f:
         release.upload_asset("binary", "hub", f)
 
@@ -225,9 +229,11 @@ def release(args):
     print(body.getvalue())
 
     if unlabeled:
-        print('The following PRs were skipped and not included in changelog:')
-        for skipped in unlabeled:
-            print(skipped)
+        w('')
+        print('The following PRs were unlabeled and *will* be included in changelog:')
+        for notskipped in unlabeled:
+            print(notskipped)
+            w(notskipped)
 
     if fixups:
         print('The following PRs were marked as fixups and not included in changelog:')
