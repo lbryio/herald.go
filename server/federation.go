@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"log"
-	"math"
 	"os"
 	"strings"
 	"time"
@@ -12,13 +11,6 @@ import (
 	pb "github.com/lbryio/hub/protobuf/go"
 	"google.golang.org/grpc"
 )
-
-// sub is an internal structure holding information about an open connection
-// with a peer.
-type sub struct {
-	stream pb.Hub_PeerSubscribeStreamingServer
-	done   chan<- bool
-}
 
 // peerAddMsg is an internal structure for use in the channel communicating
 // to the peerAdder gorountine.
@@ -167,9 +159,7 @@ func helloPeer(server *FederatedServer, args *Args) bool {
 	return true
 }
 
-// writePeers writes our current known peers to disk
-// FIXME: This is probably inefficient, we just truncate the file and write
-// 	the entire thing every time. Maybe use some sort of mmap?
+// writePeers writes our current known peers to disk.
 func (s *Server) writePeers() {
 	if !s.Args.WritePeers {
 		return
@@ -223,7 +213,6 @@ func (s *Server) peerAdder(ctx context.Context) {
 						Port: msg.Port,
 						Ts: time.Now(),
 					}
-					log.Println(!ping)
 					if !ping || helloPeer(newServer, s.Args) {
 						s.Servers[k] = newServer
 						s.writePeers()
@@ -237,123 +226,6 @@ func (s *Server) peerAdder(ctx context.Context) {
 				return
 		}
 
-	}
-}
-
-// getFastestPeer determines the fastest peer in its list of peers by sending
-// out udp pings and seeing who responds first. This is currently not
-// implemented.
-func (s *Server) getFastestPeer() *FederatedServer {
-	log.Println(s.Servers)
-	if len(s.Servers) == 0 {
-		return nil
-	}
-
-	for _, peer := range s.Servers {
-		return peer
-	}
-
-	return nil
-}
-
-// subscribeToPeer subscribes to a given peer hub in a streaming fashion.
-func (s *Server) subscribeToPeer(peer *FederatedServer) {
-	var msg *pb.ServerMessage
-
-	log.Println("Subscribing to peer: ", peer)
-
-	if peer == nil {
-		return
-	}
-
-	conn, err := grpc.Dial(
-		peer.Address+":"+peer.Port,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer conn.Close()
-
-
-	c := pb.NewHubClient(conn)
-
-	var retries = 0
-	var stream pb.Hub_PeerSubscribeStreamingClient
-	for retries <= 3 {
-		if stream == nil {
-			stream, err = c.PeerSubscribeStreaming(
-				context.Background(),
-				&pb.ServerMessage{Address: s.Args.Host, Port: s.Args.Port},
-			)
-		}
-		if err != nil {
-			goto retry
-		}
-		err = stream.RecvMsg(msg)
-		if err != nil {
-			goto retry
-		}
-		s.addPeer(msg, false)
-		continue
-	retry:
-		retries = retries + 1
-		time.Sleep(time.Second * time.Duration(int(math.Pow(10, float64(retries)))))
-	}
-}
-
-// subscribeToFastestPeer is a convenience function to find and subscribe to
-// the fastest peer we know about in a streaming fashion.
-func (s *Server) subscribeToFastestPeer(keepSubscribed bool) {
-	for {
-		peer := s.getFastestPeer()
-		s.subscribeToPeer(peer)
-		if !keepSubscribed {
-			return
-		}
-		// Put in a sleep, so we aren't looping like crazy if we have no peers
-		time.Sleep(time.Second * 5)
-	}
-}
-
-// notifyPeerSubsStreaming notifies peer subs of new peers in a streaming
-// fashion.
-func (s *Server) notifyPeerSubsStreaming(newServer *FederatedServer) {
-	msg := &pb.ServerMessage{
-		Address: newServer.Address,
-		Port:    newServer.Port,
-	}
-	var unsubscribe []string
-	s.PeerSubs.Range(func(k, v interface{}) bool {
-		key, ok := k.(string)
-		if !ok {
-			log.Println("Failed to cast subscriber key: ", v)
-			return true
-		}
-		peer, ok := v.(sub)
-		if !ok {
-			log.Println("Failed to cast subscriber value: ", v)
-			return true
-		}
-
-		log.Printf("Notifying peer %s of new node %+v\n", key, msg)
-		err :=  peer.stream.Send(msg)
-		if err != nil {
-			log.Println("Failed to send data to ", key)
-			select {
-			case peer.done <- true:
-				log.Println("Unsubscribed ", key)
-			default:
-			}
-			unsubscribe = append(unsubscribe, key)
-		}
-		return true
-	})
-
-	for _, key := range unsubscribe {
-		s.PeerSubs.Delete(key)
 	}
 }
 

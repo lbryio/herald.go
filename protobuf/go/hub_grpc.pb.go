@@ -22,7 +22,6 @@ type HubClient interface {
 	Ping(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
 	Hello(ctx context.Context, in *HelloMessage, opts ...grpc.CallOption) (*HelloMessage, error)
 	AddPeer(ctx context.Context, in *ServerMessage, opts ...grpc.CallOption) (*StringValue, error)
-	PeerSubscribeStreaming(ctx context.Context, in *ServerMessage, opts ...grpc.CallOption) (Hub_PeerSubscribeStreamingClient, error)
 	PeerSubscribe(ctx context.Context, in *ServerMessage, opts ...grpc.CallOption) (*StringValue, error)
 	Version(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
 	Features(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
@@ -73,38 +72,6 @@ func (c *hubClient) AddPeer(ctx context.Context, in *ServerMessage, opts ...grpc
 	return out, nil
 }
 
-func (c *hubClient) PeerSubscribeStreaming(ctx context.Context, in *ServerMessage, opts ...grpc.CallOption) (Hub_PeerSubscribeStreamingClient, error) {
-	stream, err := c.cc.NewStream(ctx, &Hub_ServiceDesc.Streams[0], "/pb.Hub/PeerSubscribeStreaming", opts...)
-	if err != nil {
-		return nil, err
-	}
-	x := &hubPeerSubscribeStreamingClient{stream}
-	if err := x.ClientStream.SendMsg(in); err != nil {
-		return nil, err
-	}
-	if err := x.ClientStream.CloseSend(); err != nil {
-		return nil, err
-	}
-	return x, nil
-}
-
-type Hub_PeerSubscribeStreamingClient interface {
-	Recv() (*ServerMessage, error)
-	grpc.ClientStream
-}
-
-type hubPeerSubscribeStreamingClient struct {
-	grpc.ClientStream
-}
-
-func (x *hubPeerSubscribeStreamingClient) Recv() (*ServerMessage, error) {
-	m := new(ServerMessage)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
-		return nil, err
-	}
-	return m, nil
-}
-
 func (c *hubClient) PeerSubscribe(ctx context.Context, in *ServerMessage, opts ...grpc.CallOption) (*StringValue, error) {
 	out := new(StringValue)
 	err := c.cc.Invoke(ctx, "/pb.Hub/PeerSubscribe", in, out, opts...)
@@ -149,7 +116,6 @@ type HubServer interface {
 	Ping(context.Context, *EmptyMessage) (*StringValue, error)
 	Hello(context.Context, *HelloMessage) (*HelloMessage, error)
 	AddPeer(context.Context, *ServerMessage) (*StringValue, error)
-	PeerSubscribeStreaming(*ServerMessage, Hub_PeerSubscribeStreamingServer) error
 	PeerSubscribe(context.Context, *ServerMessage) (*StringValue, error)
 	Version(context.Context, *EmptyMessage) (*StringValue, error)
 	Features(context.Context, *EmptyMessage) (*StringValue, error)
@@ -172,9 +138,6 @@ func (UnimplementedHubServer) Hello(context.Context, *HelloMessage) (*HelloMessa
 }
 func (UnimplementedHubServer) AddPeer(context.Context, *ServerMessage) (*StringValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AddPeer not implemented")
-}
-func (UnimplementedHubServer) PeerSubscribeStreaming(*ServerMessage, Hub_PeerSubscribeStreamingServer) error {
-	return status.Errorf(codes.Unimplemented, "method PeerSubscribeStreaming not implemented")
 }
 func (UnimplementedHubServer) PeerSubscribe(context.Context, *ServerMessage) (*StringValue, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PeerSubscribe not implemented")
@@ -271,27 +234,6 @@ func _Hub_AddPeer_Handler(srv interface{}, ctx context.Context, dec func(interfa
 		return srv.(HubServer).AddPeer(ctx, req.(*ServerMessage))
 	}
 	return interceptor(ctx, in, info, handler)
-}
-
-func _Hub_PeerSubscribeStreaming_Handler(srv interface{}, stream grpc.ServerStream) error {
-	m := new(ServerMessage)
-	if err := stream.RecvMsg(m); err != nil {
-		return err
-	}
-	return srv.(HubServer).PeerSubscribeStreaming(m, &hubPeerSubscribeStreamingServer{stream})
-}
-
-type Hub_PeerSubscribeStreamingServer interface {
-	Send(*ServerMessage) error
-	grpc.ServerStream
-}
-
-type hubPeerSubscribeStreamingServer struct {
-	grpc.ServerStream
-}
-
-func (x *hubPeerSubscribeStreamingServer) Send(m *ServerMessage) error {
-	return x.ServerStream.SendMsg(m)
 }
 
 func _Hub_PeerSubscribe_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
@@ -406,12 +348,6 @@ var Hub_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _Hub_Broadcast_Handler,
 		},
 	},
-	Streams: []grpc.StreamDesc{
-		{
-			StreamName:    "PeerSubscribeStreaming",
-			Handler:       _Hub_PeerSubscribeStreaming_Handler,
-			ServerStreams: true,
-		},
-	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "hub.proto",
 }

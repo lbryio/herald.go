@@ -10,7 +10,6 @@ service Hub {
   rpc Ping (EmptyMessage) returns (StringValue) {}
   rpc Hello (HelloMessage) returns (HelloMessage) {}
   rpc AddPeer (ServerMessage) returns (StringValue) {}
-  rpc PeerSubscribeStreaming (ServerMessage) returns (stream ServerMessage) {}
   rpc PeerSubscribe (ServerMessage) returns (StringValue) {}
   rpc Version (EmptyMessage) returns (StringValue) {}
   rpc Features (EmptyMessage) returns (StringValue) {}

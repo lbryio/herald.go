@@ -213,42 +213,6 @@ func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.S
 	return &pb.StringValue{Value: "Success"}, nil
 }
 
-// PeerSubscribeStreaming is a streaming grpc endpoint that allows another hub to
-// subscribe to this hub for peer updates. This first loops through all the
-// peers that this hub knows about and sends them to the connecting hub,
-// it then stores the peer, along with a channel to indicate when it's finished
-// and it's stream context in our map of peer subs. Finally, it waits on the
-// context to finish, or a message in the done channel. This function cannot
-// exit while the peer is subscribe or the context will die. Communicating with
-// the peer is handled by the peerAdder goroutine in federation.go, which
-// listens on a channel of new peers and notifies all our connected peers when
-// we find out about a new one.
-func (s *Server) PeerSubscribeStreaming(in *pb.ServerMessage, stream pb.Hub_PeerSubscribeStreamingServer) error {
-	for _, server := range s.Servers {
-		err := stream.Send(&pb.ServerMessage{
-			Address: server.Address,
-			Port:    server.Port,
-		})
-		if err != nil {
-			return err
-		}
-	}
-
-	done := make(chan bool)
-	ctx := stream.Context()
-	s.PeerSubs.Store(peerKey(in), &sub{stream: stream, done: done})
-	for {
-		select {
-		case <-done:
-			log.Println("Removing client:", in)
-			return nil
-		case <-ctx.Done():
-			log.Println("Client disconnected: ", in)
-			return nil
-		}
-	}
-}
-
 // AddPeer is a grpc endpoint to tell this hub about another hub in the network.
 func (s *Server) AddPeer(ctx context.Context, args *pb.ServerMessage) (*pb.StringValue, error) {
 	s.addPeer(args, true)
