@@ -1,4 +1,4 @@
-name: 'Build Hub'
+name: 'Build and Test Hub'
 
 on:
   push:
@@ -30,3 +30,4 @@ jobs:
       - run: go get github.com/golang/protobuf/protoc-gen-go google.golang.org/grpc/cmd/protoc-gen-go-grpc
       - run: go build .
       - run: ./protobuf/build.sh
+      - run: cd server && go test -v

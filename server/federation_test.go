@@ -158,8 +158,9 @@ func TestPeerWriter(t *testing.T) {
 						Port:    "50051",
 					}
 				} else {
+					x := i + 1
 					msg = &pb.ServerMessage{
-						Address: fmt.Sprintf("%d.%d.%d.%d", i, i, i, i),
+						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}

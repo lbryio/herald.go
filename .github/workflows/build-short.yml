@@ -1,4 +1,4 @@
-name: 'Build Hub'
+name: 'Build and Test Hub'
 
 on:
   push:
@@ -11,3 +11,4 @@ jobs:
         with:
           go-version: 1.16.5
       - run: go build .
+      - run: cd server && go test -v
