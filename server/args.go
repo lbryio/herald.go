@@ -22,15 +22,15 @@ type Args struct {
 	UDPPort         string
 	EsHost          string
 	EsPort          string
-	DisableEs       bool
 	PrometheusPort  string
 	EsIndex         string
-	Debug           bool
 	RefreshDelta    int
 	CacheTTL        int
 	PeerFile	    string
 	Country         string
-	StartPeerAdder  bool
+	DisableEs       bool
+	Debug           bool
+	LoadPeers       bool
 	StartPrometheus bool
 	StartUDP        bool
 	WritePeers      bool
@@ -48,7 +48,7 @@ const (
 	DefaultCacheTTL        = 5
 	DefaultPeerFile        = "peers.txt"
 	DefaultCountry         = "US"
-	DefaultStartPeerAdder  = true
+	DefaultLoadPeers       = true
 	DefaultStartPrometheus = true
 	DefaultStartUDP        = true
 	DefaultWritePeers      = true
@@ -83,8 +83,6 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
 	searchCmd := parser.NewCommand("search", "claim search")
-	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
-	disableEs := parser.Flag("", "disable-es", &argparse.Options{Required: false, Help: "Disable elastic search, for running/testing independently", Default: false})
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
@@ -97,7 +95,10 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
 	peerFile := parser.String("", "peerfile", &argparse.Options{Required: false, Help: "Initial peer file for federation", Default: DefaultPeerFile})
 	country := parser.String("", "country", &argparse.Options{Required: false, Help: "Country this node is running in. Default US.", Default: DefaultCountry})
-	startPeerAdder := parser.Flag("", "start-peer-adder", &argparse.Options{Required: false, Help: "Start peer adder service", Default: DefaultStartPeerAdder})
+
+	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
+	disableEs := parser.Flag("", "disable-es", &argparse.Options{Required: false, Help: "Disable elastic search, for running/testing independently", Default: false})
+	loadPeers := parser.Flag("", "load-peers", &argparse.Options{Required: false, Help: "load peers from disk at startup", Default: DefaultLoadPeers})
 	startPrometheus := parser.Flag("", "start-prometheus", &argparse.Options{Required: false, Help: "Start prometheus server", Default: DefaultStartPrometheus})
 	startUdp := parser.Flag("", "start-udp", &argparse.Options{Required: false, Help: "Start UDP ping server", Default: DefaultStartUDP})
 	writePeers := parser.Flag("", "write-peers", &argparse.Options{Required: false, Help: "Write peer to disk as we learn about them", Default: DefaultWritePeers})
@@ -125,15 +126,15 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		EsHost:          *esHost,
 		EsPort:          *esPort,
 		UDPPort:         *udpPort,
-		DisableEs:       *disableEs,
 		PrometheusPort:  *prometheusPort,
 		EsIndex:         *esIndex,
-		Debug:           *debug,
 		RefreshDelta:    *refreshDelta,
 		CacheTTL:        *cacheTTL,
 		PeerFile:        *peerFile,
 		Country:         *country,
-		StartPeerAdder:  *startPeerAdder,
+		DisableEs:       *disableEs,
+		Debug:           *debug,
+		LoadPeers:       *loadPeers,
 		StartPrometheus: *startPrometheus,
 		StartUDP:        *startUdp,
 		WritePeers:      *writePeers,

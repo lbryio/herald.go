@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"hash"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"regexp"
@@ -20,22 +21,25 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 type Server struct {
-	GrpcServer   	 *grpc.Server
-	Args         	 *Args
-	MultiSpaceRe 	 *regexp.Regexp
-	WeirdCharsRe 	 *regexp.Regexp
-	EsClient     	 *elastic.Client
-	Servers      	 map[string]*FederatedServer
-	QueryCache   	 *ttlcache.Cache
-	S256		 	 *hash.Hash
+	GrpcServer       *grpc.Server
+	Args             *Args
+	MultiSpaceRe     *regexp.Regexp
+	WeirdCharsRe     *regexp.Regexp
+	EsClient         *elastic.Client
+	QueryCache       *ttlcache.Cache
+	S256             *hash.Hash
 	LastRefreshCheck time.Time
 	RefreshDelta     time.Duration
 	NumESRefreshes   int64
-	PeerSubs		 sync.Map
-	peerChannel      chan *peerAddMsg
+	PeerServers      sync.Map //map[string]*FederatedServer
+	NumPeerServers   *int64
+	PeerSubs         sync.Map
+	NumPeerSubs      *int64
+	Subscribed       bool
 	pb.UnimplementedHubServer
 }
 
@@ -83,13 +87,27 @@ func getVersion() string {
 	'blockchain.address.unsubscribe'
 */
 
+func (s *Server) Run() {
+	l, err := net.Listen("tcp", ":"+s.Args.Port)
+	if err != nil {
+		log.Fatalf("failed to listen: %v", err)
+	}
+
+	pb.RegisterHubServer(s.GrpcServer, s)
+	reflection.Register(s.GrpcServer)
+
+	log.Printf("listening on %s\n", l.Addr().String())
+	log.Println(s.Args)
+	if err := s.GrpcServer.Serve(l); err != nil {
+		log.Fatalf("failed to serve: %v", err)
+	}
+}
+
 // MakeHubServer takes the arguments given to a hub when it's started and
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
 func MakeHubServer(ctx context.Context, args *Args) *Server {
 	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(10))
-
-	peerChannel := make(chan *peerAddMsg)
 
 	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
 	if err != nil {
@@ -100,8 +118,6 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	servers := loadPeers(args)
 
 	var client *elastic.Client
 	if !args.DisableEs {
@@ -134,26 +150,30 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		refreshDelta = time.Second * 0
 	}
 
+	numPeers := new(int64)
+	*numPeers = 0
+	numSubs := new(int64)
+	*numSubs = 0
+
 	s := &Server{
 		GrpcServer:       grpcServer,
-		Args:         	  args,
-		MultiSpaceRe: 	  multiSpaceRe,
-		WeirdCharsRe: 	  weirdCharsRe,
-		EsClient:     	  client,
-		QueryCache:   	  cache,
-		S256:         	  &s256,
+		Args:             args,
+		MultiSpaceRe:     multiSpaceRe,
+		WeirdCharsRe:     weirdCharsRe,
+		EsClient:         client,
+		QueryCache:       cache,
+		S256:             &s256,
 		LastRefreshCheck: time.Now(),
-		RefreshDelta: 	  refreshDelta,
+		RefreshDelta:     refreshDelta,
 		NumESRefreshes:   0,
-		Servers: 		  servers,
+		PeerServers:      sync.Map{},
+		NumPeerServers:   numPeers,
 		PeerSubs:         sync.Map{},
-		peerChannel:      peerChannel,
+		NumPeerSubs:      numSubs,
+		Subscribed:       false,
 	}
 
 	// Start up our background services
-	if args.StartPeerAdder {
-		go s.peerAdder(ctx)
-	}
 	if args.StartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}
@@ -164,6 +184,20 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 				log.Println("UDP Server failed!", err)
 			}
 		}()
+	}
+	// Load peers from disk and subscribe to one if there are any
+	if args.LoadPeers {
+		// We Subscribed to true, so we don't try subscribing to peers as we
+		// add them, we'll find the best one after
+		s.Subscribed = true
+		err = s.loadPeers()
+		if err != nil {
+			log.Println(err)
+		}
+		// subscribe to the fastest peer we know (if there are any) for updates
+		// about their peers.
+		s.Subscribed = false
+		s.subscribeToFastestPeer()
 	}
 
 	return s
@@ -182,6 +216,7 @@ func (s *Server) prometheusEndpoint(port string, endpoint string) {
 // The passed message includes information about the other hub, and all
 // of its peers which are added to the knowledge of this hub.
 func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMessage, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "hello"}).Inc()
 	port := args.Port
 	host := args.Host
 	server := &FederatedServer{
@@ -191,7 +226,11 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 	}
 	log.Println(server)
 
-	s.addPeer(&pb.ServerMessage{Address: host, Port: port}, false)
+	err := s.addPeer(&pb.ServerMessage{Address: host, Port: port}, false)
+	// They just contacted us, so this shouldn't happen
+	if err != nil {
+		log.Println(err)
+	}
 	s.mergeFederatedServers(args.Servers)
 	s.writePeers()
 	s.notifyPeerSubs(server)
@@ -202,21 +241,34 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 // PeerSubscribe adds a peer hub to the list of subscribers to update about
 // new peers.
 func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.StringValue, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "peer_subscribe"}).Inc()
+	var msg = "Success"
 	peer := &FederatedServer{
 		Address: in.Address,
 		Port:    in.Port,
 		Ts:      time.Now(),
 	}
 
-	s.PeerSubs.Store(peerKey(in), peer)
+	if _, loaded := s.PeerSubs.LoadOrStore(peerKey(in), peer); !loaded {
+		s.incNumSubs()
+		metrics.PeersSubscribed.Inc()
+	} else {
+		msg = "Already subscribed"
+	}
 
-	return &pb.StringValue{Value: "Success"}, nil
+	return &pb.StringValue{Value: msg}, nil
 }
 
 // AddPeer is a grpc endpoint to tell this hub about another hub in the network.
 func (s *Server) AddPeer(ctx context.Context, args *pb.ServerMessage) (*pb.StringValue, error) {
-	s.addPeer(args, true)
-	return &pb.StringValue{Value: "Success!"}, nil
+	metrics.RequestsCount.With(prometheus.Labels{"method": "add_peer"}).Inc()
+	var msg = "Success"
+	err := s.addPeer(args, true)
+	if err != nil {
+		log.Println(err)
+		msg = "Failed"
+	}
+	return &pb.StringValue{Value: msg}, err
 }
 
 // Ping is a grpc endpoint that returns a short message.

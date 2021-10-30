@@ -4,14 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"net"
 	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/reflection"
 )
 
 func main() {
@@ -26,20 +24,21 @@ func main() {
 		ctxWCancel, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		l, err := net.Listen("tcp", ":"+args.Port)
-		if err != nil {
-			log.Fatalf("failed to listen: %v", err)
-		}
-
 		s := server.MakeHubServer(ctxWCancel, args)
-		pb.RegisterHubServer(s.GrpcServer, s)
-		reflection.Register(s.GrpcServer)
-
-		log.Printf("listening on %s\n", l.Addr().String())
-		log.Println(s.Args)
-		if err := s.GrpcServer.Serve(l); err != nil {
-			log.Fatalf("failed to serve: %v", err)
-		}
+		s.Run()
+		//l, err := net.Listen("tcp", ":"+args.Port)
+		//if err != nil {
+		//	log.Fatalf("failed to listen: %v", err)
+		//}
+		//
+		//pb.RegisterHubServer(s.GrpcServer, s)
+		//reflection.Register(s.GrpcServer)
+		//
+		//log.Printf("listening on %s\n", l.Addr().String())
+		//log.Println(s.Args)
+		//if err := s.GrpcServer.Serve(l); err != nil {
+		//	log.Fatalf("failed to serve: %v", err)
+		//}
 		return
 	}
 

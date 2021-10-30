@@ -6,18 +6,13 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync/atomic"
 	"time"
 
+	"github.com/lbryio/hub/internal/metrics"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"google.golang.org/grpc"
 )
-
-// peerAddMsg is an internal structure for use in the channel communicating
-// to the peerAdder gorountine.
-type peerAddMsg struct {
-	msg  *pb.ServerMessage
-	ping bool
-}
 
 // FederatedServer hold relevant information about peers that we known about.
 type FederatedServer struct {
@@ -26,29 +21,56 @@ type FederatedServer struct {
 	Ts      time.Time
 }
 
+var (
+	localHosts = map[string]bool{
+		"127.0.0.1": true,
+		"0.0.0.0": true,
+		"localhost": true,
+	}
+)
+
+
 // peerKey takes a ServerMessage object and returns the key that for that peer
 // in our peer table.
 func peerKey(msg *pb.ServerMessage) string {
 	return msg.Address + ":" + msg.Port
 }
 
+func (s *Server) incNumPeers() {
+	atomic.AddInt64(s.NumPeerServers, 1)
+}
+
+func (s *Server) decNumPeers() {
+	atomic.AddInt64(s.NumPeerServers, -1)
+}
+
+func (s *Server) getNumPeers() int64 {
+	return *s.NumPeerServers
+}
+
+func (s *Server) incNumSubs() {
+	atomic.AddInt64(s.NumPeerSubs, 1)
+}
+
+func (s *Server) decNumSubs() {
+	atomic.AddInt64(s.NumPeerSubs, -1)
+}
+
+func (s *Server) getNumSubs() int64 {
+	return *s.NumPeerSubs
+}
+
 // loadPeers takes the arguments given to the hub at startup and loads the
 // previously known peers from disk and verifies their existence before
 // storing them as known peers. Returns a map of peerKey -> object
-func loadPeers(args *Args) map[string]*FederatedServer {
-	localHosts := map[string]bool {
-		"127.0.0.1": true,
-		"0.0.0.0": true,
-		"localhost": true,
-	}
-	servers := make(map[string]*FederatedServer)
-	peerFile := args.PeerFile
-	port := args.Port
+func (s *Server) loadPeers() error {
+	peerFile := s.Args.PeerFile
+	port := s.Args.Port
 
 	f, err := os.Open(peerFile)
 	if err != nil {
 		log.Println(err)
-		return map[string]*FederatedServer{}
+		return err
 	}
 	scanner := bufio.NewScanner(f)
 	scanner.Split(bufio.ScanLines)
@@ -68,25 +90,164 @@ func loadPeers(args *Args) map[string]*FederatedServer {
 			continue
 		}
 		// If the peer is us, skip
-		log.Println(args)
 		log.Println(ipPort)
 		if ipPort[1] == port && localHosts[ipPort[0]] {
 			log.Println("Self peer, skipping ...")
 			continue
 		}
-		server := &FederatedServer{
+		srvMsg := &pb.ServerMessage{
 			Address: ipPort[0],
 			Port:    ipPort[1],
-			Ts:      time.Now(),
 		}
-		log.Println("pinging peer", server)
-		if helloPeer(server, args) {
-			servers[line] = server
+		log.Printf("pinging peer %+v\n", srvMsg)
+		err := s.addPeer(srvMsg, true)
+		if err != nil {
+			log.Println(err)
 		}
 	}
 
 	log.Println("Returning from loadPeers")
-	return servers
+	return nil
+}
+
+
+// getFastestPeer determines the fastest peer in its list of peers by sending
+// out udp pings and seeing who responds first. This is currently not
+// implemented and just returns the first peer.
+func (s *Server) getFastestPeer() *FederatedServer {
+	var fastestPeer *FederatedServer
+
+	s.PeerServers.Range(func(_, v interface{}) bool {
+		fastestPeer = v.(*FederatedServer)
+		return false
+	})
+
+	return fastestPeer
+}
+
+// subscribeToFastestPeer is a convenience function to find and subscribe to
+// the fastest peer we know about.
+func (s *Server) subscribeToFastestPeer() {
+	peer := s.getFastestPeer()
+	if peer != nil {
+		err := s.subscribeToPeer(peer)
+		if err != nil {
+			log.Println(err)
+		}
+	} else {
+		log.Println("No peers found, not subscribed to any.")
+	}
+}
+
+// subscribeToPeer subscribes us to a peer to we'll get updates about their
+// known peers.
+func (s *Server) subscribeToPeer(peer *FederatedServer) error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	conn, err := grpc.DialContext(ctx,
+		peer.Address+":"+peer.Port,
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	msg := &pb.ServerMessage{
+		Address: s.Args.Host,
+		Port:    s.Args.Port,
+	}
+
+	c := pb.NewHubClient(conn)
+
+	log.Printf("%s:%s subscribing to %+v\n", s.Args.Host, s.Args.Port, peer)
+	_, err = c.PeerSubscribe(ctx, msg)
+	if err != nil {
+		return err
+	}
+
+	s.Subscribed = true
+
+	return nil
+}
+
+// helloPeer takes a peer to say hello to and sends a hello message
+// containing all the peers we know about and information about us.
+// This is used to confirm existence of peers on start and let them
+// know about us. Returns the response from the server on success,
+// nil otherwise.
+func (s *Server) helloPeer(server *FederatedServer) (*pb.HelloMessage, error) {
+	log.Println("In helloPeer")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	conn, err := grpc.DialContext(ctx,
+		server.Address+":"+server.Port,
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+	defer conn.Close()
+
+	c := pb.NewHubClient(conn)
+
+	msg := &pb.HelloMessage{
+		Port: s.Args.Port,
+		Host: s.Args.Host,
+		Servers: []*pb.ServerMessage{},
+	}
+
+	log.Printf("%s:%s saying hello to %+v\n", s.Args.Host, s.Args.Port, server)
+	res, err := c.Hello(ctx, msg)
+	if err != nil {
+		log.Println(err)
+		return nil, err
+	}
+
+	log.Println(res)
+
+	return res, nil
+}
+
+// writePeers writes our current known peers to disk.
+func (s *Server) writePeers() {
+	if !s.Args.WritePeers {
+		return
+	}
+	f, err := os.Create(s.Args.PeerFile)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	writer := bufio.NewWriter(f)
+
+	s.PeerServers.Range(func(k, _ interface{}) bool {
+		key, ok := k.(string)
+		if !ok {
+			log.Println("Failed to cast key when writing peers: ", k)
+			return true
+		}
+		line := key + "\n"
+		_, err := writer.WriteString(line)
+		if err != nil {
+			log.Println(err)
+		}
+		return true
+	})
+
+	err = writer.Flush()
+	if err != nil {
+		log.Println(err)
+	}
+	err = f.Close()
+	if err != nil {
+		log.Println(err)
+	}
 }
 
 // notifyPeer takes a peer to notify and a new peer we just learned about
@@ -120,115 +281,8 @@ func notifyPeer(peerToNotify *FederatedServer, newPeer *FederatedServer) error {
 	return nil
 }
 
-// helloPeer takes a peer to say hello to and sends a hello message
-// containing all the peers we know about and information about us.
-// This is used to confirm existence of peers on start and let them
-// know about us. Returns true is call was successful, false otherwise.
-func helloPeer(server *FederatedServer, args *Args) bool {
-	log.Println("In helloPeer")
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
-	defer cancel()
-
-	conn, err := grpc.DialContext(ctx,
-		server.Address+":"+server.Port,
-		grpc.WithInsecure(),
-		grpc.WithBlock(),
-	)
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-	defer conn.Close()
-
-
-	c := pb.NewHubClient(conn)
-
-	msg := &pb.HelloMessage{
-		Port: args.Port,
-		Host: args.Host,
-		Servers: []*pb.ServerMessage{},
-	}
-	res, err := c.Hello(ctx, msg)
-	if err != nil {
-		log.Println(err)
-		return false
-	}
-
-	log.Println(res)
-
-	return true
-}
-
-// writePeers writes our current known peers to disk.
-func (s *Server) writePeers() {
-	if !s.Args.WritePeers {
-		return
-	}
-	failedCreat := "WARNING: Peer writer failed to create peer file, it's still running but may not be working!"
-	failedWrite := "WARNING: Peer writer failed to write a line, it's still running but may not be working!"
-	failedFlush := "WARNING: Peer writer failed to flush, it's still running but may not be working!"
-	failedClose := "WARNING: Peer writer failed to close the peer file, it's still running but may not be working!"
-	f, err := os.Create(s.Args.PeerFile)
-	if err != nil {
-		log.Println(failedCreat)
-		log.Println(err)
-	}
-	writer := bufio.NewWriter(f)
-
-	for _, peer := range s.Servers {
-		line := peer.Address + ":" + peer.Port + "\n"
-		_, err := writer.WriteString(line)
-		if err != nil {
-			log.Println(failedWrite)
-			log.Println(err)
-		}
-	}
-
-	err = writer.Flush()
-	if err != nil {
-		log.Println(failedFlush)
-		log.Println(err)
-	}
-	err = f.Close()
-	if err != nil {
-		log.Println(failedClose)
-		log.Println(err)
-	}
-}
-
-// peerAdder is a goroutine which listens for new peers added and then
-// optionally checks if they're online and adds them to our map of
-// peers in a thread safe manner.
-func (s *Server) peerAdder(ctx context.Context) {
-	for {
-		select {
-			case chanMsg := <-s.peerChannel:
-				msg := chanMsg.msg
-				ping := chanMsg.ping
-
-				k := msg.Address + ":" + msg.Port
-				if _, ok := s.Servers[k]; !ok {
-					newServer := &FederatedServer{
-						Address: msg.Address,
-						Port: msg.Port,
-						Ts: time.Now(),
-					}
-					if !ping || helloPeer(newServer, s.Args) {
-						s.Servers[k] = newServer
-						s.writePeers()
-						s.notifyPeerSubs(newServer)
-					}
-				} else {
-					s.Servers[k].Ts = time.Now()
-				}
-			case <-ctx.Done():
-				log.Println("context finished, peerAdder shutting down.")
-				return
-		}
-
-	}
-}
-
+// notifyPeerSubs takes a new peer server we just learned about and notifies
+// all the peers that have subscribed to us about it.
 func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 	var unsubscribe []string
 	s.PeerSubs.Range(func(k, v interface{}) bool {
@@ -254,37 +308,96 @@ func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 	})
 
 	for _, key := range unsubscribe {
+		s.decNumSubs()
+		metrics.PeersSubscribed.Dec()
 		s.PeerSubs.Delete(key)
 	}
 }
 
-// addPeer is an internal function to add a peer to this hub.
-func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) {
-	s.peerChannel <- &peerAddMsg{msg, ping}
+// addPeer takes a new peer as a pb.ServerMessage, optionally checks to see
+// if they're online, and adds them to our list of peer. If we're not currently
+// subscribed to a peer, it will also subscribe to it.
+func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) error {
+	if s.Args.Port == msg.Port &&
+		(localHosts[msg.Address] || msg.Address == s.Args.Host) {
+		log.Printf("%s:%s addPeer: Self peer, skipping...\n", s.Args.Host, s.Args.Port)
+		return nil
+	}
+	k := peerKey(msg)
+	newServer := &FederatedServer{
+		Address: msg.Address,
+		Port: msg.Port,
+		Ts: time.Now(),
+	}
+	log.Printf("%s:%s adding peer %+v\n", s.Args.Host, s.Args.Port, msg)
+	if oldServer, loaded := s.PeerServers.LoadOrStore(k, newServer); !loaded {
+		if ping {
+			_, err := s.helloPeer(newServer)
+			if err != nil {
+				s.PeerServers.Delete(k)
+				return err
+			}
+		}
+
+		s.incNumPeers()
+		metrics.PeersKnown.Inc()
+		s.writePeers()
+		s.notifyPeerSubs(newServer)
+
+		// If aren't subscribed to a server yet, subscribe to
+		// this one.
+		if !s.Subscribed {
+			err := s.subscribeToPeer(newServer)
+			if err != nil {
+				s.PeerServers.Delete(k)
+				return err
+			} else {
+				s.Subscribed = true
+			}
+		}
+	} else {
+		oldServerCast, ok := oldServer.(*FederatedServer)
+		// This shouldn't happen, but if it does, I guess delete the key
+		// and try adding this one since it's new.
+		if !ok {
+			log.Println("Error casting map value: ", oldServer)
+			s.PeerServers.Delete(k)
+			return s.addPeer(msg, ping)
+		}
+		oldServerCast.Ts = time.Now()
+	}
+	return nil
 }
 
 // mergeFederatedServers is an internal convenience function to add a list of
 // peers.
 func (s *Server) mergeFederatedServers(servers []*pb.ServerMessage) {
 	for _, srvMsg := range servers {
-		s.peerChannel <- &peerAddMsg{srvMsg, false}
+		err := s.addPeer(srvMsg, false)
+		// This shouldn't happen because we're not pinging them.
+		if err != nil {
+			log.Println(err)
+		}
 	}
 }
 
 // makeHelloMessage makes a message for this hub to call the Hello endpoint
 // on another hub.
 func (s *Server) makeHelloMessage() *pb.HelloMessage {
-	n := len(s.Servers)
-	servers := make([]*pb.ServerMessage, n)
+	servers := make([]*pb.ServerMessage, 0, 10)
 
-	var i = 0
-	for _, v := range s.Servers {
-		servers[i] = &pb.ServerMessage{
-			Address: v.Address,
-			Port: v.Port,
+	s.PeerServers.Range(func(_, v interface{}) bool {
+		peer, ok := v.(*FederatedServer)
+		if !ok {
+			log.Println("Failed to cast value in makeHelloMessage", v)
+			return true
 		}
-		i += 1
-	}
+		servers = append(servers, &pb.ServerMessage{
+			Address: peer.Address,
+			Port:	 peer.Port,
+		})
+		return true
+	})
 
 	return &pb.HelloMessage{
 		Port: s.Args.Port,

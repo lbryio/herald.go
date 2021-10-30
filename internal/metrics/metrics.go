@@ -22,5 +22,13 @@ var (
 		Help: "Histogram of query times",
 		Buckets: HistogramBuckets,
 	}, []string{"method"})
+	PeersKnown = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "peers_known",
+		Help: "Number of peers we know about.",
+	})
+	PeersSubscribed = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "peers_subbed",
+		Help: "Number of peers that are subscribed to us.",
+	})
 )
 
