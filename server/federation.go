@@ -116,34 +116,6 @@ func (s *Server) loadPeers() error {
 	return nil
 }
 
-
-// getFastestPeer determines the fastest peer in its list of peers by sending
-// out udp pings and seeing who responds first. This is currently not
-// implemented and just returns the first peer.
-func (s *Server) getFastestPeer() *FederatedServer {
-	var fastestPeer *FederatedServer
-
-	for _, v := range s.PeerServers {
-		return v
-	}
-
-	return fastestPeer
-}
-
-// subscribeToFastestPeer is a convenience function to find and subscribe to
-// the fastest peer we know about.
-func (s *Server) subscribeToFastestPeer() {
-	peer := s.getFastestPeer()
-	if peer != nil {
-		err := s.subscribeToPeer(peer)
-		if err != nil {
-			log.Println(err)
-		}
-	} else {
-		log.Println("No peers found, not subscribed to any.")
-	}
-}
-
 // subscribeToPeer subscribes us to a peer to we'll get updates about their
 // known peers.
 func (s *Server) subscribeToPeer(peer *FederatedServer) error {

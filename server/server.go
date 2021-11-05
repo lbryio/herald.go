@@ -219,17 +219,10 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	}
 	// Load peers from disk and subscribe to one if there are any
 	if args.LoadPeers {
-		// We Subscribed to true, so we don't try subscribing to peers as we
-		// add them, we'll find the best one after
-		s.Subscribed = true
 		err = s.loadPeers()
 		if err != nil {
 			log.Println(err)
 		}
-		// subscribe to the fastest peer we know (if there are any) for updates
-		// about their peers.
-		s.Subscribed = false
-		s.subscribeToFastestPeer()
 	}
 
 	return s
