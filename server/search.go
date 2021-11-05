@@ -11,8 +11,6 @@ import (
 	"strings"
 	"time"
 
-	//"github.com/lbryio/hub/schema"
-
 	"github.com/lbryio/hub/internal/metrics"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
@@ -24,8 +22,11 @@ import (
 	"gopkg.in/karalabe/cookiejar.v1/collections/deque"
 )
 
+// DefaultSearchSize is the default max number of items an
+// es search will return.
 const DefaultSearchSize = 1000
 
+// record is a struct for the response from es.
 type record struct {
 	Txid               string  `json:"tx_id"`
 	Nout               uint32  `json:"tx_nout"`
@@ -50,11 +51,14 @@ type record struct {
 	ClaimName          string  `json:"claim_name"`
 }
 
+// orderField is struct for specifying ordering of es search results.
 type orderField struct {
 	Field string
 	IsAsc bool
 }
 
+// StrArrToInterface takes an array of strings and returns them as an array of
+// interfaces.
 func StrArrToInterface(arr []string) []interface{} {
 	searchVals := make([]interface{}, len(arr))
 	for i := 0; i < len(arr); i++ {
@@ -63,6 +67,9 @@ func StrArrToInterface(arr []string) []interface{} {
 	return searchVals
 }
 
+// AddTermsField takes an es bool query, array of string values and a term
+// name and adds a TermsQuery for that name matching those values to the
+// bool query.
 func AddTermsField(q *elastic.BoolQuery, arr []string, name string) *elastic.BoolQuery {
 	if len(arr) == 0 {
 		return q
@@ -71,6 +78,9 @@ func AddTermsField(q *elastic.BoolQuery, arr []string, name string) *elastic.Boo
 	return q.Must(elastic.NewTermsQuery(name, searchVals...))
 }
 
+// AddTermField takes an es bool query, a string value and a term name
+// and adds a TermQuery for that name matching that value to the bool
+// query.
 func AddTermField(q *elastic.BoolQuery, value string, name string) *elastic.BoolQuery {
 	if value != "" {
 		return q.Must(elastic.NewTermQuery(name, value))
@@ -78,6 +88,9 @@ func AddTermField(q *elastic.BoolQuery, value string, name string) *elastic.Bool
 	return q
 }
 
+// AddIndividualTermFields takes a bool query, an array of string values
+// a term name, and a bool to invert the query, and adds multiple individual
+// TermQuerys for that name matching each of the values.
 func AddIndividualTermFields(q *elastic.BoolQuery, arr []string, name string, invert bool) *elastic.BoolQuery {
 	for _, x := range arr {
 		if invert {
@@ -89,6 +102,8 @@ func AddIndividualTermFields(q *elastic.BoolQuery, arr []string, name string, in
 	return q
 }
 
+// AddRangeField takes a bool query, a range field struct and a term name
+// and adds a term query for that name matching that range field.
 func AddRangeField(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elastic.BoolQuery {
 	if rq == nil {
 		return q
@@ -112,6 +127,8 @@ func AddRangeField(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elasti
 	}
 }
 
+// AddInvertibleField takes a bool query, an invertible field and a term name
+// and adds a term query for that name matching that invertible field.
 func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name string) *elastic.BoolQuery {
 	if field == nil {
 		return q
@@ -128,11 +145,16 @@ func AddInvertibleField(q *elastic.BoolQuery, field *pb.InvertibleField, name st
 	}
 }
 
+// recordErrorAndDie is for fatal errors. It takes an error, increments the
+// fatal error metric in prometheus and prints a fatal error message.
 func (s *Server) recordErrorAndDie(err error) {
 	metrics.ErrorsCounter.With(prometheus.Labels{"error_type": "fatal"}).Inc()
 	log.Fatalln(err)
 }
 
+// RoundUpReleaseTime take a bool query, a range query and a term name
+// and adds a term query for that name (this is for the release time
+// field) with the value rounded up.
 func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elastic.BoolQuery {
 	if rq == nil {
 		return q
@@ -170,6 +192,11 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *e
 // 8) return streams referenced by repost and all channel referenced in extra_txos
 //*/
 func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs, error) {
+	if s.Args.DisableEs {
+		log.Println("ElasticSearch disable, return nil to search")
+		return nil, nil
+	}
+
 	metrics.RequestsCount.With(prometheus.Labels{"method": "search"}).Inc()
 	defer func(t time.Time) {
 		delta := time.Since(t).Seconds()
@@ -301,6 +328,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	}, nil
 }
 
+// normalizeTag takes a string and normalizes it for search in es.
 func (s *Server) normalizeTag(tag string) string {
 	c := cases.Lower(language.English)
 	res := s.MultiSpaceRe.ReplaceAll(
@@ -312,6 +340,7 @@ func (s *Server) normalizeTag(tag string) string {
 	return string(res)
 }
 
+// cleanTags takes an array of tags and normalizes them.
 func (s *Server) cleanTags(tags []string) []string {
 	cleanedTags := make([]string, len(tags))
 	for i, tag := range tags {
@@ -320,6 +349,8 @@ func (s *Server) cleanTags(tags []string) []string {
 	return cleanedTags
 }
 
+// searchResultToRecords takes an elastic.SearchResult object and converts
+// them to internal record structures.
 func (s *Server) searchResultToRecords(
 	searchResult *elastic.SearchResult) []*record {
 	records := make([]*record, 0, searchResult.TotalHits())
@@ -334,6 +365,9 @@ func (s *Server) searchResultToRecords(
 	return records
 }
 
+// postProcessResults takes es search result records and runs our
+// post processing on them.
+// TODO: more in depth description.
 func (s *Server) postProcessResults(
 	ctx context.Context,
 	client *elastic.Client,
@@ -397,6 +431,8 @@ func (s *Server) postProcessResults(
 	return txos, extraTxos, blocked
 }
 
+// checkQuery takes a search request and does a sanity check on it for
+// validity.
 func (s *Server) checkQuery(in *pb.SearchRequest) error {
 	limit := 2048
 	checks := map[string]bool{
@@ -418,6 +454,8 @@ func (s *Server) checkQuery(in *pb.SearchRequest) error {
 	return nil
 }
 
+// setPageVars takes a search request and pointers to the local pageSize
+// and from variables and sets them from the struct.
 func setPageVars(in *pb.SearchRequest, pageSize *int, from *int) {
 	if in.Limit > 0 {
 		log.Printf("############ limit: %d\n", in.Limit)
@@ -429,6 +467,8 @@ func setPageVars(in *pb.SearchRequest, pageSize *int, from *int) {
 	}
 }
 
+// setupEsQuery takes an elastic.BoolQuery, pb.SearchRequest and orderField
+// and adds the search request terms to the bool query.
 func (s *Server) setupEsQuery(
 	q *elastic.BoolQuery,
 	in *pb.SearchRequest,
@@ -625,6 +665,8 @@ func (s *Server) setupEsQuery(
 	return q
 }
 
+// getUniqueChannels takes the record results from the es search and returns
+// the unique channels from those records as a list and a map.
 func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ctx context.Context, searchIndices []string) ([]*pb.Output, map[string]*pb.Output) {
 	channels := make(map[string]*pb.Output)
 	channelsSet := make(map[string]bool)
@@ -678,6 +720,9 @@ func (s *Server) getUniqueChannels(records []*record, client *elastic.Client, ct
 	return channelTxos, channels
 }
 
+// getClaimsForReposts takes the record results from the es query and returns
+// an array and map of the reposted records as well as an array of those
+// records.
 func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client, records []*record, searchIndices []string) ([]*pb.Output, []*record, map[string]*pb.Output) {
 
 	var totalReposted = 0
@@ -731,10 +776,8 @@ func (s *Server) getClaimsForReposts(ctx context.Context, client *elastic.Client
 	return claims, repostedRecords, respostedMap
 }
 
-/*
-	Takes a search request and serializes into a string for use as a key into the
-	internal cache for the hub.
-*/
+// serializeSearchRequest takes a search request and serializes it into a key
+// for use in the internal cache for the hub.
 func (s *Server) serializeSearchRequest(request *pb.SearchRequest) string {
 	// Save the offest / limit and set to zero, cache hits should happen regardless
 	// and they're used in post processing
@@ -754,6 +797,8 @@ func (s *Server) serializeSearchRequest(request *pb.SearchRequest) string {
 	return str
 }
 
+// searchAhead takes an array of record results, the pageSize and
+// perChannelPerPage value and returns the hits for this page.
 func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*record {
 	finalHits := make([]*record, 0, len(searchHits))
 	var channelCounters map[string]int
@@ -796,6 +841,8 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 	return finalHits
 }
 
+// recordToOutput is a function on a record struct to turn it into a pb.Output
+// struct.
 func (r *record) recordToOutput() *pb.Output {
 	return &pb.Output{
 		TxHash: util.TxIdToTxHash(r.Txid),
@@ -822,6 +869,8 @@ func (r *record) recordToOutput() *pb.Output {
 	}
 }
 
+// getHitId is a function on the record struct to get the id for the search
+// hit.
 func (r *record) getHitId() string {
 	if r.RepostedClaimId != "" {
 		return r.RepostedClaimId
@@ -830,6 +879,7 @@ func (r *record) getHitId() string {
 	}
 }
 
+// removeDuplicates takes an array of record results and remove duplicates.
 func removeDuplicates(searchHits []*record) []*record {
 	dropped := make(map[*record]bool)
 	// claim_id -> (creation_height, hit_id), where hit_id is either reposted claim id or original
@@ -865,6 +915,8 @@ func removeDuplicates(searchHits []*record) []*record {
 	return deduped
 }
 
+// removeBlocked takes an array of record results from the es search
+// and removes blocked records.
 func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.Blocked) {
 	newHits := make([]*record, 0, len(searchHits))
 	blockedHits := make([]*record, 0, len(searchHits))
