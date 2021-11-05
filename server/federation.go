@@ -36,6 +36,12 @@ func peerKey(msg *pb.ServerMessage) string {
 	return msg.Address + ":" + msg.Port
 }
 
+// peerKey is a function on a FederatedServer struct to return the key for that
+// peer is out peer table.
+func (peer *FederatedServer) peerKey() string {
+	return peer.Address + ":" + peer.Port
+}
+
 func (s *Server) incNumPeers() {
 	atomic.AddInt64(s.NumPeerServers, 1)
 }
@@ -117,10 +123,9 @@ func (s *Server) loadPeers() error {
 func (s *Server) getFastestPeer() *FederatedServer {
 	var fastestPeer *FederatedServer
 
-	s.PeerServers.Range(func(_, v interface{}) bool {
-		fastestPeer = v.(*FederatedServer)
-		return false
-	})
+	for _, v := range s.PeerServers {
+		return v
+	}
 
 	return fastestPeer
 }
@@ -226,19 +231,13 @@ func (s *Server) writePeers() {
 	}
 	writer := bufio.NewWriter(f)
 
-	s.PeerServers.Range(func(k, _ interface{}) bool {
-		key, ok := k.(string)
-		if !ok {
-			log.Println("Failed to cast key when writing peers: ", k)
-			return true
-		}
+	for key, _ := range s.PeerServers {
 		line := key + "\n"
 		_, err := writer.WriteString(line)
 		if err != nil {
 			log.Println(err)
 		}
-		return true
-	})
+	}
 
 	err = writer.Flush()
 	if err != nil {
@@ -285,18 +284,8 @@ func notifyPeer(peerToNotify *FederatedServer, newPeer *FederatedServer) error {
 // all the peers that have subscribed to us about it.
 func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 	var unsubscribe []string
-	s.PeerSubs.Range(func(k, v interface{}) bool {
-		key, ok := k.(string)
-		if !ok {
-			log.Println("Failed to cast subscriber key: ", v)
-			return true
-		}
-		peer, ok := v.(*FederatedServer)
-		if !ok {
-			log.Println("Failed to cast subscriber value: ", v)
-			return true
-		}
-
+	s.PeerSubsMut.RLock()
+	for key, peer := range s.PeerSubs {
 		log.Printf("Notifying peer %s of new node %+v\n", key, newServer)
 		err := notifyPeer(peer, newServer)
 		if err != nil {
@@ -304,14 +293,18 @@ func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 			log.Println(err)
 			unsubscribe = append(unsubscribe, key)
 		}
-		return true
-	})
-
-	for _, key := range unsubscribe {
-		s.decNumSubs()
-		metrics.PeersSubscribed.Dec()
-		s.PeerSubs.Delete(key)
 	}
+	s.PeerSubsMut.RUnlock()
+
+	s.PeerSubsMut.Lock()
+	for _, key := range unsubscribe {
+		if _, ok := s.PeerSubs[key]; ok {
+			delete(s.PeerSubs, key)
+			s.decNumSubs()
+			metrics.PeersSubscribed.Dec()
+		}
+	}
+	s.PeerSubsMut.Unlock()
 }
 
 // addPeer takes a new peer as a pb.ServerMessage, optionally checks to see
@@ -330,11 +323,13 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) error {
 		Ts: time.Now(),
 	}
 	log.Printf("%s:%s adding peer %+v\n", s.Args.Host, s.Args.Port, msg)
-	if oldServer, loaded := s.PeerServers.LoadOrStore(k, newServer); !loaded {
+	if oldServer, loaded := s.PeerServersLoadOrStore(newServer); !loaded {
 		if ping {
 			_, err := s.helloPeer(newServer)
 			if err != nil {
-				s.PeerServers.Delete(k)
+				s.PeerServersMut.Lock()
+				delete(s.PeerServers, k)
+				s.PeerServersMut.Unlock()
 				return err
 			}
 		}
@@ -344,27 +339,15 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) error {
 		s.writePeers()
 		s.notifyPeerSubs(newServer)
 
-		// If aren't subscribed to a server yet, subscribe to
-		// this one.
-		if !s.Subscribed {
-			err := s.subscribeToPeer(newServer)
-			if err != nil {
-				s.PeerServers.Delete(k)
-				return err
-			} else {
-				s.Subscribed = true
-			}
+		// Subscribe to all our peers for now
+		err := s.subscribeToPeer(newServer)
+		if err != nil {
+			return err
+		} else {
+			s.Subscribed = true
 		}
 	} else {
-		oldServerCast, ok := oldServer.(*FederatedServer)
-		// This shouldn't happen, but if it does, I guess delete the key
-		// and try adding this one since it's new.
-		if !ok {
-			log.Println("Error casting map value: ", oldServer)
-			s.PeerServers.Delete(k)
-			return s.addPeer(msg, ping)
-		}
-		oldServerCast.Ts = time.Now()
+		oldServer.Ts = time.Now()
 	}
 	return nil
 }
@@ -386,18 +369,14 @@ func (s *Server) mergeFederatedServers(servers []*pb.ServerMessage) {
 func (s *Server) makeHelloMessage() *pb.HelloMessage {
 	servers := make([]*pb.ServerMessage, 0, 10)
 
-	s.PeerServers.Range(func(_, v interface{}) bool {
-		peer, ok := v.(*FederatedServer)
-		if !ok {
-			log.Println("Failed to cast value in makeHelloMessage", v)
-			return true
-		}
+	s.PeerServersMut.RLock()
+	for _, peer := range s.PeerServers {
 		servers = append(servers, &pb.ServerMessage{
 			Address: peer.Address,
 			Port:	 peer.Port,
 		})
-		return true
-	})
+	}
+	s.PeerServersMut.RUnlock()
 
 	return &pb.HelloMessage{
 		Port: s.Args.Port,

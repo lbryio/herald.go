@@ -35,9 +35,11 @@ type Server struct {
 	LastRefreshCheck time.Time
 	RefreshDelta     time.Duration
 	NumESRefreshes   int64
-	PeerServers      sync.Map //map[string]*FederatedServer
+	PeerServers      map[string]*FederatedServer
+	PeerServersMut   sync.RWMutex
 	NumPeerServers   *int64
-	PeerSubs         sync.Map
+	PeerSubs         map[string]*FederatedServer
+	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
 	Subscribed       bool
 	pb.UnimplementedHubServer
@@ -87,6 +89,36 @@ func getVersion() string {
 	'blockchain.address.unsubscribe'
 */
 
+func (s *Server) PeerSubsLoadOrStore(peer *FederatedServer) (actual *FederatedServer, loaded bool) {
+	key := peer.peerKey()
+	s.PeerSubsMut.RLock()
+	if actual, ok := s.PeerSubs[key]; ok {
+		s.PeerSubsMut.RUnlock()
+		return actual, true
+	} else {
+		s.PeerSubsMut.RUnlock()
+		s.PeerSubsMut.Lock()
+		s.PeerSubs[key] = peer
+		s.PeerSubsMut.Unlock()
+		return peer, false
+	}
+}
+
+func (s *Server) PeerServersLoadOrStore(peer *FederatedServer) (actual *FederatedServer, loaded bool) {
+	key := peer.peerKey()
+	s.PeerServersMut.RLock()
+	if actual, ok := s.PeerServers[key]; ok {
+		s.PeerServersMut.RUnlock()
+		return actual, true
+	} else {
+		s.PeerServersMut.RUnlock()
+		s.PeerServersMut.Lock()
+		s.PeerServers[key] = peer
+		s.PeerServersMut.Unlock()
+		return peer, false
+	}
+}
+
 func (s *Server) Run() {
 	l, err := net.Listen("tcp", ":"+s.Args.Port)
 	if err != nil {
@@ -119,7 +151,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		log.Fatal(err)
 	}
 
-	var client *elastic.Client
+	var client *elastic.Client = nil
 	if !args.DisableEs {
 		esUrl := args.EsHost + ":" + args.EsPort
 		opts := []elastic.ClientOptionFunc{
@@ -135,8 +167,6 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		if err != nil {
 			log.Fatal(err)
 		}
-	} else {
-		client = nil
 	}
 
 	cache := ttlcache.NewCache()
@@ -166,9 +196,11 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		LastRefreshCheck: time.Now(),
 		RefreshDelta:     refreshDelta,
 		NumESRefreshes:   0,
-		PeerServers:      sync.Map{},
+		PeerServers:      make(map[string]*FederatedServer),
+		PeerServersMut:   sync.RWMutex{},
 		NumPeerServers:   numPeers,
-		PeerSubs:         sync.Map{},
+		PeerSubs:         make(map[string]*FederatedServer),
+		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
 		Subscribed:       false,
 	}
@@ -249,7 +281,7 @@ func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.S
 		Ts:      time.Now(),
 	}
 
-	if _, loaded := s.PeerSubs.LoadOrStore(peerKey(in), peer); !loaded {
+	if _, loaded := s.PeerSubsLoadOrStore(peer); !loaded {
 		s.incNumSubs()
 		metrics.PeersSubscribed.Inc()
 	} else {
