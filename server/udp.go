@@ -99,12 +99,12 @@ func decodeSPVPong(data []byte) *SPVPong {
 
 	parsedProtocalVersion := data[0]
 	flags := data[1]
-	height := binary.BigEndian.Uint32(data[:2])
+	height := binary.BigEndian.Uint32(data[2:])
 	tip := make([]byte, 32)
 	copy(tip, data[6:38])
 	srcRawAddr := make([]byte, 4)
 	copy(srcRawAddr, data[38:42])
-	country := binary.BigEndian.Uint16(data[:42])
+	country := binary.BigEndian.Uint16(data[42:])
 	return &SPVPong{
 		protocolVersion: parsedProtocalVersion,
 		flags: flags,
@@ -148,7 +148,8 @@ func (pong *SPVPong) DecodeAddress() string {
 
 // UDPPing sends a ping over udp to another hub and returns the ip address of
 // this hub.
-func UDPPing(address string) (string, error) {
+func UDPPing(ip, port string) (string, error) {
+	address := ip + ":" + port
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		return "", err
@@ -192,7 +193,7 @@ func UDPPing(address string) (string, error) {
 // Ping/Pong protocol to find out about each other without making full TCP
 // connections.
 func UDPServer(args *Args) error {
-	address := ":" + args.UDPPort
+	address := ":" + args.Port
 	tip := make([]byte, 32)
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {

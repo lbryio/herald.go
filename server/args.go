@@ -19,7 +19,6 @@ type Args struct {
 	CmdType         int
 	Host            string
 	Port            string
-	UDPPort         string
 	EsHost          string
 	EsPort          string
 	PrometheusPort  string
@@ -39,7 +38,6 @@ type Args struct {
 const (
 	DefaultHost            = "0.0.0.0"
 	DefaultPort            = "50051"
-	DefaultUdpPort         = "41119"
 	DefaultEsHost          = "http://localhost"
 	DefaultEsIndex         = "claims"
 	DefaultEsPort          = "9200"
@@ -88,7 +86,6 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: DefaultEsHost})
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
-	udpPort := parser.String("", "uspport", &argparse.Options{Required: false, Help: "udp ping port", Default: DefaultUdpPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
@@ -125,7 +122,6 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		Port:            *port,
 		EsHost:          *esHost,
 		EsPort:          *esPort,
-		UDPPort:         *udpPort,
 		PrometheusPort:  *prometheusPort,
 		EsIndex:         *esIndex,
 		RefreshDelta:    *refreshDelta,

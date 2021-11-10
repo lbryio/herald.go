@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"log"
+	"math"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -66,12 +67,52 @@ func (s *Server) getNumSubs() int64 {
 	return *s.NumPeerSubs
 }
 
+// getAndSetExternalIp takes the address of a peer running a UDP server and
+// pings it, so we can determine our own external IP address.
+func (s *Server) getAndSetExternalIp(msg *pb.ServerMessage) error {
+	myIp, err := UDPPing(msg.Address, msg.Port)
+	if err != nil {
+		return err
+	}
+	log.Println("my ip: ", myIp)
+	s.ExternalIP = myIp
+
+	return nil
+}
+
 // loadPeers takes the arguments given to the hub at startup and loads the
 // previously known peers from disk and verifies their existence before
 // storing them as known peers. Returns a map of peerKey -> object
 func (s *Server) loadPeers() error {
 	peerFile := s.Args.PeerFile
 	port := s.Args.Port
+
+	// First we make sure our server has come up, so we can answer back to peers.
+	var failures = 0
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+retry:
+	time.Sleep(time.Second * time.Duration(math.Pow(float64(failures), 2)))
+	conn, err := grpc.DialContext(ctx,
+		"0.0.0.0:"+port,
+		grpc.WithInsecure(),
+		grpc.WithBlock(),
+	)
+
+	if err != nil {
+		if failures > 3 {
+			log.Println("Warning! Our endpoint doesn't seem to have come up, didn't load peers")
+			return err
+		}
+		failures += 1
+		goto retry
+	}
+	if err = conn.Close(); err != nil {
+		log.Println(err)
+	}
+	cancel()
+
 
 	f, err := os.Open(peerFile)
 	if err != nil {
@@ -97,19 +138,22 @@ func (s *Server) loadPeers() error {
 		}
 		// If the peer is us, skip
 		log.Println(ipPort)
-		if ipPort[1] == port && localHosts[ipPort[0]] {
+		if ipPort[1] == port &&
+			(localHosts[ipPort[0]] || ipPort[0] == s.ExternalIP) {
 			log.Println("Self peer, skipping ...")
 			continue
 		}
+
 		srvMsg := &pb.ServerMessage{
 			Address: ipPort[0],
 			Port:    ipPort[1],
 		}
 		log.Printf("pinging peer %+v\n", srvMsg)
-		err := s.addPeer(srvMsg, true)
+		err = s.addPeer(srvMsg, true, true)
 		if err != nil {
 			log.Println(err)
 		}
+
 	}
 
 	log.Println("Returning from loadPeers")
@@ -133,19 +177,17 @@ func (s *Server) subscribeToPeer(peer *FederatedServer) error {
 	defer conn.Close()
 
 	msg := &pb.ServerMessage{
-		Address: s.Args.Host,
+		Address: s.ExternalIP,
 		Port:    s.Args.Port,
 	}
 
 	c := pb.NewHubClient(conn)
 
-	log.Printf("%s:%s subscribing to %+v\n", s.Args.Host, s.Args.Port, peer)
+	log.Printf("%s:%s subscribing to %+v\n", s.ExternalIP, s.Args.Port, peer)
 	_, err = c.PeerSubscribe(ctx, msg)
 	if err != nil {
 		return err
 	}
-
-	s.Subscribed = true
 
 	return nil
 }
@@ -175,11 +217,11 @@ func (s *Server) helloPeer(server *FederatedServer) (*pb.HelloMessage, error) {
 
 	msg := &pb.HelloMessage{
 		Port: s.Args.Port,
-		Host: s.Args.Host,
+		Host: s.ExternalIP,
 		Servers: []*pb.ServerMessage{},
 	}
 
-	log.Printf("%s:%s saying hello to %+v\n", s.Args.Host, s.Args.Port, server)
+	log.Printf("%s:%s saying hello to %+v\n", s.ExternalIP, s.Args.Port, server)
 	res, err := c.Hello(ctx, msg)
 	if err != nil {
 		log.Println(err)
@@ -282,19 +324,31 @@ func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 // addPeer takes a new peer as a pb.ServerMessage, optionally checks to see
 // if they're online, and adds them to our list of peer. If we're not currently
 // subscribed to a peer, it will also subscribe to it.
-func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) error {
+func (s *Server) addPeer(msg *pb.ServerMessage, ping bool, subscribe bool) error {
+	// First thing we get our external ip if we don't have it, otherwise we
+	// could end up subscribed to our self, which is silly.
+	if s.ExternalIP == "" {
+		err := s.getAndSetExternalIp(msg)
+		if err != nil {
+			log.Println(err)
+			log.Println("WARNING: can't determine external IP, continuing with ", s.Args.Host)
+		}
+	}
+
 	if s.Args.Port == msg.Port &&
-		(localHosts[msg.Address] || msg.Address == s.Args.Host) {
-		log.Printf("%s:%s addPeer: Self peer, skipping...\n", s.Args.Host, s.Args.Port)
+		(localHosts[msg.Address] || msg.Address == s.ExternalIP) {
+		log.Printf("%s:%s addPeer: Self peer, skipping...\n", s.ExternalIP, s.Args.Port)
 		return nil
 	}
+
 	k := peerKey(msg)
 	newServer := &FederatedServer{
 		Address: msg.Address,
 		Port: msg.Port,
 		Ts: time.Now(),
 	}
-	log.Printf("%s:%s adding peer %+v\n", s.Args.Host, s.Args.Port, msg)
+
+	log.Printf("%s:%s adding peer %+v\n", s.ExternalIP, s.Args.Port, msg)
 	if oldServer, loaded := s.PeerServersLoadOrStore(newServer); !loaded {
 		if ping {
 			_, err := s.helloPeer(newServer)
@@ -312,11 +366,11 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) error {
 		s.notifyPeerSubs(newServer)
 
 		// Subscribe to all our peers for now
-		err := s.subscribeToPeer(newServer)
-		if err != nil {
-			return err
-		} else {
-			s.Subscribed = true
+		if subscribe {
+			err := s.subscribeToPeer(newServer)
+			if err != nil {
+				return err
+			}
 		}
 	} else {
 		oldServer.Ts = time.Now()
@@ -328,7 +382,7 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool) error {
 // peers.
 func (s *Server) mergeFederatedServers(servers []*pb.ServerMessage) {
 	for _, srvMsg := range servers {
-		err := s.addPeer(srvMsg, false)
+		err := s.addPeer(srvMsg, false, true)
 		// This shouldn't happen because we're not pinging them.
 		if err != nil {
 			log.Println(err)
@@ -352,7 +406,7 @@ func (s *Server) makeHelloMessage() *pb.HelloMessage {
 
 	return &pb.HelloMessage{
 		Port: s.Args.Port,
-		Host: s.Args.Host,
+		Host: s.ExternalIP,
 		Servers: servers,
 	}
 }

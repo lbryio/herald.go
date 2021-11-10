@@ -41,7 +41,7 @@ type Server struct {
 	PeerSubs         map[string]*FederatedServer
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
-	Subscribed       bool
+	ExternalIP		 string
 	pb.UnimplementedHubServer
 }
 
@@ -202,7 +202,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubs:         make(map[string]*FederatedServer),
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
-		Subscribed:       false,
+		ExternalIP:       "",
 	}
 
 	// Start up our background services
@@ -219,10 +219,12 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	}
 	// Load peers from disk and subscribe to one if there are any
 	if args.LoadPeers {
-		err = s.loadPeers()
-		if err != nil {
-			log.Println(err)
-		}
+		go func() {
+			err := s.loadPeers()
+			if err != nil {
+				log.Println(err)
+			}
+		}()
 	}
 
 	return s
@@ -251,7 +253,7 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 	}
 	log.Println(server)
 
-	err := s.addPeer(&pb.ServerMessage{Address: host, Port: port}, false)
+	err := s.addPeer(&pb.ServerMessage{Address: host, Port: port}, false, true)
 	// They just contacted us, so this shouldn't happen
 	if err != nil {
 		log.Println(err)
@@ -288,7 +290,7 @@ func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.S
 func (s *Server) AddPeer(ctx context.Context, args *pb.ServerMessage) (*pb.StringValue, error) {
 	metrics.RequestsCount.With(prometheus.Labels{"method": "add_peer"}).Inc()
 	var msg = "Success"
-	err := s.addPeer(args, true)
+	err := s.addPeer(args, true, true)
 	if err != nil {
 		log.Println(err)
 		msg = "Failed"
