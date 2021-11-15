@@ -5,6 +5,7 @@ import (
 	"context"
 	"log"
 	"math"
+	"net"
 	"os"
 	"strings"
 	"sync/atomic"
@@ -27,6 +28,7 @@ var (
 		"127.0.0.1": true,
 		"0.0.0.0": true,
 		"localhost": true,
+		"<nil>": true,
 	}
 )
 
@@ -70,6 +72,7 @@ func (s *Server) getNumSubs() int64 {
 // getAndSetExternalIp takes the address of a peer running a UDP server and
 // pings it, so we can determine our own external IP address.
 func (s *Server) getAndSetExternalIp(msg *pb.ServerMessage) error {
+	log.Println(msg)
 	myIp, err := UDPPing(msg.Address, msg.Port)
 	if err != nil {
 		return err
@@ -139,7 +142,7 @@ retry:
 		// If the peer is us, skip
 		log.Println(ipPort)
 		if ipPort[1] == port &&
-			(localHosts[ipPort[0]] || ipPort[0] == s.ExternalIP) {
+			(localHosts[ipPort[0]] || ipPort[0] == s.ExternalIP.String()) {
 			log.Println("Self peer, skipping ...")
 			continue
 		}
@@ -177,7 +180,7 @@ func (s *Server) subscribeToPeer(peer *FederatedServer) error {
 	defer conn.Close()
 
 	msg := &pb.ServerMessage{
-		Address: s.ExternalIP,
+		Address: s.ExternalIP.String(),
 		Port:    s.Args.Port,
 	}
 
@@ -217,7 +220,7 @@ func (s *Server) helloPeer(server *FederatedServer) (*pb.HelloMessage, error) {
 
 	msg := &pb.HelloMessage{
 		Port: s.Args.Port,
-		Host: s.ExternalIP,
+		Host: s.ExternalIP.String(),
 		Servers: []*pb.ServerMessage{},
 	}
 
@@ -327,7 +330,10 @@ func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 func (s *Server) addPeer(msg *pb.ServerMessage, ping bool, subscribe bool) error {
 	// First thing we get our external ip if we don't have it, otherwise we
 	// could end up subscribed to our self, which is silly.
-	if s.ExternalIP == "" {
+	nilIP := net.IP{}
+	//localIP0 := net.IPv4(0,0,0,0)
+	localIP1 := net.IPv4(127,0,0,1)
+	if s.ExternalIP.Equal(nilIP) || s.ExternalIP.Equal(localIP1) {
 		err := s.getAndSetExternalIp(msg)
 		if err != nil {
 			log.Println(err)
@@ -336,7 +342,7 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool, subscribe bool) error
 	}
 
 	if s.Args.Port == msg.Port &&
-		(localHosts[msg.Address] || msg.Address == s.ExternalIP) {
+		(localHosts[msg.Address] || msg.Address == s.ExternalIP.String()) {
 		log.Printf("%s:%s addPeer: Self peer, skipping...\n", s.ExternalIP, s.Args.Port)
 		return nil
 	}
@@ -406,7 +412,7 @@ func (s *Server) makeHelloMessage() *pb.HelloMessage {
 
 	return &pb.HelloMessage{
 		Port: s.Args.Port,
-		Host: s.ExternalIP,
+		Host: s.ExternalIP.String(),
 		Servers: servers,
 	}
 }

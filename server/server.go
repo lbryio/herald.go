@@ -41,7 +41,7 @@ type Server struct {
 	PeerSubs         map[string]*FederatedServer
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
-	ExternalIP		 string
+	ExternalIP       net.IP
 	pb.UnimplementedHubServer
 }
 
@@ -202,7 +202,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubs:         make(map[string]*FederatedServer),
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
-		ExternalIP:       "",
+		ExternalIP:       net.IPv4(127,0,0,1),
 	}
 
 	// Start up our background services

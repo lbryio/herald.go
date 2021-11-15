@@ -2,7 +2,6 @@ package server
 
 import (
 	"encoding/binary"
-	"fmt"
 	"net"
 	"strconv"
 	"strings"
@@ -137,8 +136,8 @@ func EncodeAddress(addr string) []byte {
 }
 
 // DecodeAddress gets the string ipv4 address from an SPVPong struct.
-func (pong *SPVPong) DecodeAddress() string {
-	return fmt.Sprintf("%d.%d.%d.%d",
+func (pong *SPVPong) DecodeAddress() net.IP {
+	return net.IPv4(
 		pong.srcAddrRaw[0],
 		pong.srcAddrRaw[1],
 		pong.srcAddrRaw[2],
@@ -148,40 +147,40 @@ func (pong *SPVPong) DecodeAddress() string {
 
 // UDPPing sends a ping over udp to another hub and returns the ip address of
 // this hub.
-func UDPPing(ip, port string) (string, error) {
+func UDPPing(ip, port string) (net.IP, error) {
 	address := ip + ":" + port
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
-		return "", err
+		return net.IP{}, err
 	}
 
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
-		return "", err
+		return net.IP{}, err
 	}
 
 	defer conn.Close()
 
 	_, err = conn.Write(encodeSPVPing())
 	if err != nil {
-		return "", err
+		return net.IP{}, err
 	}
 
 	buffer := make([]byte, maxBufferSize)
 	deadline := time.Now().Add(time.Second)
 	err = conn.SetReadDeadline(deadline)
 	if err != nil {
-		return "", err
+		return net.IP{}, err
 	}
 	n, _, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		return "", err
+		return net.IP{}, err
 	}
 
 	pong := decodeSPVPong(buffer[:n])
 
 	if pong == nil {
-		return "", errors.Base("Pong decoding failed")
+		return net.IP{}, errors.Base("Pong decoding failed")
 	}
 
 	myAddr := pong.DecodeAddress()

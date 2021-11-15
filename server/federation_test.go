@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -88,7 +89,7 @@ func TestAddPeer(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T){
 			server := MakeHubServer(ctx, args)
-			server.ExternalIP = "0.0.0.0"
+			server.ExternalIP = net.IPv4(0,0,0,0)
 			metrics.PeersKnown.Set(0)
 
 			for i := 0; i < 10; i++ {
@@ -147,7 +148,7 @@ func TestPeerWriter(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T){
 			server := MakeHubServer(ctx, args)
-			server.ExternalIP = "0.0.0.0"
+			server.ExternalIP = net.IPv4(0,0,0,0)
 
 			for i := 0; i < 10; i++ {
 				var msg *pb.ServerMessage
@@ -466,12 +467,12 @@ func TestUDPServer(t *testing.T) {
 			server.GrpcServer.GracefulStop()
 			server2.GrpcServer.GracefulStop()
 
-			got1 := server.ExternalIP
+			got1 := server.ExternalIP.String()
 			if got1 != tt.want {
 				t.Errorf("server.ExternalIP = %s, want %s\n", got1, tt.want)
 				t.Errorf("server.Args.Port = %s\n", server.Args.Port)
 			}
-			got2 := server2.ExternalIP
+			got2 := server2.ExternalIP.String()
 			if got2 != tt.want {
 				t.Errorf("server2.ExternalIP = %s, want %s\n", got2, tt.want)
 				t.Errorf("server2.Args.Port = %s\n", server2.Args.Port)
