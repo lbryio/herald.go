@@ -38,6 +38,8 @@ message ClaimMeta {
   uint64 effective_amount = 20;
   uint64 support_amount = 21;
   double trending_score = 22;
+  uint64 staked_amount = 23;
+
 }
 
 message Error {
