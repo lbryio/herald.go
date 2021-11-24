@@ -45,7 +45,6 @@ type Server struct {
 	pb.UnimplementedHubServer
 }
 
-
 func getVersion() string {
 	return meta.Version
 }
@@ -202,7 +201,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubs:         make(map[string]*FederatedServer),
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
-		ExternalIP:       net.IPv4(127,0,0,1),
+		ExternalIP:       net.IPv4(127, 0, 0, 1),
 	}
 
 	// Start up our background services
@@ -248,8 +247,8 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 	host := args.Host
 	server := &FederatedServer{
 		Address: host,
-		Port: port,
-		Ts: time.Now(),
+		Port:    port,
+		Ts:      time.Now(),
 	}
 	log.Println(server)
 

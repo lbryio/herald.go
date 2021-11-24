@@ -275,16 +275,16 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 	setPageVars(in, &pageSize, &from)
 
 	/*
-			cache based on search request params
-			include from value and number of results.
-			When another search request comes in with same search params
-			and same or increased offset (which we currently don't even use?)
-			that will be a cache hit.
-			FIXME: For now the cache is turned off when in debugging mode
-				(for unit tests) because it breaks on some of them.
-			FIXME: Currently the cache just skips the initial search,
-				the mgets and post processing are still done. There's probably
-				a more efficient way to store the final result.
+		cache based on search request params
+		include from value and number of results.
+		When another search request comes in with same search params
+		and same or increased offset (which we currently don't even use?)
+		that will be a cache hit.
+		FIXME: For now the cache is turned off when in debugging mode
+			(for unit tests) because it breaks on some of them.
+		FIXME: Currently the cache just skips the initial search,
+			the mgets and post processing are still done. There's probably
+			a more efficient way to store the final result.
 	*/
 
 	if val, err := s.QueryCache.Get(cacheKey); err != nil {
@@ -518,15 +518,15 @@ func (s *Server) setupEsQuery(
 	}
 
 	replacements := map[string]string{
-		"name":       "normalized_name",
-		"normalized": "normalized_name",
-		"claim_name": "normalized_name",
-		"txid":       "tx_id",
-		"nout":	      "tx_nout",
-		"reposted":   "repost_count",
+		"name":                    "normalized_name",
+		"normalized":              "normalized_name",
+		"claim_name":              "normalized_name",
+		"txid":                    "tx_id",
+		"nout":                    "tx_nout",
+		"reposted":                "repost_count",
 		"valid_channel_signature": "is_signature_valid",
-		"claim_id":   "_id",
-		"signature_digest": "signature",
+		"claim_id":                "_id",
+		"signature_digest":        "signature",
 	}
 
 	textFields := map[string]bool{
@@ -967,4 +967,3 @@ func removeBlocked(searchHits []*record) ([]*record, []*record, map[string]*pb.B
 
 	return newHits, blockedHits, blockedChannels
 }
-

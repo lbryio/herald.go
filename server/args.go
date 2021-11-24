@@ -16,23 +16,24 @@ const (
 
 // Args struct contains the arguments to the hub server.
 type Args struct {
-	CmdType         int
-	Host            string
-	Port            string
-	EsHost          string
-	EsPort          string
-	PrometheusPort  string
-	EsIndex         string
-	RefreshDelta    int
-	CacheTTL        int
-	PeerFile	    string
-	Country         string
-	DisableEs       bool
-	Debug           bool
-	LoadPeers       bool
-	StartPrometheus bool
-	StartUDP        bool
-	WritePeers      bool
+	CmdType           int
+	Host              string
+	Port              string
+	EsHost            string
+	EsPort            string
+	PrometheusPort    string
+	EsIndex           string
+	RefreshDelta      int
+	CacheTTL          int
+	PeerFile          string
+	Country           string
+	DisableEs         bool
+	Debug             bool
+	LoadPeers         bool
+	StartPrometheus   bool
+	StartUDP          bool
+	WritePeers        bool
+	DisableFederation bool
 }
 
 const (
@@ -153,7 +154,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	}
 
 	/*
-		Verify no invalid argument combinations
+	   Verify no invalid argument combinations
 	*/
 	if len(*channelIds) > 0 && *channelId != "" {
 		log.Fatal("Cannot specify both channel_id and channel_ids")

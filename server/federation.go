@@ -26,12 +26,11 @@ type FederatedServer struct {
 var (
 	localHosts = map[string]bool{
 		"127.0.0.1": true,
-		"0.0.0.0": true,
+		"0.0.0.0":   true,
 		"localhost": true,
-		"<nil>": true,
+		"<nil>":     true,
 	}
 )
-
 
 // peerKey takes a ServerMessage object and returns the key that for that peer
 // in our peer table.
@@ -117,7 +116,6 @@ retry:
 	}
 	cancel()
 
-
 	f, err := os.Open(peerFile)
 	if err != nil {
 		log.Println(err)
@@ -135,7 +133,7 @@ retry:
 	}
 
 	for _, line := range text {
-		ipPort := strings.Split(line,":")
+		ipPort := strings.Split(line, ":")
 		if len(ipPort) != 2 {
 			log.Println("Malformed entry in peer file")
 			continue
@@ -220,8 +218,8 @@ func (s *Server) helloPeer(server *FederatedServer) (*pb.HelloMessage, error) {
 	c := pb.NewHubClient(conn)
 
 	msg := &pb.HelloMessage{
-		Port: s.Args.Port,
-		Host: s.ExternalIP.String(),
+		Port:    s.Args.Port,
+		Host:    s.ExternalIP.String(),
 		Servers: []*pb.ServerMessage{},
 	}
 
@@ -333,7 +331,7 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool, subscribe bool) error
 	// could end up subscribed to our self, which is silly.
 	nilIP := net.IP{}
 	//localIP0 := net.IPv4(0,0,0,0)
-	localIP1 := net.IPv4(127,0,0,1)
+	localIP1 := net.IPv4(127, 0, 0, 1)
 	if s.ExternalIP.Equal(nilIP) || s.ExternalIP.Equal(localIP1) {
 		err := s.getAndSetExternalIp(msg)
 		if err != nil {
@@ -351,8 +349,8 @@ func (s *Server) addPeer(msg *pb.ServerMessage, ping bool, subscribe bool) error
 	k := peerKey(msg)
 	newServer := &FederatedServer{
 		Address: msg.Address,
-		Port: msg.Port,
-		Ts: time.Now(),
+		Port:    msg.Port,
+		Ts:      time.Now(),
 	}
 
 	log.Printf("%s:%s adding peer %+v\n", s.ExternalIP, s.Args.Port, msg)
@@ -406,14 +404,14 @@ func (s *Server) makeHelloMessage() *pb.HelloMessage {
 	for _, peer := range s.PeerServers {
 		servers = append(servers, &pb.ServerMessage{
 			Address: peer.Address,
-			Port:	 peer.Port,
+			Port:    peer.Port,
 		})
 	}
 	s.PeerServersMut.RUnlock()
 
 	return &pb.HelloMessage{
-		Port: s.Args.Port,
-		Host: s.ExternalIP.String(),
+		Port:    s.Args.Port,
+		Host:    s.ExternalIP.String(),
 		Servers: servers,
 	}
 }

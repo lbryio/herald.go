@@ -75,7 +75,7 @@ func TestAddPeer(t *testing.T) {
 	tests := []struct {
 		name string
 		want int
-	} {
+	}{
 		{
 			name: "Add 10 peers",
 			want: 10,
@@ -87,9 +87,9 @@ func TestAddPeer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
-			server.ExternalIP = net.IPv4(0,0,0,0)
+			server.ExternalIP = net.IPv4(0, 0, 0, 0)
 			metrics.PeersKnown.Set(0)
 
 			for i := 0; i < 10; i++ {
@@ -134,7 +134,7 @@ func TestPeerWriter(t *testing.T) {
 	tests := []struct {
 		name string
 		want int
-	} {
+	}{
 		{
 			name: "Add 10 peers",
 			want: 10,
@@ -146,9 +146,9 @@ func TestPeerWriter(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
-			server.ExternalIP = net.IPv4(0,0,0,0)
+			server.ExternalIP = net.IPv4(0, 0, 0, 0)
 
 			for i := 0; i < 10; i++ {
 				var msg *pb.ServerMessage
@@ -188,12 +188,11 @@ func TestAddPeerEndpoint(t *testing.T) {
 	args2 := makeDefaultArgs()
 	args2.Port = "50052"
 
-
 	tests := []struct {
-		name string
+		name          string
 		wantServerOne int64
 		wantServerTwo int64
-	} {
+	}{
 		{
 			// outside -> server1.AddPeer(server2, ping=true)  : server1 = 1, server2 = 0
 			// server1 -> server2.Hello(server1)               : server1 = 1, server2 = 0
@@ -204,14 +203,14 @@ func TestAddPeerEndpoint(t *testing.T) {
 			// server1 -> server2.AddPeer(server2)             : server1 = 1, server2 = 1
 			// server2 self peer, skipping                     : server1 = 1, server2 = 1
 			// server1 -> server2.PeerSubscribe(server1)       : server1 = 1, server2 = 1
-			name: "Add 1 peer",
+			name:          "Add 1 peer",
 			wantServerOne: 1,
 			wantServerTwo: 1,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			metrics.PeersKnown.Set(0)
@@ -262,15 +261,14 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	args2.Port = "50052"
 	args3.Port = "50053"
 
-
 	tests := []struct {
-		name string
+		name            string
 		wantServerOne   int64
 		wantServerTwo   int64
 		wantServerThree int64
-	} {
+	}{
 		{
-			name: "Add 2 peers",
+			name:            "Add 2 peers",
 			wantServerOne:   2,
 			wantServerTwo:   2,
 			wantServerThree: 2,
@@ -278,7 +276,7 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			server3 := MakeHubServer(ctx, args3)
@@ -335,7 +333,6 @@ func TestAddPeerEndpoint2(t *testing.T) {
 
 }
 
-
 // TestAddPeerEndpoint3 tests the ability to add peers
 func TestAddPeerEndpoint3(t *testing.T) {
 	ctx := context.Background()
@@ -345,15 +342,14 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	args2.Port = "50052"
 	args3.Port = "50053"
 
-
 	tests := []struct {
-		name string
+		name            string
 		wantServerOne   int64
 		wantServerTwo   int64
 		wantServerThree int64
-	} {
+	}{
 		{
-			name: "Add 1 peer to each",
+			name:            "Add 1 peer to each",
 			wantServerOne:   2,
 			wantServerTwo:   2,
 			wantServerThree: 2,
@@ -361,7 +357,7 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			server3 := MakeHubServer(ctx, args3)
@@ -426,7 +422,6 @@ func TestAddPeerEndpoint3(t *testing.T) {
 
 }
 
-
 // TestAddPeer tests the ability to add peers
 func TestUDPServer(t *testing.T) {
 	ctx := context.Background()
@@ -439,7 +434,7 @@ func TestUDPServer(t *testing.T) {
 	tests := []struct {
 		name string
 		want string
-	} {
+	}{
 		{
 			name: "hubs server external ip",
 			want: "127.0.0.1",
@@ -447,7 +442,7 @@ func TestUDPServer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			go server.Run()

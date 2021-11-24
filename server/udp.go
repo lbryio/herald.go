@@ -11,9 +11,10 @@ import (
 	"github.com/lbryio/lbry.go/v2/extras/errors"
 )
 
-const maxBufferSize   = 1024
+const maxBufferSize = 1024
+
 // genesis blocktime (which is actually wrong)
-const magic           = 1446058291
+const magic = 1446058291
 const protocolVersion = 1
 
 // SPVPing is a struct for the format of how to ping another hub over udp.
@@ -31,7 +32,7 @@ type SPVPong struct {
 	flags           byte
 	height          uint32
 	tip             []byte // 32
-	srcAddrRaw	    []byte // 4
+	srcAddrRaw      []byte // 4
 	country         uint16
 }
 
@@ -55,7 +56,7 @@ func decodeSPVPing(data []byte) *SPVPing {
 	parsedMagic := binary.BigEndian.Uint32(data)
 	parsedProtocalVersion := data[4]
 	return &SPVPing{
-		magic: parsedMagic,
+		magic:   parsedMagic,
 		version: parsedProtocalVersion,
 	}
 }
@@ -65,7 +66,7 @@ func decodeSPVPing(data []byte) *SPVPing {
 func (pong *SPVPong) Encode() []byte {
 	data := make([]byte, 44)
 
-	data[0]	= pong.protocolVersion
+	data[0] = pong.protocolVersion
 	data[1] = pong.flags
 	binary.BigEndian.PutUint32(data[2:], pong.height)
 	copy(data[6:], pong.tip)
@@ -110,11 +111,11 @@ func decodeSPVPong(data []byte) *SPVPong {
 	country := binary.BigEndian.Uint16(data[42:])
 	return &SPVPong{
 		protocolVersion: parsedProtocalVersion,
-		flags: flags,
-		height: height,
-		tip: tip,
-		srcAddrRaw: srcRawAddr,
-		country: country,
+		flags:           flags,
+		height:          height,
+		tip:             tip,
+		srcAddrRaw:      srcRawAddr,
+		country:         country,
 	}
 }
 
@@ -240,7 +241,7 @@ func UDPServer(args *Args) error {
 		}
 
 		sAddr := addr.IP.String()
-		pong := makeSPVPong(0,0, tip, sAddr, args.Country)
+		pong := makeSPVPong(0, 0, tip, sAddr, args.Country)
 		data := pong.Encode()
 
 		_, err = conn.WriteToUDP(data, addr)
