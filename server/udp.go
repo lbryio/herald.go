@@ -153,48 +153,64 @@ func (pong *SPVPong) DecodeCountry() string {
 	return pb.Location_Country_name[int32(pong.country)]
 }
 
+func (pong *SPVPong) DecodeProtocolVersion() int {
+	return int(pong.protocolVersion)
+}
+
+func (pong *SPVPong) DecodeHeight() int {
+	return int(pong.height)
+}
+
+func (pong *SPVPong) DecodeTip() []byte {
+	return pong.tip
+}
+
+func (pong *SPVPong) DecodeFlags() byte {
+	return pong.flags
+}
+
 // UDPPing sends a ping over udp to another hub and returns the ip address of
 // this hub.
-func UDPPing(ip, port string) (net.IP, string, error) {
+func UDPPing(ip, port string) (*SPVPong, error) {
 	address := ip + ":" + port
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
-		return net.IP{}, "", err
+		return nil, err
 	}
 
 	conn, err := net.DialUDP("udp", nil, addr)
 	if err != nil {
-		return net.IP{}, "", err
+		return nil, err
 	}
 
 	defer conn.Close()
 
 	_, err = conn.Write(encodeSPVPing())
 	if err != nil {
-		return net.IP{}, "", err
+		return nil, err
 	}
 
 	buffer := make([]byte, maxBufferSize)
 	deadline := time.Now().Add(time.Second)
 	err = conn.SetReadDeadline(deadline)
 	if err != nil {
-		return net.IP{}, "", err
+		return nil, err
 	}
 	n, _, err := conn.ReadFromUDP(buffer)
 	if err != nil {
-		return net.IP{}, "", err
+		return nil, err
 	}
 
 	pong := decodeSPVPong(buffer[:n])
 
 	if pong == nil {
-		return net.IP{}, "", errors.Base("Pong decoding failed")
+		return nil, errors.Base("Pong decoding failed")
 	}
 
-	myAddr := pong.DecodeAddress()
-	country := pong.DecodeCountry()
+	// myAddr := pong.DecodeAddress()
+	// country := pong.DecodeCountry()
 
-	return myAddr, country, nil
+	return pong, nil
 }
 
 // UDPServer is a goroutine that starts an udp server that implements the hubs
