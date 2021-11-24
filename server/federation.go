@@ -267,7 +267,10 @@ func (s *Server) writePeers() {
 
 // notifyPeer takes a peer to notify and a new peer we just learned about
 // and calls AddPeer on the first.
-func notifyPeer(peerToNotify *FederatedServer, newPeer *FederatedServer) error {
+func (s *Server) notifyPeer(peerToNotify *FederatedServer, newPeer *FederatedServer) error {
+	if s.Args.DisableFederation {
+		return nil
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
@@ -303,7 +306,7 @@ func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 	s.PeerSubsMut.RLock()
 	for key, peer := range s.PeerSubs {
 		log.Printf("Notifying peer %s of new node %+v\n", key, newServer)
-		err := notifyPeer(peer, newServer)
+		err := s.notifyPeer(peer, newServer)
 		if err != nil {
 			log.Println("Failed to send data to ", key)
 			log.Println(err)
@@ -327,6 +330,9 @@ func (s *Server) notifyPeerSubs(newServer *FederatedServer) {
 // if they're online, and adds them to our list of peer. If we're not currently
 // subscribed to a peer, it will also subscribe to it.
 func (s *Server) addPeer(msg *pb.ServerMessage, ping bool, subscribe bool) error {
+	if s.Args.DisableFederation {
+		return nil
+	}
 	// First thing we get our external ip if we don't have it, otherwise we
 	// could end up subscribed to our self, which is silly.
 	nilIP := net.IP{}

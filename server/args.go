@@ -37,20 +37,21 @@ type Args struct {
 }
 
 const (
-	DefaultHost            = "0.0.0.0"
-	DefaultPort            = "50051"
-	DefaultEsHost          = "http://localhost"
-	DefaultEsIndex         = "claims"
-	DefaultEsPort          = "9200"
-	DefaultPrometheusPort  = "2112"
-	DefaultRefreshDelta    = 5
-	DefaultCacheTTL        = 5
-	DefaultPeerFile        = "peers.txt"
-	DefaultCountry         = "US"
-	DefaultLoadPeers       = true
-	DefaultStartPrometheus = true
-	DefaultStartUDP        = true
-	DefaultWritePeers      = true
+	DefaultHost              = "0.0.0.0"
+	DefaultPort              = "50051"
+	DefaultEsHost            = "http://localhost"
+	DefaultEsIndex           = "claims"
+	DefaultEsPort            = "9200"
+	DefaultPrometheusPort    = "2112"
+	DefaultRefreshDelta      = 5
+	DefaultCacheTTL          = 5
+	DefaultPeerFile          = "peers.txt"
+	DefaultCountry           = "US"
+	DefaultLoadPeers         = true
+	DefaultStartPrometheus   = true
+	DefaultStartUDP          = true
+	DefaultWritePeers        = true
+	DefaultDisableFederation = false
 )
 
 // GetEnvironment takes the environment variables as an array of strings
@@ -100,6 +101,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	startPrometheus := parser.Flag("", "start-prometheus", &argparse.Options{Required: false, Help: "Start prometheus server", Default: DefaultStartPrometheus})
 	startUdp := parser.Flag("", "start-udp", &argparse.Options{Required: false, Help: "Start UDP ping server", Default: DefaultStartUDP})
 	writePeers := parser.Flag("", "write-peers", &argparse.Options{Required: false, Help: "Write peer to disk as we learn about them", Default: DefaultWritePeers})
+	disableFederation := parser.Flag("", "disable-federation", &argparse.Options{Required: false, Help: "Disable server federation", Default: DefaultDisableFederation})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -118,23 +120,24 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	}
 
 	args := &Args{
-		CmdType:         SearchCmd,
-		Host:            *host,
-		Port:            *port,
-		EsHost:          *esHost,
-		EsPort:          *esPort,
-		PrometheusPort:  *prometheusPort,
-		EsIndex:         *esIndex,
-		RefreshDelta:    *refreshDelta,
-		CacheTTL:        *cacheTTL,
-		PeerFile:        *peerFile,
-		Country:         *country,
-		DisableEs:       *disableEs,
-		Debug:           *debug,
-		LoadPeers:       *loadPeers,
-		StartPrometheus: *startPrometheus,
-		StartUDP:        *startUdp,
-		WritePeers:      *writePeers,
+		CmdType:           SearchCmd,
+		Host:              *host,
+		Port:              *port,
+		EsHost:            *esHost,
+		EsPort:            *esPort,
+		PrometheusPort:    *prometheusPort,
+		EsIndex:           *esIndex,
+		RefreshDelta:      *refreshDelta,
+		CacheTTL:          *cacheTTL,
+		PeerFile:          *peerFile,
+		Country:           *country,
+		DisableEs:         *disableEs,
+		Debug:             *debug,
+		LoadPeers:         *loadPeers,
+		StartPrometheus:   *startPrometheus,
+		StartUDP:          *startUdp,
+		WritePeers:        *writePeers,
+		DisableFederation: *disableFederation,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
