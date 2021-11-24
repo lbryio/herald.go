@@ -237,7 +237,7 @@ func (s *Server) helloPeer(server *FederatedServer) (*pb.HelloMessage, error) {
 
 // writePeers writes our current known peers to disk.
 func (s *Server) writePeers() {
-	if !s.Args.WritePeers {
+	if s.Args.DisableWritePeers {
 		return
 	}
 	f, err := os.Create(s.Args.PeerFile)

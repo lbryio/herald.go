@@ -10,7 +10,7 @@ import (
 // TestAddPeer tests the ability to add peers
 func TestUDPPing(t *testing.T) {
 	args := makeDefaultArgs()
-	args.StartUDP = false
+	args.DisableStartUDP = true
 
 	tests := []struct {
 		name                string

@@ -16,42 +16,42 @@ const (
 
 // Args struct contains the arguments to the hub server.
 type Args struct {
-	CmdType           int
-	Host              string
-	Port              string
-	EsHost            string
-	EsPort            string
-	PrometheusPort    string
-	EsIndex           string
-	RefreshDelta      int
-	CacheTTL          int
-	PeerFile          string
-	Country           string
-	DisableEs         bool
-	Debug             bool
-	LoadPeers         bool
-	StartPrometheus   bool
-	StartUDP          bool
-	WritePeers        bool
-	DisableFederation bool
+	CmdType                int
+	Host                   string
+	Port                   string
+	EsHost                 string
+	EsPort                 string
+	PrometheusPort         string
+	EsIndex                string
+	RefreshDelta           int
+	CacheTTL               int
+	PeerFile               string
+	Country                string
+	DisableEs              bool
+	Debug                  bool
+	DisableLoadPeers       bool
+	DisableStartPrometheus bool
+	DisableStartUDP        bool
+	DisableWritePeers      bool
+	DisableFederation      bool
 }
 
 const (
-	DefaultHost              = "0.0.0.0"
-	DefaultPort              = "50051"
-	DefaultEsHost            = "http://localhost"
-	DefaultEsIndex           = "claims"
-	DefaultEsPort            = "9200"
-	DefaultPrometheusPort    = "2112"
-	DefaultRefreshDelta      = 5
-	DefaultCacheTTL          = 5
-	DefaultPeerFile          = "peers.txt"
-	DefaultCountry           = "US"
-	DefaultLoadPeers         = true
-	DefaultStartPrometheus   = true
-	DefaultStartUDP          = true
-	DefaultWritePeers        = true
-	DefaultDisableFederation = false
+	DefaultHost                   = "0.0.0.0"
+	DefaultPort                   = "50051"
+	DefaultEsHost                 = "http://localhost"
+	DefaultEsIndex                = "claims"
+	DefaultEsPort                 = "9200"
+	DefaultPrometheusPort         = "2112"
+	DefaultRefreshDelta           = 5
+	DefaultCacheTTL               = 5
+	DefaultPeerFile               = "peers.txt"
+	DefaultCountry                = "US"
+	DefaultDisableLoadPeers       = false
+	DefaultDisableStartPrometheus = false
+	DefaultDisableStartUDP        = false
+	DefaultDisableWritePeers      = false
+	DefaultDisableFederation      = false
 )
 
 // GetEnvironment takes the environment variables as an array of strings
@@ -97,10 +97,10 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 
 	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 	disableEs := parser.Flag("", "disable-es", &argparse.Options{Required: false, Help: "Disable elastic search, for running/testing independently", Default: false})
-	loadPeers := parser.Flag("", "load-peers", &argparse.Options{Required: false, Help: "load peers from disk at startup", Default: DefaultLoadPeers})
-	startPrometheus := parser.Flag("", "start-prometheus", &argparse.Options{Required: false, Help: "Start prometheus server", Default: DefaultStartPrometheus})
-	startUdp := parser.Flag("", "start-udp", &argparse.Options{Required: false, Help: "Start UDP ping server", Default: DefaultStartUDP})
-	writePeers := parser.Flag("", "write-peers", &argparse.Options{Required: false, Help: "Write peer to disk as we learn about them", Default: DefaultWritePeers})
+	disableLoadPeers := parser.Flag("", "disable-load-peers", &argparse.Options{Required: false, Help: "Disable load peers from disk at startup", Default: DefaultDisableLoadPeers})
+	disableStartPrometheus := parser.Flag("", "disable-start-prometheus", &argparse.Options{Required: false, Help: "Disable start prometheus server", Default: DefaultDisableStartPrometheus})
+	disableStartUdp := parser.Flag("", "disable-start-udp", &argparse.Options{Required: false, Help: "Disable start UDP ping server", Default: DefaultDisableStartUDP})
+	disableWritePeers := parser.Flag("", "disable-write-peers", &argparse.Options{Required: false, Help: "Disable write peer to disk as we learn about them", Default: DefaultDisableWritePeers})
 	disableFederation := parser.Flag("", "disable-federation", &argparse.Options{Required: false, Help: "Disable server federation", Default: DefaultDisableFederation})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
@@ -120,24 +120,24 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	}
 
 	args := &Args{
-		CmdType:           SearchCmd,
-		Host:              *host,
-		Port:              *port,
-		EsHost:            *esHost,
-		EsPort:            *esPort,
-		PrometheusPort:    *prometheusPort,
-		EsIndex:           *esIndex,
-		RefreshDelta:      *refreshDelta,
-		CacheTTL:          *cacheTTL,
-		PeerFile:          *peerFile,
-		Country:           *country,
-		DisableEs:         *disableEs,
-		Debug:             *debug,
-		LoadPeers:         *loadPeers,
-		StartPrometheus:   *startPrometheus,
-		StartUDP:          *startUdp,
-		WritePeers:        *writePeers,
-		DisableFederation: *disableFederation,
+		CmdType:                SearchCmd,
+		Host:                   *host,
+		Port:                   *port,
+		EsHost:                 *esHost,
+		EsPort:                 *esPort,
+		PrometheusPort:         *prometheusPort,
+		EsIndex:                *esIndex,
+		RefreshDelta:           *refreshDelta,
+		CacheTTL:               *cacheTTL,
+		PeerFile:               *peerFile,
+		Country:                *country,
+		DisableEs:              *disableEs,
+		Debug:                  *debug,
+		DisableLoadPeers:       *disableLoadPeers,
+		DisableStartPrometheus: *disableStartPrometheus,
+		DisableStartUDP:        *disableStartUdp,
+		DisableWritePeers:      *disableWritePeers,
+		DisableFederation:      *disableFederation,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {

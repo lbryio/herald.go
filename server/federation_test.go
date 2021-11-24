@@ -45,23 +45,23 @@ func removeFile(fileName string) {
 
 func makeDefaultArgs() *Args {
 	args := &Args{
-		CmdType:         ServeCmd,
-		Host:            DefaultHost,
-		Port:            DefaultPort,
-		EsHost:          DefaultEsHost,
-		EsPort:          DefaultEsPort,
-		PrometheusPort:  DefaultPrometheusPort,
-		EsIndex:         DefaultEsIndex,
-		RefreshDelta:    DefaultRefreshDelta,
-		CacheTTL:        DefaultCacheTTL,
-		PeerFile:        DefaultPeerFile,
-		Country:         DefaultCountry,
-		DisableEs:       true,
-		Debug:           true,
-		LoadPeers:       false,
-		StartPrometheus: false,
-		StartUDP:        false,
-		WritePeers:      false,
+		CmdType:                ServeCmd,
+		Host:                   DefaultHost,
+		Port:                   DefaultPort,
+		EsHost:                 DefaultEsHost,
+		EsPort:                 DefaultEsPort,
+		PrometheusPort:         DefaultPrometheusPort,
+		EsIndex:                DefaultEsIndex,
+		RefreshDelta:           DefaultRefreshDelta,
+		CacheTTL:               DefaultCacheTTL,
+		PeerFile:               DefaultPeerFile,
+		Country:                DefaultCountry,
+		DisableEs:              true,
+		Debug:                  true,
+		DisableLoadPeers:       true,
+		DisableStartPrometheus: true,
+		DisableStartUDP:        true,
+		DisableWritePeers:      true,
 	}
 
 	return args
@@ -129,7 +129,7 @@ func TestAddPeer(t *testing.T) {
 func TestPeerWriter(t *testing.T) {
 	ctx := context.Background()
 	args := makeDefaultArgs()
-	args.WritePeers = true
+	args.DisableWritePeers = false
 
 	tests := []struct {
 		name string
@@ -426,10 +426,10 @@ func TestAddPeerEndpoint3(t *testing.T) {
 func TestUDPServer(t *testing.T) {
 	ctx := context.Background()
 	args := makeDefaultArgs()
-	args.StartUDP = true
+	args.DisableStartUDP = false
 	args2 := makeDefaultArgs()
 	args2.Port = "50052"
-	args2.StartUDP = true
+	args2.DisableStartUDP = false
 
 	tests := []struct {
 		name string

@@ -205,10 +205,10 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	}
 
 	// Start up our background services
-	if args.StartPrometheus {
+	if !args.DisableStartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}
-	if args.StartUDP {
+	if !args.DisableStartUDP {
 		go func() {
 			err := UDPServer(args)
 			if err != nil {
@@ -217,7 +217,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		}()
 	}
 	// Load peers from disk and subscribe to one if there are any
-	if args.LoadPeers {
+	if !args.DisableLoadPeers {
 		go func() {
 			err := s.loadPeers()
 			if err != nil {
