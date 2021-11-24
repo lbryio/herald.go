@@ -13,12 +13,14 @@ func TestUDPPing(t *testing.T) {
 	args.StartUDP = false
 
 	tests := []struct {
-		name string
-		want string
+		name 		string
+		wantIP 		string
+		wantCountry string
 	} {
 		{
-			name: "Get the right ip from production server.",
-			want: "SETME",
+			name: 		 "Get the right ip from production server.",
+			wantIP: 	 "SETME",
+			wantCountry: "US",
 		},
 	}
 
@@ -28,7 +30,8 @@ func TestUDPPing(t *testing.T) {
 			toAddr := "spv16.lbry.com"
 			toPort := "50001"
 
-			ip, err := UDPPing(toAddr, toPort)
+			ip, country, err := UDPPing(toAddr, toPort)
+			gotCountry := country
 			if err != nil {
 				log.Println(err)
 			}
@@ -41,11 +44,14 @@ func TestUDPPing(t *testing.T) {
 
 			digIP := strings.TrimSpace(string(res))
 			udpIP := ip.String()
-			tt.want = digIP
+			tt.wantIP = digIP
 
-			got1 := udpIP
-			if got1 != tt.want {
-				t.Errorf("got: '%s', want: '%s'\n", got1, tt.want)
+			gotIP := udpIP
+			if gotIP != tt.wantIP {
+				t.Errorf("got: '%s', want: '%s'\n", gotIP, tt.wantIP)
+			}
+			if gotCountry != tt.wantCountry {
+				t.Errorf("got: '%s', want: '%s'\n", gotCountry, tt.wantCountry)
 			}
 		})
 	}

@@ -73,7 +73,7 @@ func (s *Server) getNumSubs() int64 {
 // pings it, so we can determine our own external IP address.
 func (s *Server) getAndSetExternalIp(msg *pb.ServerMessage) error {
 	log.Println(msg)
-	myIp, err := UDPPing(msg.Address, msg.Port)
+	myIp, _, err := UDPPing(msg.Address, msg.Port)
 	if err != nil {
 		return err
 	}
