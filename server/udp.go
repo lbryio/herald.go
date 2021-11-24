@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/errors"
 )
 
@@ -75,10 +76,13 @@ func (pong *SPVPong) Encode() []byte {
 }
 
 // makeSPVPong creates an SPVPong struct according to given parameters.
-// FIXME: Currently, does not correctly encode the country.
 func makeSPVPong(flags int, height int, tip []byte, sourceAddr string, country string) *SPVPong {
 	byteAddr := EncodeAddress(sourceAddr)
-	countryInt := 1
+	var countryInt int32
+	var ok bool
+	if countryInt, ok = pb.Location_Country_value[country]; !ok {
+		countryInt = int32(pb.Location_UNKNOWN_COUNTRY)
+	}
 	return &SPVPong{
 		protocolVersion: protocolVersion,
 		flags:           byte(flags),
