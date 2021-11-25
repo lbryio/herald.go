@@ -16,6 +16,9 @@ const maxBufferSize = 1024
 // genesis blocktime (which is actually wrong)
 const magic = 1446058291
 const protocolVersion = 1
+const defaultFlags = 0b00000000
+
+var availableFlag = 0b00000001
 
 // SPVPing is a struct for the format of how to ping another hub over udp.
 // format b'!lB64s'
@@ -241,7 +244,7 @@ func UDPServer(args *Args) error {
 		}
 
 		sAddr := addr.IP.String()
-		pong := makeSPVPong(0, 0, tip, sAddr, args.Country)
+		pong := makeSPVPong(defaultFlags|availableFlag, 0, tip, sAddr, args.Country)
 		data := pong.Encode()
 
 		_, err = conn.WriteToUDP(data, addr)
