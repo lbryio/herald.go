@@ -93,21 +93,21 @@ func TestAddPeer(t *testing.T) {
 			metrics.PeersKnown.Set(0)
 
 			for i := 0; i < 10; i++ {
-				var msg *pb.ServerMessage
+				var peer *Peer
 				if strings.Contains(tt.name, "1 unique") {
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: "1.1.1.1",
 						Port:    "50051",
 					}
 				} else {
 					x := i + 1
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}
 				//log.Printf("Adding peer %+v\n", msg)
-				err := server.addPeer(msg, false, false)
+				err := server.addPeer(peer, false, false)
 				if err != nil {
 					log.Println(err)
 				}
@@ -151,21 +151,21 @@ func TestPeerWriter(t *testing.T) {
 			server.ExternalIP = net.IPv4(0, 0, 0, 0)
 
 			for i := 0; i < 10; i++ {
-				var msg *pb.ServerMessage
+				var peer *Peer
 				if strings.Contains(tt.name, "1 unique") {
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: "1.1.1.1",
 						Port:    "50051",
 					}
 				} else {
 					x := i + 1
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}
-				//log.Printf("Adding peer %+v\n", msg)
-				err := server.addPeer(msg, false, false)
+				//log.Printf("Adding peer %+v\n", peer)
+				err := server.addPeer(peer, false, false)
 				if err != nil {
 					log.Println(err)
 				}
@@ -449,12 +449,12 @@ func TestUDPServer(t *testing.T) {
 			go server2.Run()
 			metrics.PeersKnown.Set(0)
 
-			msg := &pb.ServerMessage{
+			peer := &Peer{
 				Address: "0.0.0.0",
 				Port:    "50052",
 			}
 
-			err := server.addPeer(msg, true, true)
+			err := server.addPeer(peer, true, true)
 			if err != nil {
 				log.Println(err)
 			}

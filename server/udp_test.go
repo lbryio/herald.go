@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-// TestAddPeer tests the ability to add peers
+// TestUDPPing tests UDPPing correctness against prod server.
 func TestUDPPing(t *testing.T) {
 	args := makeDefaultArgs()
 	args.DisableStartUDP = true

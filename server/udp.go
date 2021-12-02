@@ -17,8 +17,7 @@ const maxBufferSize = 1024
 const magic = 1446058291
 const protocolVersion = 1
 const defaultFlags = 0b00000000
-
-var availableFlag = 0b00000001
+const availableFlag = 0b00000001
 
 // SPVPing is a struct for the format of how to ping another hub over udp.
 // format b'!lB64s'
@@ -210,9 +209,6 @@ func UDPPing(ip, port string) (*SPVPong, error) {
 	if pong == nil {
 		return nil, errors.Base("Pong decoding failed")
 	}
-
-	// myAddr := pong.DecodeAddress()
-	// country := pong.DecodeCountry()
 
 	return pong, nil
 }
