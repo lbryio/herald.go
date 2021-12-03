@@ -18,9 +18,9 @@ import (
 
 // Peer holds relevant information about peers that we know about.
 type Peer struct {
-	Address string
-	Port    string
-	Ts      time.Time
+	Address  string
+	Port     string
+	LastSeen time.Time
 }
 
 var (
@@ -68,8 +68,7 @@ func (s *Server) getNumSubs() int64 {
 	return *s.NumPeerSubs
 }
 
-// getAndSetExternalIp takes the ip and port of a peer running a UDP server and
-// pings it, so we can determine our own external IP address.
+// getAndSetExternalIp detects the server's external IP and stores it.
 func (s *Server) getAndSetExternalIp(ip, port string) error {
 	pong, err := UDPPing(ip, port)
 	if err != nil {
@@ -146,9 +145,9 @@ retry:
 		}
 
 		newPeer := &Peer{
-			Address: ipPort[0],
-			Port:    ipPort[1],
-			Ts:      time.Now(),
+			Address:  ipPort[0],
+			Port:     ipPort[1],
+			LastSeen: time.Now(),
 		}
 		log.Printf("pinging peer %+v\n", newPeer)
 		err = s.addPeer(newPeer, true, true)
@@ -377,7 +376,7 @@ func (s *Server) addPeer(newPeer *Peer, ping bool, subscribe bool) error {
 			}
 		}
 	} else {
-		oldServer.Ts = time.Now()
+		oldServer.LastSeen = time.Now()
 	}
 	return nil
 }
@@ -387,9 +386,9 @@ func (s *Server) addPeer(newPeer *Peer, ping bool, subscribe bool) error {
 func (s *Server) mergePeers(servers []*pb.ServerMessage) {
 	for _, srvMsg := range servers {
 		newPeer := &Peer{
-			Address: srvMsg.Address,
-			Port:    srvMsg.Port,
-			Ts:      time.Now(),
+			Address:  srvMsg.Address,
+			Port:     srvMsg.Port,
+			LastSeen: time.Now(),
 		}
 		err := s.addPeer(newPeer, false, true)
 		// This shouldn't happen because we're not pinging them.

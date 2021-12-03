@@ -246,9 +246,9 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 	port := args.Port
 	host := args.Host
 	newPeer := &Peer{
-		Address: host,
-		Port:    port,
-		Ts:      time.Now(),
+		Address:  host,
+		Port:     port,
+		LastSeen: time.Now(),
 	}
 	log.Println(newPeer)
 
@@ -270,9 +270,9 @@ func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.S
 	metrics.RequestsCount.With(prometheus.Labels{"method": "peer_subscribe"}).Inc()
 	var msg = "Success"
 	peer := &Peer{
-		Address: in.Address,
-		Port:    in.Port,
-		Ts:      time.Now(),
+		Address:  in.Address,
+		Port:     in.Port,
+		LastSeen: time.Now(),
 	}
 
 	if _, loaded := s.PeerSubsLoadOrStore(peer); !loaded {
@@ -290,9 +290,9 @@ func (s *Server) AddPeer(ctx context.Context, args *pb.ServerMessage) (*pb.Strin
 	metrics.RequestsCount.With(prometheus.Labels{"method": "add_peer"}).Inc()
 	var msg = "Success"
 	newPeer := &Peer{
-		Address: args.Address,
-		Port:    args.Port,
-		Ts:      time.Now(),
+		Address:  args.Address,
+		Port:     args.Port,
+		LastSeen: time.Now(),
 	}
 	err := s.addPeer(newPeer, true, true)
 	if err != nil {

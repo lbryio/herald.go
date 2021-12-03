@@ -14,6 +14,9 @@ import (
 const maxBufferSize = 1024
 
 // genesis blocktime (which is actually wrong)
+// magic constant for the UDPPing protocol. The above comment is taken from
+// the python code this was implemented off of.
+// https://github.com/lbryio/lbry-sdk/blob/7d49b046d44a4b7067d5dc1d6cd65ff0475c71c8/lbry/wallet/server/udp.py#L12
 const magic = 1446058291
 const protocolVersion = 1
 const defaultFlags = 0b00000000
