@@ -55,7 +55,7 @@ message RangeField {
     GT = 4;
   }
   Op op = 1;
-  repeated string value = 2;
+  repeated int32 value = 2;
 }
 
 message SearchRequest {
@@ -69,35 +69,34 @@ message SearchRequest {
   string last_take_over_height = 8;
   string claim_name = 9;
   string normalized_name = 10;
-  RangeField tx_position = 11;
-  RangeField amount = 12;
-  RangeField timestamp = 13;
-  RangeField creation_timestamp = 14;
-  RangeField height = 15;
-  RangeField creation_height = 16;
-  RangeField activation_height = 17;
-  RangeField expiration_height = 18;
-  RangeField release_time = 19;
+  repeated RangeField tx_position = 11;
+  repeated RangeField amount = 12;
+  repeated RangeField timestamp = 13;
+  repeated RangeField creation_timestamp = 14;
+  repeated RangeField height = 15;
+  repeated RangeField creation_height = 16;
+  repeated RangeField activation_height = 17;
+  repeated RangeField expiration_height = 18;
+  repeated RangeField release_time = 19;
   string short_url = 20;
   string canonical_url = 21;
   string title = 22;
   string author = 23;
   string description = 24;
   repeated string claim_type = 25;
-  RangeField repost_count = 26;
+  repeated RangeField repost_count = 26;
   repeated string stream_type = 27;
   repeated string media_type = 28;
-  RangeField fee_amount = 29;
+  repeated RangeField fee_amount = 29;
   string fee_currency = 30;
-  RangeField duration = 31;
+  repeated RangeField duration = 31;
   string reposted_claim_id = 32;
-  RangeField censor_type = 33;
+  repeated RangeField censor_type = 33;
   string claims_in_channel = 34;
-  RangeField channel_join = 35;
   BoolValue is_signature_valid = 36;
-  RangeField effective_amount = 37;
-  RangeField support_amount = 38;
-  RangeField trending_score = 39;
+  repeated RangeField effective_amount = 37;
+  repeated RangeField support_amount = 38;
+  repeated RangeField trending_score = 39;
   string tx_id = 43;
   UInt32Value tx_nout = 44;
   string signature = 45;
