@@ -67,6 +67,16 @@ func StrArrToInterface(arr []string) []interface{} {
 	return searchVals
 }
 
+// Int32ArrToInterface takes an array of int32 and returns them as an array of
+// interfaces.
+func Int32ArrToInterface(arr []int32) []interface{} {
+	searchVals := make([]interface{}, len(arr))
+	for i := 0; i < len(arr); i++ {
+		searchVals[i] = arr[i]
+	}
+	return searchVals
+}
+
 // AddTermsField takes an es bool query, array of string values and a term
 // name and adds a TermsQuery for that name matching those values to the
 // bool query.
@@ -75,6 +85,17 @@ func AddTermsField(q *elastic.BoolQuery, arr []string, name string) *elastic.Boo
 		return q
 	}
 	searchVals := StrArrToInterface(arr)
+	return q.Must(elastic.NewTermsQuery(name, searchVals...))
+}
+
+// AddTermsFieldInt32 takes an es bool query, array of int32 values and a term
+// name and adds a TermsQuery for that name matching those values to the
+// bool query.
+func AddTermsFieldInt32(q *elastic.BoolQuery, arr []int32, name string) *elastic.BoolQuery {
+	if len(arr) == 0 {
+		return q
+	}
+	searchVals := Int32ArrToInterface(arr)
 	return q.Must(elastic.NewTermsQuery(name, searchVals...))
 }
 
@@ -104,27 +125,33 @@ func AddIndividualTermFields(q *elastic.BoolQuery, arr []string, name string, in
 
 // AddRangeField takes a bool query, a range field struct and a term name
 // and adds a term query for that name matching that range field.
-func AddRangeField(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elastic.BoolQuery {
-	if rq == nil {
+func AddRangeField(q *elastic.BoolQuery, rqs []*pb.RangeField, name string) *elastic.BoolQuery {
+	if len(rqs) == 0 {
 		return q
 	}
-	if len(rq.Value) > 1 {
-		if rq.Op != pb.RangeField_EQ {
-			return q
+
+	for _, rq := range rqs {
+		if len(rq.Value) > 1 {
+			if rq.Op != pb.RangeField_EQ {
+				continue
+			}
+			q = AddTermsField(q, rq.Value, name)
+			continue
 		}
-		return AddTermsField(q, rq.Value, name)
+		if rq.Op == pb.RangeField_EQ {
+			q = q.Must(elastic.NewTermQuery(name, rq.Value[0]))
+		} else if rq.Op == pb.RangeField_LT {
+			q = q.Must(elastic.NewRangeQuery(name).Lt(rq.Value[0]))
+		} else if rq.Op == pb.RangeField_LTE {
+			q = q.Must(elastic.NewRangeQuery(name).Lte(rq.Value[0]))
+		} else if rq.Op == pb.RangeField_GT {
+			q = q.Must(elastic.NewRangeQuery(name).Gt(rq.Value[0]))
+		} else { // pb.RangeField_GTE
+			q = q.Must(elastic.NewRangeQuery(name).Gte(rq.Value[0]))
+		}
 	}
-	if rq.Op == pb.RangeField_EQ {
-		return q.Must(elastic.NewTermQuery(name, rq.Value[0]))
-	} else if rq.Op == pb.RangeField_LT {
-		return q.Must(elastic.NewRangeQuery(name).Lt(rq.Value[0]))
-	} else if rq.Op == pb.RangeField_LTE {
-		return q.Must(elastic.NewRangeQuery(name).Lte(rq.Value[0]))
-	} else if rq.Op == pb.RangeField_GT {
-		return q.Must(elastic.NewRangeQuery(name).Gt(rq.Value[0]))
-	} else { // pb.RangeField_GTE
-		return q.Must(elastic.NewRangeQuery(name).Gte(rq.Value[0]))
-	}
+
+	return q
 }
 
 // AddInvertibleField takes a bool query, an invertible field and a term name
@@ -155,29 +182,36 @@ func (s *Server) recordErrorAndDie(err error) {
 // RoundUpReleaseTime take a bool query, a range query and a term name
 // and adds a term query for that name (this is for the release time
 // field) with the value rounded up.
-func RoundUpReleaseTime(q *elastic.BoolQuery, rq *pb.RangeField, name string) *elastic.BoolQuery {
-	if rq == nil {
+func RoundUpReleaseTime(q *elastic.BoolQuery, rqs []*pb.RangeField, name string) *elastic.BoolQuery {
+	if len(rqs) == 0 {
 		return q
 	}
-	releaseTimeInt, err := strconv.ParseInt(rq.Value[0], 10, 32)
-	if err != nil {
-		return q
+	for _, rq := range rqs {
+		releaseTimeInt, err := strconv.ParseInt(rq.Value[0], 10, 32)
+		if err != nil {
+			continue
+		}
+		//releaseTimeInt := rq.Value[0]
+
+		if releaseTimeInt < 0 {
+			releaseTimeInt *= -1
+		}
+		releaseTime := strconv.Itoa(int(((releaseTimeInt / 360) + 1) * 360))
+		// releaseTime := ((releaseTimeInt / 360) + 1) * 360
+		if rq.Op == pb.RangeField_EQ {
+			q = q.Must(elastic.NewTermQuery(name, releaseTime))
+		} else if rq.Op == pb.RangeField_LT {
+			q = q.Must(elastic.NewRangeQuery(name).Lt(releaseTime))
+		} else if rq.Op == pb.RangeField_LTE {
+			q = q.Must(elastic.NewRangeQuery(name).Lte(releaseTime))
+		} else if rq.Op == pb.RangeField_GT {
+			q = q.Must(elastic.NewRangeQuery(name).Gt(releaseTime))
+		} else { // pb.RangeField_GTE
+			q = q.Must(elastic.NewRangeQuery(name).Gte(releaseTime))
+		}
 	}
-	if releaseTimeInt < 0 {
-		releaseTimeInt *= - 1
-	}
-	releaseTime := strconv.Itoa(int(((releaseTimeInt / 360) + 1) * 360))
-	if rq.Op == pb.RangeField_EQ {
-		return q.Must(elastic.NewTermQuery(name, releaseTime))
-	} else if rq.Op == pb.RangeField_LT {
-		return q.Must(elastic.NewRangeQuery(name).Lt(releaseTime))
-	} else if rq.Op == pb.RangeField_LTE {
-		return q.Must(elastic.NewRangeQuery(name).Lte(releaseTime))
-	} else if rq.Op == pb.RangeField_GT {
-		return q.Must(elastic.NewRangeQuery(name).Gt(releaseTime))
-	} else { // pb.RangeField_GTE
-		return q.Must(elastic.NewRangeQuery(name).Gte(releaseTime))
-	}
+
+	return q
 }
 
 // Search /*
@@ -645,7 +679,6 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.FeeAmount, "fee_amount")
 	q = AddRangeField(q, in.Duration, "duration")
 	q = AddRangeField(q, in.CensorType, "censor_type")
-	q = AddRangeField(q, in.ChannelJoin, "channel_join")
 	q = AddRangeField(q, in.EffectiveAmount, "effective_amount")
 	q = AddRangeField(q, in.SupportAmount, "support_amount")
 	q = AddRangeField(q, in.TrendingScore, "trending_score")
