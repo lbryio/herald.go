@@ -7,7 +7,6 @@ import (
 	"log"
 	"math"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 
@@ -135,7 +134,7 @@ func AddRangeField(q *elastic.BoolQuery, rqs []*pb.RangeField, name string) *ela
 			if rq.Op != pb.RangeField_EQ {
 				continue
 			}
-			q = AddTermsField(q, rq.Value, name)
+			q = AddTermsFieldInt32(q, rq.Value, name)
 			continue
 		}
 		if rq.Op == pb.RangeField_EQ {
@@ -187,17 +186,12 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rqs []*pb.RangeField, name string)
 		return q
 	}
 	for _, rq := range rqs {
-		releaseTimeInt, err := strconv.ParseInt(rq.Value[0], 10, 32)
-		if err != nil {
-			continue
-		}
-		//releaseTimeInt := rq.Value[0]
+		releaseTimeInt := rq.Value[0]
 
 		if releaseTimeInt < 0 {
 			releaseTimeInt *= -1
 		}
-		releaseTime := strconv.Itoa(int(((releaseTimeInt / 360) + 1) * 360))
-		// releaseTime := ((releaseTimeInt / 360) + 1) * 360
+		releaseTime := ((releaseTimeInt / 360) + 1) * 360
 		if rq.Op == pb.RangeField_EQ {
 			q = q.Must(elastic.NewTermQuery(name, releaseTime))
 		} else if rq.Op == pb.RangeField_LT {
