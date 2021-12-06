@@ -18,8 +18,8 @@ var (
 		Help: "Number of errors by type",
 	}, []string{"error_type"})
 	QueryTime = promauto.NewHistogramVec(prometheus.HistogramOpts{
-		Name: "query_time",
-		Help: "Histogram of query times",
+		Name:    "query_time",
+		Help:    "Histogram of query times",
 		Buckets: HistogramBuckets,
 	}, []string{"method"})
 	PeersKnown = promauto.NewGauge(prometheus.GaugeOpts{
@@ -31,4 +31,3 @@ var (
 		Help: "Number of peers that are subscribed to us.",
 	})
 )
-

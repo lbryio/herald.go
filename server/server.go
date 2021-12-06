@@ -35,16 +35,15 @@ type Server struct {
 	LastRefreshCheck time.Time
 	RefreshDelta     time.Duration
 	NumESRefreshes   int64
-	PeerServers      map[string]*FederatedServer
+	PeerServers      map[string]*Peer
 	PeerServersMut   sync.RWMutex
 	NumPeerServers   *int64
-	PeerSubs         map[string]*FederatedServer
+	PeerSubs         map[string]*Peer
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
-	Subscribed       bool
+	ExternalIP       net.IP
 	pb.UnimplementedHubServer
 }
-
 
 func getVersion() string {
 	return meta.Version
@@ -89,7 +88,7 @@ func getVersion() string {
 	'blockchain.address.unsubscribe'
 */
 
-func (s *Server) PeerSubsLoadOrStore(peer *FederatedServer) (actual *FederatedServer, loaded bool) {
+func (s *Server) PeerSubsLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	key := peer.peerKey()
 	s.PeerSubsMut.RLock()
 	if actual, ok := s.PeerSubs[key]; ok {
@@ -104,7 +103,7 @@ func (s *Server) PeerSubsLoadOrStore(peer *FederatedServer) (actual *FederatedSe
 	}
 }
 
-func (s *Server) PeerServersLoadOrStore(peer *FederatedServer) (actual *FederatedServer, loaded bool) {
+func (s *Server) PeerServersLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	key := peer.peerKey()
 	s.PeerServersMut.RLock()
 	if actual, ok := s.PeerServers[key]; ok {
@@ -196,20 +195,20 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		LastRefreshCheck: time.Now(),
 		RefreshDelta:     refreshDelta,
 		NumESRefreshes:   0,
-		PeerServers:      make(map[string]*FederatedServer),
+		PeerServers:      make(map[string]*Peer),
 		PeerServersMut:   sync.RWMutex{},
 		NumPeerServers:   numPeers,
-		PeerSubs:         make(map[string]*FederatedServer),
+		PeerSubs:         make(map[string]*Peer),
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
-		Subscribed:       false,
+		ExternalIP:       net.IPv4(127, 0, 0, 1),
 	}
 
 	// Start up our background services
-	if args.StartPrometheus {
+	if !args.DisableStartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}
-	if args.StartUDP {
+	if !args.DisableStartUDP {
 		go func() {
 			err := UDPServer(args)
 			if err != nil {
@@ -218,11 +217,13 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		}()
 	}
 	// Load peers from disk and subscribe to one if there are any
-	if args.LoadPeers {
-		err = s.loadPeers()
-		if err != nil {
-			log.Println(err)
-		}
+	if !args.DisableLoadPeers {
+		go func() {
+			err := s.loadPeers()
+			if err != nil {
+				log.Println(err)
+			}
+		}()
 	}
 
 	return s
@@ -244,21 +245,21 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 	metrics.RequestsCount.With(prometheus.Labels{"method": "hello"}).Inc()
 	port := args.Port
 	host := args.Host
-	server := &FederatedServer{
-		Address: host,
-		Port: port,
-		Ts: time.Now(),
+	newPeer := &Peer{
+		Address:  host,
+		Port:     port,
+		LastSeen: time.Now(),
 	}
-	log.Println(server)
+	log.Println(newPeer)
 
-	err := s.addPeer(&pb.ServerMessage{Address: host, Port: port}, false)
+	err := s.addPeer(newPeer, false, true)
 	// They just contacted us, so this shouldn't happen
 	if err != nil {
 		log.Println(err)
 	}
-	s.mergeFederatedServers(args.Servers)
+	s.mergePeers(args.Servers)
 	s.writePeers()
-	s.notifyPeerSubs(server)
+	s.notifyPeerSubs(newPeer)
 
 	return s.makeHelloMessage(), nil
 }
@@ -268,10 +269,10 @@ func (s *Server) Hello(ctx context.Context, args *pb.HelloMessage) (*pb.HelloMes
 func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.StringValue, error) {
 	metrics.RequestsCount.With(prometheus.Labels{"method": "peer_subscribe"}).Inc()
 	var msg = "Success"
-	peer := &FederatedServer{
-		Address: in.Address,
-		Port:    in.Port,
-		Ts:      time.Now(),
+	peer := &Peer{
+		Address:  in.Address,
+		Port:     in.Port,
+		LastSeen: time.Now(),
 	}
 
 	if _, loaded := s.PeerSubsLoadOrStore(peer); !loaded {
@@ -288,7 +289,12 @@ func (s *Server) PeerSubscribe(ctx context.Context, in *pb.ServerMessage) (*pb.S
 func (s *Server) AddPeer(ctx context.Context, args *pb.ServerMessage) (*pb.StringValue, error) {
 	metrics.RequestsCount.With(prometheus.Labels{"method": "add_peer"}).Inc()
 	var msg = "Success"
-	err := s.addPeer(args, true)
+	newPeer := &Peer{
+		Address:  args.Address,
+		Port:     args.Port,
+		LastSeen: time.Now(),
+	}
+	err := s.addPeer(newPeer, true, true)
 	if err != nil {
 		log.Println(err)
 		msg = "Failed"

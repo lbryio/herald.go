@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 	"strings"
 	"testing"
@@ -44,24 +45,23 @@ func removeFile(fileName string) {
 
 func makeDefaultArgs() *Args {
 	args := &Args{
-		CmdType:         ServeCmd,
-		Host:            DefaultHost,
-		Port:            DefaultPort,
-		EsHost:          DefaultEsHost,
-		EsPort:          DefaultEsPort,
-		UDPPort:         DefaultUdpPort,
-		PrometheusPort:  DefaultPrometheusPort,
-		EsIndex:         DefaultEsIndex,
-		RefreshDelta:    DefaultRefreshDelta,
-		CacheTTL:        DefaultCacheTTL,
-		PeerFile:        DefaultPeerFile,
-		Country:         DefaultCountry,
-		DisableEs:       true,
-		Debug:           true,
-		LoadPeers:       false,
-		StartPrometheus: false,
-		StartUDP:        false,
-		WritePeers:      false,
+		CmdType:                ServeCmd,
+		Host:                   DefaultHost,
+		Port:                   DefaultPort,
+		EsHost:                 DefaultEsHost,
+		EsPort:                 DefaultEsPort,
+		PrometheusPort:         DefaultPrometheusPort,
+		EsIndex:                DefaultEsIndex,
+		RefreshDelta:           DefaultRefreshDelta,
+		CacheTTL:               DefaultCacheTTL,
+		PeerFile:               DefaultPeerFile,
+		Country:                DefaultCountry,
+		DisableEs:              true,
+		Debug:                  true,
+		DisableLoadPeers:       true,
+		DisableStartPrometheus: true,
+		DisableStartUDP:        true,
+		DisableWritePeers:      true,
 	}
 
 	return args
@@ -75,7 +75,7 @@ func TestAddPeer(t *testing.T) {
 	tests := []struct {
 		name string
 		want int
-	} {
+	}{
 		{
 			name: "Add 10 peers",
 			want: 10,
@@ -87,27 +87,27 @@ func TestAddPeer(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
-			server.Subscribed = true
+			server.ExternalIP = net.IPv4(0, 0, 0, 0)
 			metrics.PeersKnown.Set(0)
 
 			for i := 0; i < 10; i++ {
-				var msg *pb.ServerMessage
+				var peer *Peer
 				if strings.Contains(tt.name, "1 unique") {
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: "1.1.1.1",
 						Port:    "50051",
 					}
 				} else {
 					x := i + 1
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}
 				//log.Printf("Adding peer %+v\n", msg)
-				err := server.addPeer(msg, false)
+				err := server.addPeer(peer, false, false)
 				if err != nil {
 					log.Println(err)
 				}
@@ -129,12 +129,12 @@ func TestAddPeer(t *testing.T) {
 func TestPeerWriter(t *testing.T) {
 	ctx := context.Background()
 	args := makeDefaultArgs()
-	args.WritePeers = true
+	args.DisableWritePeers = false
 
 	tests := []struct {
 		name string
 		want int
-	} {
+	}{
 		{
 			name: "Add 10 peers",
 			want: 10,
@@ -146,26 +146,26 @@ func TestPeerWriter(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
-			server.Subscribed = true
+			server.ExternalIP = net.IPv4(0, 0, 0, 0)
 
 			for i := 0; i < 10; i++ {
-				var msg *pb.ServerMessage
+				var peer *Peer
 				if strings.Contains(tt.name, "1 unique") {
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: "1.1.1.1",
 						Port:    "50051",
 					}
 				} else {
 					x := i + 1
-					msg = &pb.ServerMessage{
+					peer = &Peer{
 						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}
-				//log.Printf("Adding peer %+v\n", msg)
-				err := server.addPeer(msg, false)
+				//log.Printf("Adding peer %+v\n", peer)
+				err := server.addPeer(peer, false, false)
 				if err != nil {
 					log.Println(err)
 				}
@@ -188,12 +188,11 @@ func TestAddPeerEndpoint(t *testing.T) {
 	args2 := makeDefaultArgs()
 	args2.Port = "50052"
 
-
 	tests := []struct {
-		name string
+		name          string
 		wantServerOne int64
 		wantServerTwo int64
-	} {
+	}{
 		{
 			// outside -> server1.AddPeer(server2, ping=true)  : server1 = 1, server2 = 0
 			// server1 -> server2.Hello(server1)               : server1 = 1, server2 = 0
@@ -204,14 +203,14 @@ func TestAddPeerEndpoint(t *testing.T) {
 			// server1 -> server2.AddPeer(server2)             : server1 = 1, server2 = 1
 			// server2 self peer, skipping                     : server1 = 1, server2 = 1
 			// server1 -> server2.PeerSubscribe(server1)       : server1 = 1, server2 = 1
-			name: "Add 1 peer",
+			name:          "Add 1 peer",
 			wantServerOne: 1,
 			wantServerTwo: 1,
 		},
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			metrics.PeersKnown.Set(0)
@@ -262,15 +261,14 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	args2.Port = "50052"
 	args3.Port = "50053"
 
-
 	tests := []struct {
-		name string
+		name            string
 		wantServerOne   int64
 		wantServerTwo   int64
 		wantServerThree int64
-	} {
+	}{
 		{
-			name: "Add 2 peers",
+			name:            "Add 2 peers",
 			wantServerOne:   2,
 			wantServerTwo:   2,
 			wantServerThree: 2,
@@ -278,7 +276,7 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			server3 := MakeHubServer(ctx, args3)
@@ -335,7 +333,6 @@ func TestAddPeerEndpoint2(t *testing.T) {
 
 }
 
-
 // TestAddPeerEndpoint3 tests the ability to add peers
 func TestAddPeerEndpoint3(t *testing.T) {
 	ctx := context.Background()
@@ -345,15 +342,14 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	args2.Port = "50052"
 	args3.Port = "50053"
 
-
 	tests := []struct {
-		name string
+		name            string
 		wantServerOne   int64
 		wantServerTwo   int64
 		wantServerThree int64
-	} {
+	}{
 		{
-			name: "Add 1 peer to each",
+			name:            "Add 1 peer to each",
 			wantServerOne:   2,
 			wantServerTwo:   2,
 			wantServerThree: 2,
@@ -361,7 +357,7 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T){
+		t.Run(tt.name, func(t *testing.T) {
 			server := MakeHubServer(ctx, args)
 			server2 := MakeHubServer(ctx, args2)
 			server3 := MakeHubServer(ctx, args3)
@@ -420,6 +416,61 @@ func TestAddPeerEndpoint3(t *testing.T) {
 			}
 			if got3 != tt.wantServerThree {
 				t.Errorf("len(server3.PeerServers) = %d, want %d\n", got3, tt.wantServerThree)
+			}
+		})
+	}
+
+}
+
+// TestAddPeer tests the ability to add peers
+func TestUDPServer(t *testing.T) {
+	ctx := context.Background()
+	args := makeDefaultArgs()
+	args.DisableStartUDP = false
+	args2 := makeDefaultArgs()
+	args2.Port = "50052"
+	args2.DisableStartUDP = false
+
+	tests := []struct {
+		name string
+		want string
+	}{
+		{
+			name: "hubs server external ip",
+			want: "127.0.0.1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			server := MakeHubServer(ctx, args)
+			server2 := MakeHubServer(ctx, args2)
+			go server.Run()
+			go server2.Run()
+			metrics.PeersKnown.Set(0)
+
+			peer := &Peer{
+				Address: "0.0.0.0",
+				Port:    "50052",
+			}
+
+			err := server.addPeer(peer, true, true)
+			if err != nil {
+				log.Println(err)
+			}
+
+			server.GrpcServer.GracefulStop()
+			server2.GrpcServer.GracefulStop()
+
+			got1 := server.ExternalIP.String()
+			if got1 != tt.want {
+				t.Errorf("server.ExternalIP = %s, want %s\n", got1, tt.want)
+				t.Errorf("server.Args.Port = %s\n", server.Args.Port)
+			}
+			got2 := server2.ExternalIP.String()
+			if got2 != tt.want {
+				t.Errorf("server2.ExternalIP = %s, want %s\n", got2, tt.want)
+				t.Errorf("server2.Args.Port = %s\n", server2.Args.Port)
 			}
 		})
 	}

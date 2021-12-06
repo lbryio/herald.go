@@ -26,19 +26,7 @@ func main() {
 
 		s := server.MakeHubServer(ctxWCancel, args)
 		s.Run()
-		//l, err := net.Listen("tcp", ":"+args.Port)
-		//if err != nil {
-		//	log.Fatalf("failed to listen: %v", err)
-		//}
-		//
-		//pb.RegisterHubServer(s.GrpcServer, s)
-		//reflection.Register(s.GrpcServer)
-		//
-		//log.Printf("listening on %s\n", l.Addr().String())
-		//log.Println(s.Args)
-		//if err := s.GrpcServer.Serve(l); err != nil {
-		//	log.Fatalf("failed to serve: %v", err)
-		//}
+
 		return
 	}
 
