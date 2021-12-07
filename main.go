@@ -6,6 +6,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/lbryio/hub/db"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"
@@ -26,6 +27,10 @@ func main() {
 
 		s := server.MakeHubServer(ctxWCancel, args)
 		s.Run()
+
+		return
+	} else if args.CmdType == server.DBCmd {
+		db.OpenDB("/mnt/d/data/wallet/lbry-rocksdb/")
 
 		return
 	}
