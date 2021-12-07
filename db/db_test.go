@@ -9,21 +9,21 @@ func TestOpenDB(t *testing.T) {
 
 	tests := []struct {
 		name string
-		want string
+		want int
 	}{
 		{
 			name: "Open a rocksdb database",
-			want: "",
+			want: 10,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			OpenDB("/mnt/d/data/wallet/lbry-rocksdb/")
-			got := ""
+			vals := OpenDB("../resources/tmp.db")
+			got := vals
 
 			if got != tt.want {
-				t.Errorf("got: %s, want: %s\n", got, tt.want)
+				t.Errorf("got: %d, want: %d\n", got, tt.want)
 			}
 		})
 	}
