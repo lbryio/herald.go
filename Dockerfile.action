@@ -1,0 +1,5 @@
+FROM jeffreypicard/hub-github-env
+
+COPY scripts/build_and_test.sh /build_and_test.sh
+
+ENTRYPOINT ["/build_and_test.sh"]
