@@ -9,4 +9,4 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
       - name: Build and Test
-        uses: ./Dockerfile.action
+        uses: ./
