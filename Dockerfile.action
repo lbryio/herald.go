@@ -1,11 +1,11 @@
 FROM jeffreypicard/hub-github-env
 
-# COPY scripts/build_and_test.sh /build_and_test.sh
-COPY . /hub
-WORKDIR /hub
+COPY scripts/build_and_test.sh /build_and_test.sh
+# COPY . /hub
+# WORKDIR /hub
 
 ENV CGO_LDFLAGS "-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd"
 ENV CGO_CFLAGS "-I/usr/local/include/rocksdb"
 ENV LD_LIBRARY_PATH /usr/local/lib
 
-ENTRYPOINT ["scripts/build_and_test.sh"]
+ENTRYPOINT ["/build_and_test.sh"]
