@@ -23,7 +23,7 @@ func OpenDB(name string) int {
 
 	var i = 0
 	it.Seek([]byte("foo"))
-	for it = it; it.Valid() && i < 10; it.Next() {
+	for it = it; it.Valid(); it.Next() {
 		key := it.Key()
 		value := it.Value()
 
