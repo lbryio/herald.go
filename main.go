@@ -58,7 +58,17 @@ func main() {
 		}
 		stop := db.UTXOKeyPackPartial(stopKey, 1)
 
-		options := db.NewIterateOptions().WithFillCache(false).WithStop(stop)
+		log.Print(hex.EncodeToString(stop))
+
+		options := &db.IterOptions{
+			FillCache:    false,
+			Start:        nil,
+			Stop:         stop,
+			IncludeStart: true,
+			IncludeStop:  false,
+			IncludeKey:   true,
+			IncludeValue: true,
+		}
 
 		db.OpenAndWriteDB(pr, options, "./resources/asdf.db")
 

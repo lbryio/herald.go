@@ -13,9 +13,13 @@ import (
 )
 
 type IterOptions struct {
-	FillCache bool
-	Start     []byte //interface{}
-	Stop      []byte //interface{}
+	FillCache    bool
+	Start        []byte //interface{}
+	Stop         []byte //interface{}
+	IncludeStart bool
+	IncludeStop  bool
+	IncludeKey   bool
+	IncludeValue bool
 }
 
 type PrefixRow struct {
@@ -45,11 +49,24 @@ type UTXOValue struct {
 	Amount uint64
 }
 
+// NewIterateOptions creates a defualt options structure for a db iterator.
+// Default values:
+// FillCache:    false,
+// Start:        nil,
+// Stop:         nil,
+// IncludeStart: true,
+// IncludeStop:  false,
+// IncludeKey:   true,
+// IncludeValue: false,
 func NewIterateOptions() *IterOptions {
 	return &IterOptions{
-		FillCache: false,
-		Start:     nil,
-		Stop:      nil,
+		FillCache:    false,
+		Start:        nil,
+		Stop:         nil,
+		IncludeStart: true,
+		IncludeStop:  false,
+		IncludeKey:   true,
+		IncludeValue: false,
 	}
 }
 
@@ -65,6 +82,26 @@ func (o *IterOptions) WithStart(start []byte) *IterOptions {
 
 func (o *IterOptions) WithStop(stop []byte) *IterOptions {
 	o.Stop = stop
+	return o
+}
+
+func (o *IterOptions) WithIncludeStart(includeStart bool) *IterOptions {
+	o.IncludeStart = includeStart
+	return o
+}
+
+func (o *IterOptions) WithIncludeStop(includeStop bool) *IterOptions {
+	o.IncludeStop = includeStop
+	return o
+}
+
+func (o *IterOptions) WithIncludeKey(includeKey bool) *IterOptions {
+	o.IncludeKey = includeKey
+	return o
+}
+
+func (o *IterOptions) WithIncludeValue(includeValue bool) *IterOptions {
+	o.IncludeValue = includeValue
 	return o
 }
 
@@ -93,49 +130,72 @@ func (pr *PrefixRow) Iter(options *IterOptions) <-chan *PrefixRowKV {
 		log.Println("Not seeking to start")
 	}
 
-	/*
-	   def _check_stop_iteration(self, key: bytes):
-	       if self.stop is not None and (key.startswith(self.stop) or self.stop < key[:len(self.stop)]):
-	           raise StopIteration
-	       elif self.start is not None and self.start > key[:len(self.start)]:
-	           raise StopIteration
-	       elif self.prefix is not None and not key.startswith(self.prefix):
-	           raise StopIteration
-	*/
-	terminateFunc := func(key []byte) bool {
+	stopIteration := func(key []byte) bool {
 		if key == nil {
-			return true
+			return false
 		}
 
 		if options.Stop != nil &&
 			(bytes.HasPrefix(key, options.Stop) || bytes.Compare(options.Stop, key[:len(options.Stop)]) < 0) {
-			return false
+			return true
 		} else if options.Start != nil &&
 			bytes.Compare(options.Start, key[:len(options.Start)]) > 0 {
-			return false
+			return true
 		} else if pr.Prefix != nil && !bytes.HasPrefix(key, pr.Prefix) {
-			return false
+			return true
 		}
 
-		return true
+		return false
 	}
 
-	var prevKey []byte = nil
 	go func() {
 		defer it.Close()
 		defer close(ch)
-		for ; terminateFunc(prevKey); it.Next() {
-			key := it.Key()
-			prevKey = key.Data()
-			value := it.Value()
 
-			ch <- &PrefixRowKV{
-				Key:   key.Data(),
-				Value: value.Data(),
+		if !options.IncludeStart {
+			it.Next()
+		}
+		var prevKey []byte = nil
+		for ; !stopIteration(prevKey); it.Next() {
+			key := it.Key()
+			keyData := key.Data()
+			keyLen := len(keyData)
+			value := it.Value()
+			valueData := value.Data()
+			valueLen := len(valueData)
+
+			// We need to check the current key is we're not including the stop
+			// key.
+			if !options.IncludeStop && stopIteration(keyData) {
+				return
+			}
+
+			var outputKeyData []byte = nil
+			// We have to copy the key no matter what because we need to check
+			// it on the next iterations to see if we're going to stop.
+			newKeyData := make([]byte, keyLen)
+			copy(newKeyData, keyData)
+			if options.IncludeKey {
+				outputKeyData = newKeyData
+			}
+
+			var newValueData []byte = nil
+			// Value could be quite large, so this setting could be important
+			// for performance in some cases.
+			if options.IncludeValue {
+				newValueData = make([]byte, valueLen)
+				copy(newValueData, valueData)
 			}
 
 			key.Free()
 			value.Free()
+
+			ch <- &PrefixRowKV{
+				Key:   outputKeyData,
+				Value: newValueData,
+			}
+			prevKey = newKeyData
+
 		}
 	}()
 
@@ -230,7 +290,8 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 
 func GetDB(name string) (*grocksdb.DB, error) {
 	opts := grocksdb.NewDefaultOptions()
-	db, err := grocksdb.OpenDb(opts, name)
+	// db, err := grocksdb.OpenDb(opts, name)
+	db, err := grocksdb.OpenDbAsSecondary(opts, name, "asdf")
 	if err != nil {
 		return nil, err
 	}
@@ -287,7 +348,6 @@ func OpenDB(name string, start string) int {
 
 	var i = 0
 	it.Seek([]byte(start))
-	// it.Seek([]byte{'u'})
 	for ; it.Valid(); it.Next() {
 		key := it.Key()
 		value := it.Value()
@@ -319,34 +379,31 @@ func OpenAndWriteDB(prIn *PrefixRow, options *IterOptions, out string) {
 	ch := prIn.Iter(options)
 
 	var i = 0
-	var prevKey []byte = nil
 	for kv := range ch {
-		log.Println(kv)
 		key := kv.Key
 		value := kv.Value
-		unpackKeyFnValue := reflect.ValueOf(prIn.KeyUnpackFunc)
-		keyArgs := []reflect.Value{reflect.ValueOf(key)}
-		unpackKeyFnResult := unpackKeyFnValue.Call(keyArgs)
-		unpackedKey := unpackKeyFnResult[0].Interface() //.(reflect.TypeOf())
+		var unpackedKey *UTXOKey = nil
+		var unpackedValue *UTXOValue = nil
 
-		unpackValueFnValue := reflect.ValueOf(prIn.ValueUnpackFunc)
-		valueArgs := []reflect.Value{reflect.ValueOf(value)}
-		unpackValueFnResult := unpackValueFnValue.Call(valueArgs)
-		unpackedValue := unpackValueFnResult[0].Interface() //.([]byte)
-
-		log.Println(unpackedKey)
-		log.Println(unpackedValue)
-
-		if bytes.Equal(prevKey, key) {
-			if err := db.Merge(wo, key, value); err != nil {
-				log.Println(err)
-			}
-		} else {
-			if err := db.Put(wo, key, value); err != nil {
-				log.Println(err)
-			}
+		if key != nil {
+			unpackKeyFnValue := reflect.ValueOf(prIn.KeyUnpackFunc)
+			keyArgs := []reflect.Value{reflect.ValueOf(key)}
+			unpackKeyFnResult := unpackKeyFnValue.Call(keyArgs)
+			unpackedKey = unpackKeyFnResult[0].Interface().(*UTXOKey)
 		}
-		prevKey = key
+
+		if value != nil {
+			unpackValueFnValue := reflect.ValueOf(prIn.ValueUnpackFunc)
+			valueArgs := []reflect.Value{reflect.ValueOf(value)}
+			unpackValueFnResult := unpackValueFnValue.Call(valueArgs)
+			unpackedValue = unpackValueFnResult[0].Interface().(*UTXOValue)
+		}
+
+		log.Println(unpackedKey, unpackedValue)
+
+		if err := db.Put(wo, key, value); err != nil {
+			log.Println(err)
+		}
 		i++
 	}
 }

@@ -50,7 +50,16 @@ func TestReadUTXO2(t *testing.T) {
 			}
 			stop := UTXOKeyPackPartial(stopKey, 1)
 
-			options := NewIterateOptions().WithFillCache(false).WithStop(stop)
+			options := &IterOptions{
+				FillCache:    false,
+				Start:        nil,
+				Stop:         stop,
+				IncludeStart: true,
+				IncludeStop:  false,
+				IncludeKey:   true,
+				IncludeValue: true,
+			}
+
 			log.Println(options)
 
 			ch := utxoRow.Iter(options)
