@@ -21,10 +21,12 @@ type IterOptions struct {
 type PrefixRow struct {
 	//KeyStruct     interface{}
 	//ValueStruct   interface{}
-	Prefix        []byte
-	KeyPackFunc   interface{}
-	ValuePackFunc interface{}
-	DB            *grocksdb.DB
+	Prefix          []byte
+	KeyPackFunc     interface{}
+	ValuePackFunc   interface{}
+	KeyUnpackFunc   interface{}
+	ValueUnpackFunc interface{}
+	DB              *grocksdb.DB
 }
 
 type PrefixRowKV struct {
@@ -85,7 +87,10 @@ func (pr *PrefixRow) Iter(options *IterOptions) <-chan *PrefixRowKV {
 
 	it.Seek(pr.Prefix)
 	if options.Start != nil {
+		log.Println("Seeking to start")
 		it.Seek(options.Start)
+	} else {
+		log.Println("Not seeking to start")
 	}
 
 	/*
@@ -118,6 +123,7 @@ func (pr *PrefixRow) Iter(options *IterOptions) <-chan *PrefixRowKV {
 	var prevKey []byte = nil
 	go func() {
 		defer it.Close()
+		defer close(ch)
 		for ; terminateFunc(prevKey); it.Next() {
 			key := it.Key()
 			prevKey = key.Data()
@@ -131,7 +137,6 @@ func (pr *PrefixRow) Iter(options *IterOptions) <-chan *PrefixRowKV {
 			key.Free()
 			value.Free()
 		}
-		close(ch)
 	}()
 
 	return ch
@@ -148,6 +153,13 @@ func (k *UTXOKey) PackKey() []byte {
 	binary.BigEndian.PutUint16(key[prefixLen+15:], k.Nout)
 
 	return key
+}
+
+// UTXOKeyPackPartialNFields creates a pack partial key function for n fields.
+func UTXOKeyPackPartialNFields(nFields int) func(*UTXOKey) []byte {
+	return func(u *UTXOKey) []byte {
+		return UTXOKeyPackPartial(u, nFields)
+	}
 }
 
 // UTXOKeyPackPartial packs a variable number of fields for a UTXOKey into
@@ -257,7 +269,7 @@ func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*PrefixRowKV {
 	return res
 }
 
-func OpenDB(name string) int {
+func OpenDB(name string, start string) int {
 	// Read db
 	opts := grocksdb.NewDefaultOptions()
 	db, err := grocksdb.OpenDb(opts, name)
@@ -274,7 +286,8 @@ func OpenDB(name string) int {
 	defer it.Close()
 
 	var i = 0
-	it.Seek([]byte("foo"))
+	it.Seek([]byte(start))
+	// it.Seek([]byte{'u'})
 	for ; it.Valid(); it.Next() {
 		key := it.Key()
 		value := it.Value()
@@ -292,46 +305,48 @@ func OpenDB(name string) int {
 	return i
 }
 
-func OpenAndWriteDB(in string, out string) {
-	// Read db
-	opts := grocksdb.NewDefaultOptions()
-	db, err := grocksdb.OpenDb(opts, in)
-	ro := grocksdb.NewDefaultReadOptions()
-	ro.SetFillCache(false)
-	if err != nil {
-		log.Println(err)
-	}
+func OpenAndWriteDB(prIn *PrefixRow, options *IterOptions, out string) {
 	// Write db
+	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
-	db2, err := grocksdb.OpenDb(opts, out)
+	db, err := grocksdb.OpenDb(opts, out)
 	if err != nil {
 		log.Println(err)
 	}
 	wo := grocksdb.NewDefaultWriteOptions()
-	defer db2.Close()
+	defer db.Close()
 
-	log.Println(db.Name())
-	log.Println(db2.Name())
-
-	it := db.NewIterator(ro)
-	defer it.Close()
+	ch := prIn.Iter(options)
 
 	var i = 0
-	it.Seek([]byte("foo"))
-	for ; it.Valid() && i < 10; it.Next() {
-		key := it.Key()
-		value := it.Value()
-		fmt.Printf("Key: %v Value: %v\n", key.Data(), value.Data())
+	var prevKey []byte = nil
+	for kv := range ch {
+		log.Println(kv)
+		key := kv.Key
+		value := kv.Value
+		unpackKeyFnValue := reflect.ValueOf(prIn.KeyUnpackFunc)
+		keyArgs := []reflect.Value{reflect.ValueOf(key)}
+		unpackKeyFnResult := unpackKeyFnValue.Call(keyArgs)
+		unpackedKey := unpackKeyFnResult[0].Interface() //.(reflect.TypeOf())
 
-		if err := db2.Put(wo, key.Data(), value.Data()); err != nil {
-			log.Println(err)
+		unpackValueFnValue := reflect.ValueOf(prIn.ValueUnpackFunc)
+		valueArgs := []reflect.Value{reflect.ValueOf(value)}
+		unpackValueFnResult := unpackValueFnValue.Call(valueArgs)
+		unpackedValue := unpackValueFnResult[0].Interface() //.([]byte)
+
+		log.Println(unpackedKey)
+		log.Println(unpackedValue)
+
+		if bytes.Equal(prevKey, key) {
+			if err := db.Merge(wo, key, value); err != nil {
+				log.Println(err)
+			}
+		} else {
+			if err := db.Put(wo, key, value); err != nil {
+				log.Println(err)
+			}
 		}
-
-		key.Free()
-		value.Free()
+		prevKey = key
 		i++
-	}
-	if err := it.Err(); err != nil {
-		log.Println(err)
 	}
 }

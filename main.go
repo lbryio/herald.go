@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/lbryio/hub/db"
+	"github.com/lbryio/hub/db/prefixes"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"
@@ -30,7 +32,35 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd {
-		db.OpenDB("/mnt/d/data/wallet/lbry-rocksdb/")
+		dbVal, err := db.GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		pr := &db.PrefixRow{
+			Prefix:          prefixes.UTXO,
+			KeyPackFunc:     nil,
+			ValuePackFunc:   nil,
+			KeyUnpackFunc:   db.UTXOKeyUnpack,
+			ValueUnpackFunc: db.UTXOValueUnpack,
+			DB:              dbVal,
+		}
+
+		b, err := hex.DecodeString("000013")
+		if err != nil {
+			log.Println(err)
+		}
+		stopKey := &db.UTXOKey{
+			Prefix: prefixes.UTXO,
+			HashX:  b,
+			TxNum:  0,
+			Nout:   0,
+		}
+		stop := db.UTXOKeyPackPartial(stopKey, 1)
+
+		options := db.NewIterateOptions().WithFillCache(false).WithStop(stop)
+
+		db.OpenAndWriteDB(pr, options, "./resources/asdf.db")
 
 		return
 	}
