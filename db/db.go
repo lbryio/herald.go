@@ -117,6 +117,7 @@ func (pr *PrefixRow) Iter(options *IterOptions) <-chan *PrefixRowKV {
 
 	var prevKey []byte = nil
 	go func() {
+		defer it.Close()
 		for ; terminateFunc(prevKey); it.Next() {
 			key := it.Key()
 			prevKey = key.Data()
@@ -260,11 +261,12 @@ func OpenDB(name string) int {
 	// Read db
 	opts := grocksdb.NewDefaultOptions()
 	db, err := grocksdb.OpenDb(opts, name)
-	ro := grocksdb.NewDefaultReadOptions()
-	ro.SetFillCache(false)
 	if err != nil {
 		log.Println(err)
 	}
+	defer db.Close()
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetFillCache(false)
 
 	log.Println(db.Name())
 
@@ -277,7 +279,7 @@ func OpenDB(name string) int {
 		key := it.Key()
 		value := it.Value()
 
-		fmt.Printf("Key: %v Value: %v\n", key.Data(), value.Data())
+		fmt.Printf("Key: %v Value: %v\n", hex.EncodeToString(key.Data()), hex.EncodeToString(value.Data()))
 
 		key.Free()
 		value.Free()

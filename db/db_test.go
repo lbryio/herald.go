@@ -27,6 +27,7 @@ func TestReadUTXO2(t *testing.T) {
 			if err != nil {
 				t.Errorf("err not nil: %+v\n", err)
 			}
+			defer db.Close()
 			utxoRow := &PrefixRow{
 				// KeyStruct:     UTXOKey{},
 				// ValueStruct:   UTXOValue{},
@@ -62,9 +63,6 @@ func TestReadUTXO2(t *testing.T) {
 					t.Errorf("got: %d, want: %d\n", got, tt.want)
 				}
 				i++
-				if i >= 10 {
-					break
-				}
 			}
 		})
 	}
@@ -89,6 +87,8 @@ func TestReadUTXO(t *testing.T) {
 			if err != nil {
 				t.Errorf("err not nil: %+v\n", err)
 			}
+			defer db.Close()
+
 			data := ReadPrefixN(db, prefixes.UTXO, tt.want)
 
 			got := len(data)
@@ -147,13 +147,13 @@ func TestUTXOKey_String(t *testing.T) {
 			hashx:  []byte("AAAAAAAAAA"),
 			txnum:  0,
 			nout:   0,
-			want:   "db.UTXOKey(hashX=41414141414141414141, tx_num=0, nout=0)",
+			want:   "*db.UTXOKey(hashX=41414141414141414141, tx_num=0, nout=0)",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := UTXOKey{
+			key := &UTXOKey{
 				Prefix: tt.prefix,
 				HashX:  tt.hashx,
 				TxNum:  tt.txnum,
