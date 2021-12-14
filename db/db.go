@@ -173,6 +173,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 func NewIterateOptions() *IterOptions {
 	return &IterOptions{
 		FillCache:    false,
+		Prefix:       []byte{},
 		Start:        nil,
 		Stop:         nil,
 		IncludeStart: true,
@@ -186,6 +187,11 @@ func NewIterateOptions() *IterOptions {
 
 func (o *IterOptions) WithFillCache(fillCache bool) *IterOptions {
 	o.FillCache = fillCache
+	return o
+}
+
+func (o *IterOptions) WithPrefix(prefix []byte) *IterOptions {
+	o.Prefix = prefix
 	return o
 }
 
@@ -216,6 +222,16 @@ func (o *IterOptions) WithIncludeKey(includeKey bool) *IterOptions {
 
 func (o *IterOptions) WithIncludeValue(includeValue bool) *IterOptions {
 	o.IncludeValue = includeValue
+	return o
+}
+
+func (o *IterOptions) WithRawKey(rawKey bool) *IterOptions {
+	o.RawKey = rawKey
+	return o
+}
+
+func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
+	o.RawValue = rawValue
 	return o
 }
 
