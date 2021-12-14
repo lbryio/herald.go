@@ -30,20 +30,16 @@ func TestReadUTXO2(t *testing.T) {
 				t.Errorf("err not nil: %+v\n", err)
 			}
 			defer db.Close()
-			utxoRow := &PrefixRow{
-				// KeyStruct:     UTXOKey{},
-				// ValueStruct:   UTXOValue{},
-				Prefix:        prefixes.UTXO,
-				KeyPackFunc:   nil,
-				ValuePackFunc: nil,
-				DB:            db,
-			}
+			//utxoRow := &PrefixRow{
+			//	Prefix: []byte{prefixes.UTXO},
+			//	DB:     db,
+			//}
 			b, err := hex.DecodeString("000012")
 			if err != nil {
 				log.Println(err)
 			}
 			stopKey := &UTXOKey{
-				Prefix: prefixes.UTXO,
+				Prefix: []byte{prefixes.UTXO},
 				HashX:  b,
 				TxNum:  0,
 				Nout:   0,
@@ -52,24 +48,25 @@ func TestReadUTXO2(t *testing.T) {
 
 			options := &IterOptions{
 				FillCache:    false,
+				Prefix:       []byte{prefixes.UTXO},
 				Start:        nil,
 				Stop:         stop,
 				IncludeStart: true,
 				IncludeStop:  false,
 				IncludeKey:   true,
 				IncludeValue: true,
+				RawKey:       false,
+				RawValue:     false,
 			}
 
 			log.Println(options)
 
-			ch := utxoRow.Iter(options)
+			ch := Iter(db, options)
 
 			var i = 0
 			for kv := range ch {
 				log.Println(kv.Key)
-				log.Println(UTXOKeyUnpack(kv.Key))
-				log.Println(UTXOValueUnpack(kv.Value))
-				got := UTXOValueUnpack(kv.Value).Amount
+				got := kv.Value.(*UTXOValue).Amount
 				if got != tt.want[i] {
 					t.Errorf("got: %d, want: %d\n", got, tt.want[i])
 				}

@@ -32,18 +32,14 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd {
-		dbVal, err := db.GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
+		dbVal, err := db.GetDB("./resources/asdf.db")
 		if err != nil {
 			log.Fatalln(err)
 		}
 
 		pr := &db.PrefixRow{
-			Prefix:          prefixes.UTXO,
-			KeyPackFunc:     nil,
-			ValuePackFunc:   nil,
-			KeyUnpackFunc:   db.UTXOKeyUnpack,
-			ValueUnpackFunc: db.UTXOValueUnpack,
-			DB:              dbVal,
+			Prefix: []byte{prefixes.UTXO},
+			DB:     dbVal,
 		}
 
 		b, err := hex.DecodeString("000013")
@@ -51,13 +47,14 @@ func main() {
 			log.Println(err)
 		}
 		stopKey := &db.UTXOKey{
-			Prefix: prefixes.UTXO,
+			Prefix: []byte{prefixes.UTXO},
 			HashX:  b,
 			TxNum:  0,
 			Nout:   0,
 		}
 		stop := db.UTXOKeyPackPartial(stopKey, 1)
 
+		log.Println(stop)
 		log.Print(hex.EncodeToString(stop))
 
 		options := &db.IterOptions{
@@ -70,7 +67,7 @@ func main() {
 			IncludeValue: true,
 		}
 
-		db.OpenAndWriteDB(pr, options, "./resources/asdf.db")
+		db.OpenAndWriteDB(pr, options, "./resources/asdf2.db")
 
 		return
 	}
