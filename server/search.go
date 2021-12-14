@@ -595,6 +595,10 @@ func (s *Server) setupEsQuery(
 		q = q.Must(elastic.NewTermsQuery("stream_type", searchVals...))
 	}
 
+	if in.SdHash != "" {
+		q.Must(elastic.NewPrefixQuery("sd_hash.keyword", in.SdHash))
+	}
+
 	if in.ClaimId != nil {
 		searchVals := StrArrToInterface(in.ClaimId.Value)
 		if len(in.ClaimId.Value) == 1 && len(in.ClaimId.Value[0]) < 20 {
