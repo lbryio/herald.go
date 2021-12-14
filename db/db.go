@@ -9,6 +9,7 @@ import (
 	"reflect"
 
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/hub/db/rocksdbwrap"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -30,12 +31,18 @@ type PrefixRow struct {
 	ValuePackFunc   interface{}
 	KeyUnpackFunc   interface{}
 	ValueUnpackFunc interface{}
-	DB              *grocksdb.DB
+	DB              *rocksdbwrap.RocksDB
+	// DB              *grocksdb.DB
 }
 
 type PrefixRowKV struct {
 	Key   []byte
 	Value []byte
+}
+
+type PrefixRowKV2 struct {
+	Key   interface{}
+	Value interface{}
 }
 
 type UTXOKey struct {
@@ -113,6 +120,101 @@ func (k *UTXOKey) String() string {
 		k.TxNum,
 		k.Nout,
 	)
+}
+
+func (pr *PrefixRow) Iter2(options *IterOptions) <-chan *PrefixRowKV2 {
+	ch := make(chan *PrefixRowKV2)
+
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetFillCache(options.FillCache)
+	it := pr.DB.NewIterator(ro)
+
+	it.Seek(pr.Prefix)
+	if options.Start != nil {
+		log.Println("Seeking to start")
+		it.Seek(options.Start)
+	} else {
+		log.Println("Not seeking to start")
+	}
+
+	stopIteration := func(key []byte) bool {
+		if key == nil {
+			return false
+		}
+
+		if options.Stop != nil &&
+			(bytes.HasPrefix(key, options.Stop) || bytes.Compare(options.Stop, key[:len(options.Stop)]) < 0) {
+			return true
+		} else if options.Start != nil &&
+			bytes.Compare(options.Start, key[:len(options.Start)]) > 0 {
+			return true
+		} else if pr.Prefix != nil && !bytes.HasPrefix(key, pr.Prefix) {
+			return true
+		}
+
+		return false
+	}
+
+	go func() {
+		defer it.Close()
+		defer close(ch)
+
+		if !options.IncludeStart {
+			it.Next()
+		}
+		var prevKey []byte = nil
+		for ; !stopIteration(prevKey); it.Next() {
+			key := it.Key()
+			keyData := key.Data()
+			keyLen := len(keyData)
+			value := it.Value()
+			valueData := value.Data()
+			valueLen := len(valueData)
+
+			var unpackedKey interface{} = nil
+			var unpackedValue interface{} = nil
+
+			// We need to check the current key is we're not including the stop
+			// key.
+			if !options.IncludeStop && stopIteration(keyData) {
+				return
+			}
+
+			// We have to copy the key no matter what because we need to check
+			// it on the next iterations to see if we're going to stop.
+			newKeyData := make([]byte, keyLen)
+			copy(newKeyData, keyData)
+			if options.IncludeKey {
+				unpackKeyFnValue := reflect.ValueOf(pr.KeyUnpackFunc)
+				keyArgs := []reflect.Value{reflect.ValueOf(newKeyData)}
+				unpackKeyFnResult := unpackKeyFnValue.Call(keyArgs)
+				unpackedKey = unpackKeyFnResult[0].Interface() //.(*UTXOKey)
+			}
+
+			// Value could be quite large, so this setting could be important
+			// for performance in some cases.
+			if options.IncludeValue {
+				newValueData := make([]byte, valueLen)
+				copy(newValueData, valueData)
+				unpackValueFnValue := reflect.ValueOf(pr.ValueUnpackFunc)
+				valueArgs := []reflect.Value{reflect.ValueOf(newValueData)}
+				unpackValueFnResult := unpackValueFnValue.Call(valueArgs)
+				unpackedValue = unpackValueFnResult[0].Interface() //.(*UTXOValue)
+			}
+
+			key.Free()
+			value.Free()
+
+			ch <- &PrefixRowKV2{
+				Key:   unpackedKey,
+				Value: unpackedValue,
+			}
+			prevKey = newKeyData
+
+		}
+	}()
+
+	return ch
 }
 
 func (pr *PrefixRow) Iter(options *IterOptions) <-chan *PrefixRowKV {
