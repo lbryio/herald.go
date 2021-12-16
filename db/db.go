@@ -27,23 +27,7 @@ type IterOptions struct {
 	RawValue     bool
 }
 
-type PrefixRow struct {
-	//KeyStruct     interface{}
-	//ValueStruct   interface{}
-	Prefix []byte
-	//KeyPackFunc     interface{}
-	//ValuePackFunc   interface{}
-	//KeyUnpackFunc   interface{}
-	//ValueUnpackFunc interface{}
-	DB *grocksdb.DB
-}
-
 type PrefixRowKV struct {
-	Key   []byte
-	Value []byte
-}
-
-type PrefixRowKV2 struct {
 	Key   interface{}
 	Value interface{}
 }
@@ -162,14 +146,6 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 }
 
 // NewIterateOptions creates a defualt options structure for a db iterator.
-// Default values:
-// FillCache:    false,
-// Start:        nil,
-// Stop:         nil,
-// IncludeStart: true,
-// IncludeStop:  false,
-// IncludeKey:   true,
-// IncludeValue: false,
 func NewIterateOptions() *IterOptions {
 	return &IterOptions{
 		FillCache:    false,
@@ -245,8 +221,8 @@ func (k *UTXOKey) String() string {
 	)
 }
 
-func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV2 {
-	ch := make(chan *PrefixRowKV2)
+func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV {
+	ch := make(chan *PrefixRowKV)
 
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(opts.FillCache)
@@ -340,7 +316,7 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV2 {
 			key.Free()
 			value.Free()
 
-			ch <- &PrefixRowKV2{
+			ch <- &PrefixRowKV{
 				Key:   outKey,
 				Value: outValue,
 			}
@@ -515,42 +491,14 @@ func OpenDB(name string, start string) int {
 	return i
 }
 
-func OpenAndWriteDB(prIn *PrefixRow, options *IterOptions, out string) {
-	// Write db
-	//opts := grocksdb.NewDefaultOptions()
-	//opts.SetCreateIfMissing(true)
-	//db, err := grocksdb.OpenDb(opts, out)
-	//if err != nil {
-	//	log.Println(err)
-	//}
-	//wo := grocksdb.NewDefaultWriteOptions()
-	//defer db.Close()
+func OpenAndWriteDB(db *grocksdb.DB, options *IterOptions, out string) {
 
-	options.Prefix = prIn.Prefix
-	ch := Iter(prIn.DB, options)
+	ch := Iter(db, options)
 
 	var i = 0
 	for kv := range ch {
 		key := kv.Key.(*UTXOKey)
 		value := kv.Value.(*UTXOValue)
-		//var unpackedKey *UTXOKey = nil
-		//var unpackedValue *UTXOValue = nil
-
-		//if key != nil {
-		//	unpackKeyFnValue := reflect.ValueOf(prIn.KeyUnpackFunc)
-		//	keyArgs := []reflect.Value{reflect.ValueOf(key)}
-		//	unpackKeyFnResult := unpackKeyFnValue.Call(keyArgs)
-		//	unpackedKey = unpackKeyFnResult[0].Interface().(*UTXOKey)
-		//}
-		//
-		//if value != nil {
-		//	unpackValueFnValue := reflect.ValueOf(prIn.ValueUnpackFunc)
-		//	valueArgs := []reflect.Value{reflect.ValueOf(value)}
-		//	unpackValueFnResult := unpackValueFnValue.Call(valueArgs)
-		//	unpackedValue = unpackValueFnResult[0].Interface().(*UTXOValue)
-		//}
-
-		//log.Println(key, value)
 
 		keyMarshal, err := json.Marshal(key)
 		if err != nil {
@@ -563,9 +511,6 @@ func OpenAndWriteDB(prIn *PrefixRow, options *IterOptions, out string) {
 
 		log.Println(string(keyMarshal), string(valMarshal))
 
-		//if err := db.Put(wo, key, value); err != nil {
-		//	log.Println(err)
-		//}
 		i++
 	}
 }

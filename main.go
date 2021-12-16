@@ -37,11 +37,6 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		pr := &db.PrefixRow{
-			Prefix: []byte{prefixes.UTXO},
-			DB:     dbVal,
-		}
-
 		b, err := hex.DecodeString("000013")
 		if err != nil {
 			log.Println(err)
@@ -59,15 +54,18 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
+			Prefix:       []byte{prefixes.UTXO},
 			Start:        nil,
 			Stop:         stop,
 			IncludeStart: true,
 			IncludeStop:  false,
 			IncludeKey:   true,
 			IncludeValue: true,
+			RawKey:       false,
+			RawValue:     false,
 		}
 
-		db.OpenAndWriteDB(pr, options, "./resources/asdf2.db")
+		db.OpenAndWriteDB(dbVal, options, "./resources/asdf2.db")
 
 		return
 	}

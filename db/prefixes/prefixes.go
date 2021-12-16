@@ -14,10 +14,10 @@ const (
 	EffectiveAmount    = 'D'
 	ClaimExpiration    = 'O'
 
-	ActiveAmount             = 'S'
 	ClaimTakeover            = 'P'
 	PendingActivation        = 'Q'
 	ActivatedClaimAndSupport = 'R'
+	ActiveAmount             = 'S'
 
 	Repost        = 'V'
 	RepostedClaim = 'W'
