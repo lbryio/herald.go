@@ -1,13 +1,67 @@
 package db
 
 import (
+	"encoding/csv"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"os"
 	"testing"
 
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/linxGnu/grocksdb"
 )
+
+const tmpPath = "../resources/tmp_rocksdb/"
+
+func TestHashXUTXO(t *testing.T) {
+
+	tests := []struct {
+		name     string
+		filePath string
+	}{
+		{
+			name:     "Read HashX_UTXO correctly",
+			filePath: "../resources/hashx_utxo.csv",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			log.Println(tt.filePath)
+			file, err := os.Open(tt.filePath)
+			if err != nil {
+				log.Println(err)
+			}
+			reader := csv.NewReader(file)
+			records, err := reader.ReadAll()
+			if err != nil {
+				log.Println(err)
+			}
+
+			wOpts := grocksdb.NewDefaultWriteOptions()
+			opts := grocksdb.NewDefaultOptions()
+			opts.SetCreateIfMissing(true)
+			// opts.SetDBPaths([]*grocksdb.DBPath{grocksdb.NewDBPath(tmpPath, 10000)})
+			db, err := grocksdb.OpenDb(opts, "tmp")
+			defer db.Close()
+			if err != nil {
+				log.Println(err)
+			}
+			for _, record := range records {
+				key, err := hex.DecodeString(record[0])
+				if err != nil {
+					log.Println(err)
+				}
+				val, err := hex.DecodeString(record[1])
+				if err != nil {
+					log.Println(err)
+				}
+				db.Put(wOpts, key, val)
+			}
+		})
+	}
+}
 
 func TestReadUTXO2(t *testing.T) {
 
@@ -38,13 +92,13 @@ func TestReadUTXO2(t *testing.T) {
 			if err != nil {
 				log.Println(err)
 			}
-			stopKey := &UTXOKey{
+			stopKey := &prefixes.UTXOKey{
 				Prefix: []byte{prefixes.UTXO},
 				HashX:  b,
 				TxNum:  0,
 				Nout:   0,
 			}
-			stop := UTXOKeyPackPartial(stopKey, 1)
+			stop := prefixes.UTXOKeyPackPartial(stopKey, 1)
 
 			options := &IterOptions{
 				FillCache:    false,
@@ -66,7 +120,7 @@ func TestReadUTXO2(t *testing.T) {
 			var i = 0
 			for kv := range ch {
 				log.Println(kv.Key)
-				got := kv.Value.(*UTXOValue).Amount
+				got := kv.Value.(*prefixes.UTXOValue).Amount
 				if got != tt.want[i] {
 					t.Errorf("got: %d, want: %d\n", got, tt.want[i])
 				}
@@ -184,13 +238,13 @@ func TestUTXOKey_String(t *testing.T) {
 			hashx:  []byte("AAAAAAAAAA"),
 			txnum:  0,
 			nout:   0,
-			want:   "*db.UTXOKey(hashX=41414141414141414141, tx_num=0, nout=0)",
+			want:   "*prefixes.UTXOKey(hashX=41414141414141414141, tx_num=0, nout=0)",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			key := &UTXOKey{
+			key := &prefixes.UTXOKey{
 				Prefix: tt.prefix,
 				HashX:  tt.hashx,
 				TxNum:  tt.txnum,

@@ -2,15 +2,13 @@ package db
 
 import (
 	"bytes"
-	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"log"
-	"reflect"
+	"os"
 
 	"github.com/lbryio/hub/db/prefixes"
-	"github.com/lbryio/lbry.go/v2/extras/errors"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -25,124 +23,6 @@ type IterOptions struct {
 	IncludeValue bool
 	RawKey       bool
 	RawValue     bool
-}
-
-type PrefixRowKV struct {
-	Key   interface{}
-	Value interface{}
-}
-
-type UTXOKey struct {
-	Prefix []byte `json:"prefix"`
-	HashX  []byte `json:"hashx"`
-	TxNum  uint32 `json:"tx_num"`
-	Nout   uint16 `json:"nout"`
-}
-
-type UTXOValue struct {
-	Amount uint64 `json:"amount"`
-}
-
-func UnpackGenericKey(key []byte) (byte, interface{}, error) {
-	if len(key) == 0 {
-		return 0x0, nil, errors.Base("key length zero")
-	}
-	firstByte := key[0]
-	switch firstByte {
-	case prefixes.ClaimToSupport:
-	case prefixes.SupportToClaim:
-
-	case prefixes.ClaimToTXO:
-	case prefixes.TXOToClaim:
-
-	case prefixes.ClaimToChannel:
-	case prefixes.ChannelToClaim:
-
-	case prefixes.ClaimShortIdPrefix:
-	case prefixes.EffectiveAmount:
-	case prefixes.ClaimExpiration:
-
-	case prefixes.ClaimTakeover:
-	case prefixes.PendingActivation:
-	case prefixes.ActivatedClaimAndSupport:
-	case prefixes.ActiveAmount:
-
-	case prefixes.Repost:
-	case prefixes.RepostedClaim:
-
-	case prefixes.Undo:
-	case prefixes.ClaimDiff:
-
-	case prefixes.Tx:
-	case prefixes.BlockHash:
-	case prefixes.Header:
-	case prefixes.TxNum:
-	case prefixes.TxCount:
-	case prefixes.TxHash:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
-	case prefixes.UTXO:
-		return prefixes.UTXO, UTXOKeyUnpack(key), nil
-	case prefixes.HashXUTXO:
-	case prefixes.HashXHistory:
-	case prefixes.DBState:
-	case prefixes.ChannelCount:
-	case prefixes.SupportAmount:
-	case prefixes.BlockTXs:
-	}
-	return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
-}
-
-func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
-	if len(key) == 0 {
-		return 0x0, nil, errors.Base("key length zero")
-	}
-	if len(value) == 0 {
-		return 0x0, nil, errors.Base("value length zero")
-	}
-
-	firstByte := key[0]
-	switch firstByte {
-	case prefixes.ClaimToSupport:
-	case prefixes.SupportToClaim:
-
-	case prefixes.ClaimToTXO:
-	case prefixes.TXOToClaim:
-
-	case prefixes.ClaimToChannel:
-	case prefixes.ChannelToClaim:
-
-	case prefixes.ClaimShortIdPrefix:
-	case prefixes.EffectiveAmount:
-	case prefixes.ClaimExpiration:
-
-	case prefixes.ClaimTakeover:
-	case prefixes.PendingActivation:
-	case prefixes.ActivatedClaimAndSupport:
-	case prefixes.ActiveAmount:
-
-	case prefixes.Repost:
-	case prefixes.RepostedClaim:
-
-	case prefixes.Undo:
-	case prefixes.ClaimDiff:
-
-	case prefixes.Tx:
-	case prefixes.BlockHash:
-	case prefixes.Header:
-	case prefixes.TxNum:
-	case prefixes.TxCount:
-	case prefixes.TxHash:
-		return 0x0, nil, nil
-	case prefixes.UTXO:
-		return prefixes.UTXO, UTXOValueUnpack(value), nil
-	case prefixes.HashXUTXO:
-	case prefixes.HashXHistory:
-	case prefixes.DBState:
-	case prefixes.ChannelCount:
-	case prefixes.SupportAmount:
-	case prefixes.BlockTXs:
-	}
-	return 0x0, nil, nil
 }
 
 // NewIterateOptions creates a defualt options structure for a db iterator.
@@ -211,18 +91,8 @@ func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
 	return o
 }
 
-func (k *UTXOKey) String() string {
-	return fmt.Sprintf(
-		"%s(hashX=%s, tx_num=%d, nout=%d)",
-		reflect.TypeOf(k),
-		hex.EncodeToString(k.HashX),
-		k.TxNum,
-		k.Nout,
-	)
-}
-
-func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV {
-	ch := make(chan *PrefixRowKV)
+func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
+	ch := make(chan *prefixes.PrefixRowKV)
 
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(opts.FillCache)
@@ -286,7 +156,7 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV {
 				//keyArgs := []reflect.Value{reflect.ValueOf(newKeyData)}
 				//unpackKeyFnResult := unpackKeyFnValue.Call(keyArgs)
 				//outKey = unpackKeyFnResult[0].Interface()
-				_, outKey, err = UnpackGenericKey(newKeyData)
+				_, outKey, err = prefixes.UnpackGenericKey(newKeyData)
 				if err != nil {
 					log.Println(err)
 				}
@@ -304,7 +174,7 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV {
 				//unpackValueFnResult := unpackValueFnValue.Call(valueArgs)
 				//outValue = unpackValueFnResult[0].Interface()
 				if !opts.RawValue {
-					_, outValue, err = UnpackGenericValue(newKeyData, newValueData)
+					_, outValue, err = prefixes.UnpackGenericValue(newKeyData, newValueData)
 					if err != nil {
 						log.Println(err)
 					}
@@ -316,7 +186,7 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV {
 			key.Free()
 			value.Free()
 
-			ch <- &PrefixRowKV{
+			ch <- &prefixes.PrefixRowKV{
 				Key:   outKey,
 				Value: outValue,
 			}
@@ -326,92 +196,6 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *PrefixRowKV {
 	}()
 
 	return ch
-}
-
-func (k *UTXOKey) PackKey() []byte {
-	prefixLen := 1
-	// b'>11sLH'
-	n := prefixLen + 11 + 4 + 2
-	key := make([]byte, n)
-	copy(key, k.Prefix)
-	copy(key[prefixLen:], k.HashX)
-	binary.BigEndian.PutUint32(key[prefixLen+11:], k.TxNum)
-	binary.BigEndian.PutUint16(key[prefixLen+15:], k.Nout)
-
-	return key
-}
-
-// UTXOKeyPackPartialNFields creates a pack partial key function for n fields.
-func UTXOKeyPackPartialNFields(nFields int) func(*UTXOKey) []byte {
-	return func(u *UTXOKey) []byte {
-		return UTXOKeyPackPartial(u, nFields)
-	}
-}
-
-// UTXOKeyPackPartial packs a variable number of fields for a UTXOKey into
-// a byte array.
-func UTXOKeyPackPartial(k *UTXOKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
-	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
-	}
-	if nFields < 0 {
-		nFields = 0
-	}
-
-	// b'>11sLH'
-	prefixLen := 1
-	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
-		switch i {
-		case 1:
-			n += 11
-		case 2:
-			n += 4
-		case 3:
-			n += 2
-		}
-	}
-
-	key := make([]byte, n)
-
-	for i := 0; i <= nFields; i++ {
-		switch i {
-		case 0:
-			copy(key, k.Prefix)
-		case 1:
-			copy(key[prefixLen:], k.HashX)
-		case 2:
-			binary.BigEndian.PutUint32(key[prefixLen+11:], k.TxNum)
-		case 3:
-			binary.BigEndian.PutUint16(key[prefixLen+15:], k.Nout)
-		}
-	}
-
-	return key
-}
-
-func UTXOKeyUnpack(key []byte) *UTXOKey {
-	return &UTXOKey{
-		Prefix: key[:1],
-		HashX:  key[1:12],
-		TxNum:  binary.BigEndian.Uint32(key[12:]),
-		Nout:   binary.BigEndian.Uint16(key[16:]),
-	}
-}
-
-func (k *UTXOValue) PackValue() []byte {
-	value := make([]byte, 8)
-	binary.BigEndian.PutUint64(value, k.Amount)
-
-	return value
-}
-
-func UTXOValueUnpack(value []byte) *UTXOValue {
-	return &UTXOValue{
-		Amount: binary.BigEndian.Uint64(value),
-	}
 }
 
 func GetDB(name string) (*grocksdb.DB, error) {
@@ -425,14 +209,14 @@ func GetDB(name string) (*grocksdb.DB, error) {
 	return db, nil
 }
 
-func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*PrefixRowKV {
+func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*prefixes.PrefixRowKV {
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
 
 	it := db.NewIterator(ro)
 	defer it.Close()
 
-	res := make([]*PrefixRowKV, n)
+	res := make([]*prefixes.PrefixRowKV, n)
 
 	var i = 0
 	it.Seek(prefix)
@@ -440,7 +224,7 @@ func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*PrefixRowKV {
 		key := it.Key()
 		value := it.Value()
 
-		res[i] = &PrefixRowKV{
+		res[i] = &prefixes.PrefixRowKV{
 			Key:   key.Data(),
 			Value: value.Data(),
 		}
@@ -497,8 +281,8 @@ func OpenAndWriteDB(db *grocksdb.DB, options *IterOptions, out string) {
 
 	var i = 0
 	for kv := range ch {
-		key := kv.Key.(*UTXOKey)
-		value := kv.Value.(*UTXOValue)
+		key := kv.Key.(*prefixes.UTXOKey)
+		value := kv.Value.(*prefixes.UTXOValue)
 
 		keyMarshal, err := json.Marshal(key)
 		if err != nil {
@@ -513,4 +297,63 @@ func OpenAndWriteDB(db *grocksdb.DB, options *IterOptions, out string) {
 
 		i++
 	}
+}
+
+func ReadWriteRawN(db *grocksdb.DB, options *IterOptions, out string, n int) {
+
+	options.RawKey = true
+	options.RawValue = true
+	ch := Iter(db, options)
+
+	file, err := os.Create(out)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer file.Close()
+
+	var i = 0
+	for kv := range ch {
+		log.Println(i)
+		if i >= n {
+			return
+		}
+		key := kv.Key.([]byte)
+		value := kv.Value.([]byte)
+		keyHex := hex.EncodeToString(key)
+		valueHex := hex.EncodeToString(value)
+		log.Println(keyHex)
+		log.Println(valueHex)
+		file.WriteString(keyHex)
+		file.WriteString(",")
+		file.WriteString(valueHex)
+		file.WriteString("\n")
+
+		i++
+	}
+}
+
+func GenerateTestData() {
+	dbVal, err := GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// options := &IterOptions{
+	// 	FillCache:    false,
+	// 	Prefix:       []byte{prefixes.HashXUTXO},
+	// 	Start:        nil,
+	// 	Stop:         nil,
+	// 	IncludeStart: true,
+	// 	IncludeStop:  false,
+	// 	IncludeKey:   true,
+	// 	IncludeValue: true,
+	// 	RawKey:       true,
+	// 	RawValue:     true,
+	// }
+	options := NewIterateOptions()
+	options.WithRawKey(true).WithRawValue(true)
+	options.WithPrefix([]byte{prefixes.HashXUTXO})
+
+	ReadWriteRawN(dbVal, options, "./resources/hashx_utxo.csv", 10)
 }
