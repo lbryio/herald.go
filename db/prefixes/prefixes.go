@@ -664,14 +664,110 @@ class ActiveAmountValue(typing.NamedTuple):
 type ActiveAmountKey struct {
 	Prefix           []byte `json:"prefix"`
 	ClaimHash        []byte `json:"claim_hash"`
-	TxoType          int32  `json:"txo_type"`
-	ActivationHeight int32  `json:"activation_height"`
-	TxNum            int32  `json:"tx_num"`
-	Position         int32  `json:"position"`
+	TxoType          uint8  `json:"txo_type"`
+	ActivationHeight uint32 `json:"activation_height"`
+	TxNum            uint32 `json:"tx_num"`
+	Position         uint16 `json:"position"`
 }
 
 type ActiveAmountValue struct {
-	Amount int32 `json:"amount"`
+	Amount uint64 `json:"amount"`
+}
+
+func (k *ActiveAmountKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20sBLLH'
+	n := prefixLen + 20 + 1 + 4 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ClaimHash[:20])
+	copy(key[prefixLen+20:], []byte{k.TxoType})
+	binary.BigEndian.PutUint32(key[prefixLen+20+1:], k.ActivationHeight)
+	binary.BigEndian.PutUint32(key[prefixLen+20+1+4:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+20+1+4+4:], k.Position)
+
+	return key
+}
+
+func (v *ActiveAmountValue) PackValue() []byte {
+	// b'>Q'
+	value := make([]byte, 8)
+	binary.BigEndian.PutUint64(value, v.Amount)
+
+	return value
+}
+
+func ActiveAmountKeyPackPartialNFields(nFields int) func(*ActiveAmountKey) []byte {
+	return func(u *ActiveAmountKey) []byte {
+		return ActiveAmountKeyPackPartial(u, nFields)
+	}
+}
+
+func ActiveAmountKeyPackPartial(k *ActiveAmountKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 5 {
+		nFields = 5
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		case 2:
+			n += 1
+		case 3:
+			n += 4
+		case 4:
+			n += 4
+		case 5:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ClaimHash)
+		case 2:
+			copy(key[prefixLen+20:], []byte{k.TxoType})
+		case 3:
+			binary.BigEndian.PutUint32(key[prefixLen+20+1:], k.ActivationHeight)
+		case 4:
+			binary.BigEndian.PutUint32(key[prefixLen+20+1+4:], k.TxNum)
+		case 5:
+			binary.BigEndian.PutUint16(key[prefixLen+20+1+4+4:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func ActiveAmountKeyUnpack(key []byte) *ActiveAmountKey {
+	prefixLen := 1
+	return &ActiveAmountKey{
+		Prefix:           key[:prefixLen],
+		ClaimHash:        key[prefixLen : prefixLen+20],
+		TxoType:          uint8(key[prefixLen+20 : prefixLen+20+1][0]),
+		ActivationHeight: binary.BigEndian.Uint32(key[prefixLen+20+1:]),
+		TxNum:            binary.BigEndian.Uint32(key[prefixLen+20+1+4:]),
+		Position:         binary.BigEndian.Uint16(key[prefixLen+20+1+4+4:]),
+	}
+}
+
+func ActiveAmountValueUnpack(value []byte) *ActiveAmountValue {
+	return &ActiveAmountValue{
+		Amount: binary.BigEndian.Uint64(value),
+	}
 }
 
 //
@@ -1427,8 +1523,9 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case ClaimTakeover:
 	case PendingActivation:
 	case ActivatedClaimAndSupport:
-	case ActiveAmount:
 		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+	case ActiveAmount:
+		return ActiveAmount, ActiveAmountKeyUnpack(key), nil
 
 	case Repost:
 		return Repost, RepostKeyUnpack(key), nil
@@ -1488,8 +1585,9 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case ClaimTakeover:
 	case PendingActivation:
 	case ActivatedClaimAndSupport:
-	case ActiveAmount:
 		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+	case ActiveAmount:
+		return ActiveAmount, ActiveAmountValueUnpack(value), nil
 
 	case Repost:
 		return Repost, RepostValueUnpack(value), nil
