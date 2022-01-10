@@ -747,12 +747,95 @@ class RepostedValue(typing.NamedTuple):
 type RepostedKey struct {
 	Prefix            []byte `json:"prefix"`
 	RepostedClaimHash []byte `json:"reposted_claim_hash"`
-	TxNum             int32  `json:"tx_num"`
-	Position          int32  `json:"position"`
+	TxNum             uint32 `json:"tx_num"`
+	Position          uint16 `json:"position"`
 }
 
 type RepostedValue struct {
 	ClaimHash []byte `json:"claim_hash"`
+}
+
+func (k *RepostedKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20sLH'
+	n := prefixLen + 20 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.RepostedClaimHash)
+	binary.BigEndian.PutUint32(key[prefixLen+20:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+24:], k.Position)
+
+	return key
+}
+
+func (v *RepostedValue) PackValue() []byte {
+	// b'>20s'
+	value := make([]byte, 20)
+	copy(value, v.ClaimHash)
+
+	return value
+}
+
+func RepostedKeyPackPartialNFields(nFields int) func(*RepostedKey) []byte {
+	return func(u *RepostedKey) []byte {
+		return RepostedKeyPackPartial(u, nFields)
+	}
+}
+
+func RepostedKeyPackPartial(k *RepostedKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 3 {
+		nFields = 3
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		case 2:
+			n += 4
+		case 3:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.RepostedClaimHash)
+		case 2:
+			binary.BigEndian.PutUint32(key[prefixLen+20:], k.TxNum)
+		case 3:
+			binary.BigEndian.PutUint16(key[prefixLen+24:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func RepostedKeyUnpack(key []byte) *RepostedKey {
+	return &RepostedKey{
+		Prefix:            key[:1],
+		RepostedClaimHash: key[1:21],
+		TxNum:             binary.BigEndian.Uint32(key[21:]),
+		Position:          binary.BigEndian.Uint16(key[25:]),
+	}
+}
+
+func RepostedValueUnpack(value []byte) *RepostedValue {
+	return &RepostedValue{
+		ClaimHash: value[:20],
+	}
 }
 
 //
@@ -848,6 +931,7 @@ func (v *TouchedOrDeletedClaimValue) PackValue() []byte {
 	value := make([]byte, n)
 	binary.BigEndian.PutUint32(value, touchedLen)
 	binary.BigEndian.PutUint32(value[4:], deletedLen)
+	// These are sorted for consistency with the Python implementation
 	sort.Slice(v.TouchedClaims, func(i, j int) bool { return bytes.Compare(v.TouchedClaims[i], v.TouchedClaims[j]) < 0 })
 	sort.Slice(v.DeletedClaims, func(i, j int) bool { return bytes.Compare(v.DeletedClaims[i], v.DeletedClaims[j]) < 0 })
 
@@ -917,14 +1001,10 @@ func TouchedOrDeletedClaimValueUnpack(value []byte) *TouchedOrDeletedClaimValue 
 	deletedClaims := make([][]byte, deletedLen)
 	var j = 8
 	for i := 0; i < int(touchedLen); i++ {
-		//touchedClaims[i] = make([]byte, 20)
-		//copy(touchedClaims[i], value[j:j+20])
 		touchedClaims[i] = value[j : j+20]
 		j += 20
 	}
 	for i := 0; i < int(deletedLen); i++ {
-		//deletedClaims[i] = make([]byte, 20)
-		//copy(deletedClaims[i], value[j:j+20])
 		deletedClaims[i] = value[j : j+20]
 		j += 20
 	}
@@ -1167,7 +1247,9 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case ActiveAmount:
 
 	case Repost:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 	case RepostedClaim:
+		return RepostedClaim, RepostedKeyUnpack(key), nil
 
 	case Undo:
 		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
@@ -1223,7 +1305,9 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case ActiveAmount:
 
 	case Repost:
+		return 0x0, nil, nil
 	case RepostedClaim:
+		return RepostedClaim, RepostedValueUnpack(value), nil
 
 	case Undo:
 		return 0x0, nil, nil
