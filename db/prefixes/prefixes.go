@@ -725,6 +725,79 @@ type RepostValue struct {
 	RepostedClaimHash []byte `json:"reposted_claim_hash"`
 }
 
+func (k *RepostKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20s'
+	n := prefixLen + 20
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ClaimHash)
+
+	return key
+}
+
+func (v *RepostValue) PackValue() []byte {
+	// FIXME: Is there a limit to this length?
+	n := len(v.RepostedClaimHash)
+	value := make([]byte, n)
+	copy(value, v.RepostedClaimHash)
+
+	return value
+}
+
+func RepostKeyPackPartialNFields(nFields int) func(*RepostKey) []byte {
+	return func(u *RepostKey) []byte {
+		return RepostKeyPackPartial(u, nFields)
+	}
+}
+
+func RepostKeyPackPartial(k *RepostKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ClaimHash)
+		}
+	}
+
+	return key
+}
+
+func RepostKeyUnpack(key []byte) *RepostKey {
+	prefixLen := 1
+	return &RepostKey{
+		Prefix:    key[:prefixLen],
+		ClaimHash: key[prefixLen : prefixLen+20],
+	}
+}
+
+func RepostValueUnpack(value []byte) *RepostValue {
+	return &RepostValue{
+		RepostedClaimHash: value[:],
+	}
+}
+
 /*
 
 class RepostedKey(typing.NamedTuple):
@@ -824,11 +897,12 @@ func RepostedKeyPackPartial(k *RepostedKey, nFields int) []byte {
 }
 
 func RepostedKeyUnpack(key []byte) *RepostedKey {
+	prefixLen := 1
 	return &RepostedKey{
-		Prefix:            key[:1],
-		RepostedClaimHash: key[1:21],
-		TxNum:             binary.BigEndian.Uint32(key[21:]),
-		Position:          binary.BigEndian.Uint16(key[25:]),
+		Prefix:            key[:prefixLen],
+		RepostedClaimHash: key[prefixLen : prefixLen+20],
+		TxNum:             binary.BigEndian.Uint32(key[prefixLen+20:]),
+		Position:          binary.BigEndian.Uint16(key[prefixLen+24:]),
 	}
 }
 
@@ -988,9 +1062,10 @@ func TouchedOrDeletedClaimKeyPackPartial(k *TouchedOrDeletedClaimKey, nFields in
 }
 
 func TouchedOrDeletedClaimKeyUnpack(key []byte) *TouchedOrDeletedClaimKey {
+	prefixLen := 1
 	return &TouchedOrDeletedClaimKey{
-		Prefix: key[:1],
-		Height: int32(binary.BigEndian.Uint32(key[1:])),
+		Prefix: key[:prefixLen],
+		Height: int32(binary.BigEndian.Uint32(key[prefixLen:])),
 	}
 }
 
@@ -1108,11 +1183,12 @@ func HashXUTXOKeyPackPartial(k *HashXUTXOKey, nFields int) []byte {
 }
 
 func HashXUTXOKeyUnpack(key []byte) *HashXUTXOKey {
+	prefixLen := 1
 	return &HashXUTXOKey{
-		Prefix:      key[:1],
-		ShortTXHash: key[1:5],
-		TxNum:       binary.BigEndian.Uint32(key[5:]),
-		Nout:        binary.BigEndian.Uint16(key[9:]),
+		Prefix:      key[:prefixLen],
+		ShortTXHash: key[prefixLen : prefixLen+4],
+		TxNum:       binary.BigEndian.Uint32(key[prefixLen+4:]),
+		Nout:        binary.BigEndian.Uint16(key[prefixLen+8:]),
 	}
 }
 
@@ -1208,11 +1284,12 @@ func UTXOKeyPackPartial(k *UTXOKey, nFields int) []byte {
 }
 
 func UTXOKeyUnpack(key []byte) *UTXOKey {
+	prefixLen := 1
 	return &UTXOKey{
-		Prefix: key[:1],
-		HashX:  key[1:12],
-		TxNum:  binary.BigEndian.Uint32(key[12:]),
-		Nout:   binary.BigEndian.Uint16(key[16:]),
+		Prefix: key[:prefixLen],
+		HashX:  key[prefixLen : prefixLen+11],
+		TxNum:  binary.BigEndian.Uint32(key[prefixLen+11:]),
+		Nout:   binary.BigEndian.Uint16(key[prefixLen+15:]),
 	}
 }
 
@@ -1245,9 +1322,10 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case PendingActivation:
 	case ActivatedClaimAndSupport:
 	case ActiveAmount:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 
 	case Repost:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return Repost, RepostKeyUnpack(key), nil
 	case RepostedClaim:
 		return RepostedClaim, RepostedKeyUnpack(key), nil
 
@@ -1303,9 +1381,10 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case PendingActivation:
 	case ActivatedClaimAndSupport:
 	case ActiveAmount:
+		return 0x0, nil, nil
 
 	case Repost:
-		return 0x0, nil, nil
+		return Repost, RepostValueUnpack(value), nil
 	case RepostedClaim:
 		return RepostedClaim, RepostedValueUnpack(value), nil
 

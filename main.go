@@ -31,7 +31,6 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd {
-		//dbVal, err := db.GetDB("./resources/asdf.db")
 		dbVal, err := db.GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
 		if err != nil {
 			log.Fatalln(err)
@@ -39,7 +38,7 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
-			Prefix:       []byte{prefixes.ClaimDiff},
+			Prefix:       []byte{prefixes.Repost},
 			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
@@ -50,37 +49,7 @@ func main() {
 			RawValue:     true,
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/claim_diff.csv", 10)
-
-		// b, err := hex.DecodeString("000013")
-		// if err != nil {
-		// 	log.Println(err)
-		// }
-		// stopKey := &prefixes.UTXOKey{
-		// 	Prefix: []byte{prefixes.UTXO},
-		// 	HashX:  b,
-		// 	TxNum:  0,
-		// 	Nout:   0,
-		// }
-		// stop := prefixes.UTXOKeyPackPartial(stopKey, 1)
-
-		// log.Println(stop)
-		// log.Print(hex.EncodeToString(stop))
-
-		// options := &db.IterOptions{
-		// 	FillCache:    false,
-		// 	Prefix:       []byte{prefixes.UTXO},
-		// 	Start:        nil,
-		// 	Stop:         stop,
-		// 	IncludeStart: true,
-		// 	IncludeStop:  false,
-		// 	IncludeKey:   true,
-		// 	IncludeValue: true,
-		// 	RawKey:       false,
-		// 	RawValue:     false,
-		// }
-
-		// db.OpenAndWriteDB(dbVal, options, "./resources/asdf2.db")
+		db.ReadWriteRawN(dbVal, options, "./resources/repost.csv", 10)
 
 		return
 	}
