@@ -54,6 +54,8 @@ const (
 
 	ACTIVATED_CLAIM_TXO_TYPE   = 1
 	ACTIVATED_SUPPORT_TXO_TYPE = 2
+
+	OnesCompTwiddle uint64 = 0xffffffffffffffff
 )
 
 type PrefixRowKV struct {
@@ -672,6 +674,9 @@ type ActiveAmountValue struct {
 	Amount int32 `json:"amount"`
 }
 
+//
+// EffectiveAmountKey / EffectiveAmountValue
+//
 /*
 
 class EffectiveAmountKey(typing.NamedTuple):
@@ -691,13 +696,112 @@ class EffectiveAmountValue(typing.NamedTuple):
 type EffectiveAmountKey struct {
 	Prefix          []byte `json:"prefix"`
 	NormalizedName  string `json:"normalized_name"`
-	EffectiveAmount int32  `json:"effective_amount"`
-	TxNum           int32  `json:"tx_num"`
-	Position        int32  `json:"position"`
+	EffectiveAmount uint64 `json:"effective_amount"`
+	TxNum           uint32 `json:"tx_num"`
+	Position        uint16 `json:"position"`
 }
 
 type EffectiveAmountValue struct {
 	ClaimHash []byte `json:"claim_hash"`
+}
+
+func (k *EffectiveAmountKey) PackKey() []byte {
+	prefixLen := 1
+	// 2 byte length field, plus number of bytes in name
+	nameLen := len(k.NormalizedName)
+	nameLenLen := 2 + nameLen
+	// b'>QLH'
+	n := prefixLen + nameLenLen + 8 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+
+	binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
+	copy(key[prefixLen+2:], []byte(k.NormalizedName))
+	binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle-k.EffectiveAmount)
+	binary.BigEndian.PutUint32(key[prefixLen+nameLenLen+8:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+nameLenLen+8+4:], k.Position)
+
+	return key
+}
+
+func (v *EffectiveAmountValue) PackValue() []byte {
+	// b'>20s'
+	value := make([]byte, 20)
+	copy(value, v.ClaimHash[:20])
+
+	return value
+}
+
+func EffectiveAmountKeyPackPartialNFields(nFields int) func(*EffectiveAmountKey) []byte {
+	return func(u *EffectiveAmountKey) []byte {
+		return EffectiveAmountKeyPackPartial(u, nFields)
+	}
+}
+
+func EffectiveAmountKeyPackPartial(k *EffectiveAmountKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	nameLen := len(k.NormalizedName)
+	nameLenLen := 2 + nameLen
+	if nFields > 4 {
+		nFields = 4
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 2 + nameLen
+		case 2:
+			n += 8
+		case 3:
+			n += 4
+		case 4:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
+			copy(key[prefixLen+2:], []byte(k.NormalizedName))
+		case 2:
+			binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle-k.EffectiveAmount)
+		case 3:
+			binary.BigEndian.PutUint32(key[prefixLen+nameLenLen+8:], k.TxNum)
+		case 4:
+			binary.BigEndian.PutUint16(key[prefixLen+nameLenLen+8+4:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func EffectiveAmountKeyUnpack(key []byte) *EffectiveAmountKey {
+	prefixLen := 1
+	nameLen := binary.BigEndian.Uint16(key[prefixLen:])
+	return &EffectiveAmountKey{
+		Prefix:          key[:prefixLen],
+		NormalizedName:  string(key[prefixLen+2 : prefixLen+2+int(nameLen)]),
+		EffectiveAmount: OnesCompTwiddle - binary.BigEndian.Uint64(key[prefixLen+2+int(nameLen):]),
+		TxNum:           binary.BigEndian.Uint32(key[prefixLen+2+int(nameLen)+8:]),
+		Position:        binary.BigEndian.Uint16(key[prefixLen+2+int(nameLen)+8+4:]),
+	}
+}
+
+func EffectiveAmountValueUnpack(value []byte) *EffectiveAmountValue {
+	return &EffectiveAmountValue{
+		ClaimHash: value[:20],
+	}
 }
 
 /*
@@ -1315,7 +1419,9 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case ChannelToClaim:
 
 	case ClaimShortIdPrefix:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 	case EffectiveAmount:
+		return EffectiveAmount, EffectiveAmountKeyUnpack(key), nil
 	case ClaimExpiration:
 
 	case ClaimTakeover:
@@ -1374,14 +1480,16 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case ChannelToClaim:
 
 	case ClaimShortIdPrefix:
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 	case EffectiveAmount:
+		return EffectiveAmount, EffectiveAmountValueUnpack(value), nil
 	case ClaimExpiration:
 
 	case ClaimTakeover:
 	case PendingActivation:
 	case ActivatedClaimAndSupport:
 	case ActiveAmount:
-		return 0x0, nil, nil
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 
 	case Repost:
 		return Repost, RepostValueUnpack(value), nil
@@ -1389,7 +1497,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 		return RepostedClaim, RepostedValueUnpack(value), nil
 
 	case Undo:
-		return 0x0, nil, nil
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 	case ClaimDiff:
 		return ClaimDiff, TouchedOrDeletedClaimValueUnpack(value), nil
 
@@ -1399,7 +1507,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case TxNum:
 	case TxCount:
 	case TxHash:
-		return 0x0, nil, nil
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 	case UTXO:
 		return UTXO, UTXOValueUnpack(value), nil
 	case HashXUTXO:
@@ -1410,5 +1518,5 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case SupportAmount:
 	case BlockTXs:
 	}
-	return 0x0, nil, nil
+	return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 }

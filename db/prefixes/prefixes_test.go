@@ -44,6 +44,94 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 	return db, records, toDefer
 }
 
+func TestEffectiveAmount(t *testing.T) {
+
+	filePath := "../../resources/effective_amount.csv"
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	db, records, toDefer := testInit(filePath)
+	defer toDefer()
+	for _, record := range records {
+		key, err := hex.DecodeString(record[0])
+		if err != nil {
+			log.Println(err)
+		}
+		val, err := hex.DecodeString(record[1])
+		if err != nil {
+			log.Println(err)
+		}
+		db.Put(wOpts, key, val)
+	}
+	// test prefix
+	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.EffectiveAmount}).WithIncludeValue(true)
+	ch := dbpkg.Iter(db, options)
+	var i = 0
+	for kv := range ch {
+		// log.Println(kv.Key)
+		gotKey := kv.Key.(*prefixes.EffectiveAmountKey).PackKey()
+
+		keyPartial1 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 1)
+		keyPartial2 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 2)
+		keyPartial3 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 3)
+		keyPartial4 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 4)
+
+		// Check pack partial for sanity
+		if !bytes.HasPrefix(gotKey, keyPartial1) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
+		}
+		if !bytes.HasPrefix(gotKey, keyPartial2) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
+		}
+		if !bytes.HasPrefix(gotKey, keyPartial3) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
+		}
+		if !bytes.HasPrefix(gotKey, keyPartial4) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial4, gotKey)
+		}
+
+		got := kv.Value.(*prefixes.EffectiveAmountValue).PackValue()
+		wantKey, err := hex.DecodeString(records[i][0])
+		if err != nil {
+			log.Println(err)
+		}
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(gotKey, wantKey) {
+			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+
+	// Test start / stop
+	start, err := hex.DecodeString(records[0][0])
+	if err != nil {
+		log.Println(err)
+	}
+	stop, err := hex.DecodeString(records[9][0])
+	if err != nil {
+		log.Println(err)
+	}
+	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+	ch2 := dbpkg.Iter(db, options2)
+	i = 0
+	for kv := range ch2 {
+		got := kv.Value.(*prefixes.EffectiveAmountValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+}
+
 func TestRepost(t *testing.T) {
 
 	filePath := "../../resources/repost.csv"

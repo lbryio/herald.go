@@ -38,7 +38,7 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
-			Prefix:       []byte{prefixes.Repost},
+			Prefix:       []byte{prefixes.EffectiveAmount},
 			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
@@ -49,7 +49,7 @@ func main() {
 			RawValue:     true,
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/repost.csv", 10)
+		db.ReadWriteRawN(dbVal, options, "./resources/effective_amount.csv", 10)
 
 		return
 	}
