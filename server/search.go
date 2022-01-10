@@ -260,6 +260,7 @@ func (s *Server) Search(ctx context.Context, in *pb.SearchRequest) (*pb.Outputs,
 		res, err := client.IndexStats(searchIndices[0]).Do(ctx)
 		if err != nil {
 			log.Printf("Error on ES index stats\n%v\n", err)
+			return &pb.Outputs{}, nil
 		}
 		numRefreshes := res.Indices[searchIndices[0]].Primaries.Refresh.Total
 		if numRefreshes != s.NumESRefreshes {
