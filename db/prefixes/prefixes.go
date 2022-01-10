@@ -1,10 +1,13 @@
 package prefixes
 
 import (
+	"bytes"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"log"
 	"reflect"
+	"sort"
 	"strings"
 
 	"github.com/lbryio/lbry.go/extras/errors"
@@ -752,6 +755,10 @@ type RepostedValue struct {
 	ClaimHash []byte `json:"claim_hash"`
 }
 
+//
+// TouchedOrDeletedClaimKey / TouchedOrDeletedClaimValue
+//
+
 /*
 class TouchedOrDeletedClaimKey(typing.NamedTuple):
     height: int
@@ -804,6 +811,127 @@ func (v *TouchedOrDeletedClaimValue) String() string {
 		touchedSB.String(),
 		deletedSB.String(),
 	)
+}
+
+func (k *TouchedOrDeletedClaimKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 4
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], uint32(k.Height))
+
+	return key
+}
+
+func (v *TouchedOrDeletedClaimValue) PackValue() []byte {
+	var touchedLen, deletedLen uint32 = 0, 0
+	if v.TouchedClaims != nil {
+		for _, claim := range v.TouchedClaims {
+			if len(claim) != 20 {
+				log.Println("TouchedOrDeletedClaimValue: claim not length 20?!?")
+				return nil
+			}
+		}
+		touchedLen = uint32(len(v.TouchedClaims))
+	}
+	if v.DeletedClaims != nil {
+		for _, claim := range v.DeletedClaims {
+			if len(claim) != 20 {
+				log.Println("TouchedOrDeletedClaimValue: claim not length 20?!?")
+				return nil
+			}
+		}
+		deletedLen = uint32(len(v.DeletedClaims))
+	}
+	n := 4 + 4 + 20*touchedLen + 20*deletedLen
+	value := make([]byte, n)
+	binary.BigEndian.PutUint32(value, touchedLen)
+	binary.BigEndian.PutUint32(value[4:], deletedLen)
+	sort.Slice(v.TouchedClaims, func(i, j int) bool { return bytes.Compare(v.TouchedClaims[i], v.TouchedClaims[j]) < 0 })
+	sort.Slice(v.DeletedClaims, func(i, j int) bool { return bytes.Compare(v.DeletedClaims[i], v.DeletedClaims[j]) < 0 })
+
+	var i = 8
+	for j := 0; j < int(touchedLen); j++ {
+		copy(value[i:], v.TouchedClaims[j])
+		i += 20
+	}
+	for j := 0; j < int(deletedLen); j++ {
+		copy(value[i:], v.DeletedClaims[j])
+		i += 20
+	}
+
+	return value
+}
+
+func TouchedOrDeletedClaimPackPartialNFields(nFields int) func(*TouchedOrDeletedClaimKey) []byte {
+	return func(u *TouchedOrDeletedClaimKey) []byte {
+		return TouchedOrDeletedClaimKeyPackPartial(u, nFields)
+	}
+}
+
+func TouchedOrDeletedClaimKeyPackPartial(k *TouchedOrDeletedClaimKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], uint32(k.Height))
+		}
+	}
+
+	return key
+}
+
+func TouchedOrDeletedClaimKeyUnpack(key []byte) *TouchedOrDeletedClaimKey {
+	return &TouchedOrDeletedClaimKey{
+		Prefix: key[:1],
+		Height: int32(binary.BigEndian.Uint32(key[1:])),
+	}
+}
+
+func TouchedOrDeletedClaimValueUnpack(value []byte) *TouchedOrDeletedClaimValue {
+	touchedLen := binary.BigEndian.Uint32(value)
+	deletedLen := binary.BigEndian.Uint32(value[4:])
+	touchedClaims := make([][]byte, touchedLen)
+	deletedClaims := make([][]byte, deletedLen)
+	var j = 8
+	for i := 0; i < int(touchedLen); i++ {
+		//touchedClaims[i] = make([]byte, 20)
+		//copy(touchedClaims[i], value[j:j+20])
+		touchedClaims[i] = value[j : j+20]
+		j += 20
+	}
+	for i := 0; i < int(deletedLen); i++ {
+		//deletedClaims[i] = make([]byte, 20)
+		//copy(deletedClaims[i], value[j:j+20])
+		deletedClaims[i] = value[j : j+20]
+		j += 20
+	}
+	return &TouchedOrDeletedClaimValue{
+		TouchedClaims: touchedClaims,
+		DeletedClaims: deletedClaims,
+	}
 }
 
 //
@@ -1042,7 +1170,9 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case RepostedClaim:
 
 	case Undo:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 	case ClaimDiff:
+		return ClaimDiff, TouchedOrDeletedClaimKeyUnpack(key), nil
 
 	case Tx:
 	case BlockHash:
@@ -1054,6 +1184,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case UTXO:
 		return UTXO, UTXOKeyUnpack(key), nil
 	case HashXUTXO:
+		return UTXO, HashXUTXOKeyUnpack(key), nil
 	case HashXHistory:
 	case DBState:
 	case ChannelCount:
@@ -1095,7 +1226,9 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case RepostedClaim:
 
 	case Undo:
+		return 0x0, nil, nil
 	case ClaimDiff:
+		return ClaimDiff, TouchedOrDeletedClaimValueUnpack(value), nil
 
 	case Tx:
 	case BlockHash:
@@ -1107,6 +1240,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case UTXO:
 		return UTXO, UTXOValueUnpack(value), nil
 	case HashXUTXO:
+		return HashXUTXO, HashXUTXOValueUnpack(value), nil
 	case HashXHistory:
 	case DBState:
 	case ChannelCount:

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +14,182 @@ import (
 )
 
 const tmpPath = "../resources/tmp_rocksdb/"
+
+func TestClaimDiff(t *testing.T) {
+
+	filePath := "../resources/claim_diff.csv"
+
+	log.Println(filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Println(err)
+	}
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		log.Println(err)
+	}
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	opts := grocksdb.NewDefaultOptions()
+	opts.SetCreateIfMissing(true)
+	db, err := grocksdb.OpenDb(opts, "tmp")
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
+	for _, record := range records {
+		key, err := hex.DecodeString(record[0])
+		if err != nil {
+			log.Println(err)
+		}
+		val, err := hex.DecodeString(record[1])
+		if err != nil {
+			log.Println(err)
+		}
+		db.Put(wOpts, key, val)
+	}
+	// test prefix
+	options := NewIterateOptions().WithPrefix([]byte{prefixes.ClaimDiff}).WithIncludeValue(true)
+	ch := Iter(db, options)
+	var i = 0
+	for kv := range ch {
+		// log.Println(kv.Key)
+		gotKey := kv.Key.(*prefixes.TouchedOrDeletedClaimKey).PackKey()
+		got := kv.Value.(*prefixes.TouchedOrDeletedClaimValue).PackValue()
+		wantKey, err := hex.DecodeString(records[i][0])
+		if err != nil {
+			log.Println(err)
+		}
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(gotKey, wantKey) {
+			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+	err = os.RemoveAll("tmp")
+	if err != nil {
+		log.Println(err)
+	}
+	// Test start / stop
+	start, err := hex.DecodeString(records[0][0])
+	if err != nil {
+		log.Println(err)
+	}
+	stop, err := hex.DecodeString(records[9][0])
+	if err != nil {
+		log.Println(err)
+	}
+	options2 := NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+	ch2 := Iter(db, options2)
+	i = 0
+	for kv := range ch2 {
+		log.Println(kv.Key)
+		got := kv.Value.(*prefixes.TouchedOrDeletedClaimValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+	err = os.RemoveAll("tmp")
+	if err != nil {
+		log.Println(err)
+	}
+}
+
+func TestUTXO(t *testing.T) {
+
+	filePath := "../resources/utxo.csv"
+
+	log.Println(filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Println(err)
+	}
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		log.Println(err)
+	}
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	opts := grocksdb.NewDefaultOptions()
+	opts.SetCreateIfMissing(true)
+	db, err := grocksdb.OpenDb(opts, "tmp")
+	if err != nil {
+		log.Println(err)
+	}
+	defer db.Close()
+	for _, record := range records {
+		key, err := hex.DecodeString(record[0])
+		if err != nil {
+			log.Println(err)
+		}
+		val, err := hex.DecodeString(record[1])
+		if err != nil {
+			log.Println(err)
+		}
+		db.Put(wOpts, key, val)
+	}
+	// test prefix
+	options := NewIterateOptions().WithPrefix([]byte{prefixes.UTXO}).WithIncludeValue(true)
+	ch := Iter(db, options)
+	var i = 0
+	for kv := range ch {
+		log.Println(kv.Key)
+		got := kv.Value.(*prefixes.UTXOValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+	err = os.RemoveAll("./tmp")
+	if err != nil {
+		log.Println(err)
+	}
+	// Test start / stop
+	start, err := hex.DecodeString(records[0][0])
+	if err != nil {
+		log.Println(err)
+	}
+	stop, err := hex.DecodeString(records[9][0])
+	if err != nil {
+		log.Println(err)
+	}
+	options2 := NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+	ch2 := Iter(db, options2)
+	i = 0
+	for kv := range ch2 {
+		log.Println(kv.Key)
+		got := kv.Value.(*prefixes.UTXOValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+	err = os.RemoveAll("./tmp")
+	if err != nil {
+		log.Println(err)
+	}
+}
 
 func TestHashXUTXO(t *testing.T) {
 
@@ -42,12 +219,11 @@ func TestHashXUTXO(t *testing.T) {
 			wOpts := grocksdb.NewDefaultWriteOptions()
 			opts := grocksdb.NewDefaultOptions()
 			opts.SetCreateIfMissing(true)
-			// opts.SetDBPaths([]*grocksdb.DBPath{grocksdb.NewDBPath(tmpPath, 10000)})
 			db, err := grocksdb.OpenDb(opts, "tmp")
-			defer db.Close()
 			if err != nil {
 				log.Println(err)
 			}
+			defer db.Close()
 			for _, record := range records {
 				key, err := hex.DecodeString(record[0])
 				if err != nil {
@@ -59,166 +235,32 @@ func TestHashXUTXO(t *testing.T) {
 				}
 				db.Put(wOpts, key, val)
 			}
-		})
-	}
-}
-
-func TestReadUTXO2(t *testing.T) {
-
-	tests := []struct {
-		name      string
-		want      []uint64
-		wantTotal int
-	}{
-		{
-			name:      "Read UTXO Key Values With Stop",
-			want:      []uint64{2174594, 200000000, 20000000, 100000, 603510, 75000000, 100000, 962984, 25000000, 50000000},
-			wantTotal: 7,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db, err := GetDB("../resources/asdf.db")
-			if err != nil {
-				t.Errorf("err not nil: %+v\n", err)
-			}
-			defer db.Close()
-			//utxoRow := &PrefixRow{
-			//	Prefix: []byte{prefixes.UTXO},
-			//	DB:     db,
-			//}
-			b, err := hex.DecodeString("000012")
+			start, err := hex.DecodeString(records[0][0])
 			if err != nil {
 				log.Println(err)
 			}
-			stopKey := &prefixes.UTXOKey{
-				Prefix: []byte{prefixes.UTXO},
-				HashX:  b,
-				TxNum:  0,
-				Nout:   0,
-			}
-			stop := prefixes.UTXOKeyPackPartial(stopKey, 1)
-
-			options := &IterOptions{
-				FillCache:    false,
-				Prefix:       []byte{prefixes.UTXO},
-				Start:        nil,
-				Stop:         stop,
-				IncludeStart: true,
-				IncludeStop:  false,
-				IncludeKey:   true,
-				IncludeValue: true,
-				RawKey:       false,
-				RawValue:     false,
-			}
-
-			log.Println(options)
-
+			options := NewIterateOptions().WithPrefix([]byte{prefixes.HashXUTXO}).WithStart(start).WithIncludeValue(true)
 			ch := Iter(db, options)
-
 			var i = 0
 			for kv := range ch {
 				log.Println(kv.Key)
-				got := kv.Value.(*prefixes.UTXOValue).Amount
-				if got != tt.want[i] {
-					t.Errorf("got: %d, want: %d\n", got, tt.want[i])
+				got := kv.Value.(*prefixes.HashXUTXOValue).PackValue()
+				want, err := hex.DecodeString(records[i][1])
+				if err != nil {
+					log.Println(err)
+				}
+				if !bytes.Equal(got, want) {
+					t.Errorf("got: %+v, want: %+v\n", got, want)
 				}
 				i++
+				if i > 9 {
+					return
+				}
 			}
-
-			got := i
-			if got != tt.wantTotal {
-				t.Errorf("got: %d, want: %d\n", got, tt.want)
+			err = os.RemoveAll("./tmp")
+			if err != nil {
+				log.Println(err)
 			}
-		})
-	}
-
-}
-
-// func TestReadUTXO(t *testing.T) {
-
-// 	tests := []struct {
-// 		name string
-// 		want int
-// 	}{
-// 		{
-// 			name: "Read UTXO Key Values",
-// 			want: 12,
-// 		},
-// 	}
-
-// 	for _, tt := range tests {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			db, err := GetDB("../resources/asdf.db")
-// 			if err != nil {
-// 				t.Errorf("err not nil: %+v\n", err)
-// 			}
-// 			defer db.Close()
-
-// 			data := ReadPrefixN(db, prefixes.UTXO, tt.want)
-
-// 			got := len(data)
-
-// 			for _, kv := range data {
-// 				log.Println(UTXOKeyUnpack(kv.Key))
-// 				log.Println(UTXOValueUnpack(kv.Value))
-// 			}
-
-// 			if got != tt.want {
-// 				t.Errorf("got: %d, want: %d\n", got, tt.want)
-// 			}
-// 		})
-// 	}
-
-// }
-
-// TestOpenDB test to see if we can open a db
-func TestOpenDB(t *testing.T) {
-
-	tests := []struct {
-		name string
-		want int
-	}{
-		{
-			name: "Open a rocksdb database",
-			want: 10,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			vals := OpenDB("../resources/tmp.db", "foo")
-			got := vals
-
-			if got != tt.want {
-				t.Errorf("got: %d, want: %d\n", got, tt.want)
-			}
-		})
-	}
-
-}
-
-func TestOpenDB2(t *testing.T) {
-
-	tests := []struct {
-		name string
-		want int
-	}{
-		{
-			name: "Open a rocksdb database",
-			want: 10,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			OpenDB("../resources/asdf.db", "u")
-			// got := vals
-
-			// if got != tt.want {
-			// 	t.Errorf("got: %d, want: %d\n", got, tt.want)
-			// }
 		})
 	}
 }

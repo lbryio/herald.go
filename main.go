@@ -39,7 +39,7 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
-			Prefix:       []byte{prefixes.HashXUTXO},
+			Prefix:       []byte{prefixes.ClaimDiff},
 			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
@@ -50,7 +50,7 @@ func main() {
 			RawValue:     true,
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/hashx_utxo.csv", 10)
+		db.ReadWriteRawN(dbVal, options, "./resources/claim_diff.csv", 10)
 
 		// b, err := hex.DecodeString("000013")
 		// if err != nil {
