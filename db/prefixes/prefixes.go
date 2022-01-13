@@ -555,7 +555,7 @@ type ClaimTakeoverKey struct {
 
 type ClaimTakeoverValue struct {
 	ClaimHash []byte `json:"claim_hash"`
-	Height    int32  `json:"height"`
+	Height    uint32 `json:"height"`
 }
 
 func (v *ClaimTakeoverValue) String() string {
@@ -565,6 +565,84 @@ func (v *ClaimTakeoverValue) String() string {
 		hex.EncodeToString(v.ClaimHash),
 		v.Height,
 	)
+}
+
+func (k *ClaimTakeoverKey) PackKey() []byte {
+	prefixLen := 1
+	nameLen := len(k.NormalizedName)
+	n := prefixLen + 2 + nameLen
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
+	copy(key[prefixLen+2:], []byte(k.NormalizedName))
+
+	return key
+}
+
+func (v *ClaimTakeoverValue) PackValue() []byte {
+	// b'>20sL'
+	value := make([]byte, 24)
+	copy(value, v.ClaimHash[:20])
+	binary.BigEndian.PutUint32(value[20:], uint32(v.Height))
+
+	return value
+}
+
+func ClaimTakeoverKeyPackPartialNFields(nFields int) func(*ClaimTakeoverKey) []byte {
+	return func(u *ClaimTakeoverKey) []byte {
+		return ClaimTakeoverKeyPackPartial(u, nFields)
+	}
+}
+
+func ClaimTakeoverKeyPackPartial(k *ClaimTakeoverKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	nameLen := len(k.NormalizedName)
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 2 + nameLen
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
+			copy(key[prefixLen+2:], []byte(k.NormalizedName))
+		}
+	}
+
+	return key
+}
+
+func ClaimTakeoverKeyUnpack(key []byte) *ClaimTakeoverKey {
+	prefixLen := 1
+	nameLen := binary.BigEndian.Uint16(key[prefixLen:])
+	return &ClaimTakeoverKey{
+		Prefix:         key[:prefixLen],
+		NormalizedName: string(key[prefixLen+2 : prefixLen+2+int(nameLen)]),
+	}
+}
+
+func ClaimTakeoverValueUnpack(value []byte) *ClaimTakeoverValue {
+	return &ClaimTakeoverValue{
+		ClaimHash: value[:20],
+		Height:    binary.BigEndian.Uint32(value[20:]),
+	}
 }
 
 /*
@@ -1706,9 +1784,10 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case EffectiveAmount:
 		return EffectiveAmount, EffectiveAmountKeyUnpack(key), nil
 	case ClaimExpiration:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 
 	case ClaimTakeover:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return ClaimTakeover, ClaimTakeoverKeyUnpack(key), nil
 	case PendingActivation:
 		return PendingActivation, PendingActivationKeyUnpack(key), nil
 	case ActivatedClaimAndSupport:
@@ -1770,9 +1849,10 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case EffectiveAmount:
 		return EffectiveAmount, EffectiveAmountValueUnpack(value), nil
 	case ClaimExpiration:
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 
 	case ClaimTakeover:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+		return ClaimTakeover, ClaimTakeoverValueUnpack(value), nil
 	case PendingActivation:
 		return PendingActivation, PendingActivationValueUnpack(value), nil
 	case ActivatedClaimAndSupport:
