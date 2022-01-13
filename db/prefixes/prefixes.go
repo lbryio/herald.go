@@ -594,10 +594,10 @@ class PendingActivationValue(typing.NamedTuple):
 
 type PendingActivationKey struct {
 	Prefix   []byte `json:"prefix"`
-	Height   int32  `json:"height"`
-	TxoType  int32  `json:"txo_height"`
-	TxNum    int32  `json:"tx_num"`
-	Position int32  `json:"position"`
+	Height   uint32 `json:"height"`
+	TxoType  uint8  `json:"txo_type"`
+	TxNum    uint32 `json:"tx_num"`
+	Position uint16 `json:"position"`
 }
 
 func (k *PendingActivationKey) IsSupport() bool {
@@ -611,6 +611,102 @@ func (k *PendingActivationKey) IsClaim() bool {
 type PendingActivationValue struct {
 	ClaimHash      []byte `json:"claim_hash"`
 	NormalizedName string `json:"normalized_name"`
+}
+
+func (k *PendingActivationKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>LBLH'
+	n := prefixLen + 4 + 1 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+	key[prefixLen+4] = k.TxoType
+	binary.BigEndian.PutUint32(key[prefixLen+5:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+9:], k.Position)
+
+	return key
+}
+
+func (v *PendingActivationValue) PackValue() []byte {
+	nameLen := len(v.NormalizedName)
+	n := 20 + 2 + nameLen
+	value := make([]byte, n)
+	copy(value, v.ClaimHash[:20])
+	binary.BigEndian.PutUint16(value[20:], uint16(nameLen))
+	copy(value[22:], []byte(v.NormalizedName))
+
+	return value
+}
+
+func PendingActivationKeyPackPartialNFields(nFields int) func(*PendingActivationKey) []byte {
+	return func(u *PendingActivationKey) []byte {
+		return PendingActivationKeyPackPartial(u, nFields)
+	}
+}
+
+func PendingActivationKeyPackPartial(k *PendingActivationKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 4 {
+		nFields = 4
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		case 2:
+			n += 1
+		case 3:
+			n += 4
+		case 4:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+		case 2:
+			key[prefixLen+4] = k.TxoType
+		case 3:
+			binary.BigEndian.PutUint32(key[prefixLen+5:], k.TxNum)
+		case 4:
+			binary.BigEndian.PutUint16(key[prefixLen+9:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func PendingActivationKeyUnpack(key []byte) *PendingActivationKey {
+	prefixLen := 1
+	return &PendingActivationKey{
+		Prefix:   key[:prefixLen],
+		Height:   binary.BigEndian.Uint32(key[prefixLen:]),
+		TxoType:  key[prefixLen+4],
+		TxNum:    binary.BigEndian.Uint32(key[prefixLen+5:]),
+		Position: binary.BigEndian.Uint16(key[prefixLen+9:]),
+	}
+}
+
+func PendingActivationValueUnpack(value []byte) *PendingActivationValue {
+	nameLen := binary.BigEndian.Uint16(value[20:])
+	return &PendingActivationValue{
+		ClaimHash:      value[:20],
+		NormalizedName: string(value[22 : 22+nameLen]),
+	}
 }
 
 /*
@@ -1612,8 +1708,9 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case ClaimExpiration:
 
 	case ClaimTakeover:
-	case PendingActivation:
 		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+	case PendingActivation:
+		return PendingActivation, PendingActivationKeyUnpack(key), nil
 	case ActivatedClaimAndSupport:
 		return ActivatedClaimAndSupport, ActivationKeyUnpack(key), nil
 	case ActiveAmount:
@@ -1675,8 +1772,9 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case ClaimExpiration:
 
 	case ClaimTakeover:
-	case PendingActivation:
 		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+	case PendingActivation:
+		return PendingActivation, PendingActivationValueUnpack(value), nil
 	case ActivatedClaimAndSupport:
 		return ActivatedClaimAndSupport, ActivationValueUnpack(value), nil
 	case ActiveAmount:
