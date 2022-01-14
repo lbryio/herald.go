@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"os"
 
 	"github.com/lbryio/hub/db/prefixes"
@@ -108,8 +109,9 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			return false
 		}
 
+		maxLen := int(math.Min(float64(len(key)), float64(len(opts.Stop))))
 		if opts.Stop != nil &&
-			(bytes.HasPrefix(key, opts.Stop) || bytes.Compare(opts.Stop, key[:len(opts.Stop)]) < 0) {
+			(bytes.HasPrefix(key, opts.Stop) || bytes.Compare(opts.Stop, key[:maxLen]) < 0) {
 			return true
 		} else if opts.Start != nil &&
 			bytes.Compare(opts.Start, key[:len(opts.Start)]) > 0 {
