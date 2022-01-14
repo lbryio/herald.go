@@ -245,11 +245,83 @@ class BlockHeaderValue(NamedTuple):
 
 type BlockHeaderKey struct {
 	Prefix []byte `json:"prefix"`
-	Height int32  `json:"height"`
+	Height uint32 `json:"height"`
 }
 
 type BlockHeaderValue struct {
 	Header []byte `json:"header"`
+}
+
+func (k *BlockHeaderKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 4
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+
+	return key
+}
+
+func (v *BlockHeaderValue) PackValue() []byte {
+	value := make([]byte, 112)
+	copy(value, v.Header)
+
+	return value
+}
+
+func BlockHeaderKeyPackPartialNFields(nFields int) func(*BlockHeaderKey) []byte {
+	return func(u *BlockHeaderKey) []byte {
+		return BlockHeaderKeyPackPartial(u, nFields)
+	}
+}
+
+func BlockHeaderKeyPackPartial(k *BlockHeaderKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+		}
+	}
+
+	return key
+}
+
+func BlockHeaderKeyUnpack(key []byte) *BlockHeaderKey {
+	prefixLen := 1
+	return &BlockHeaderKey{
+		Prefix: key[:prefixLen],
+		Height: binary.BigEndian.Uint32(key[prefixLen:]),
+	}
+}
+
+func BlockHeaderValueUnpack(value []byte) *BlockHeaderValue {
+	return &BlockHeaderValue{
+		Header: value[:112],
+	}
 }
 
 /*
@@ -295,7 +367,7 @@ type ClaimToTXOValue struct {
 }
 
 func (v *ClaimToTXOValue) NormalizedName() string {
-	//TODO implement
+	//TODO implement? Might not need to do anything.
 	return v.Name
 }
 
@@ -2519,8 +2591,11 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 
 	case Tx:
 	case BlockHash:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 	case Header:
+		return Header, BlockHeaderKeyUnpack(key), nil
 	case TxNum:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 	case TxCount:
 	case TxHash:
 		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
@@ -2590,8 +2665,11 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 
 	case Tx:
 	case BlockHash:
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 	case Header:
+		return Header, BlockHeaderValueUnpack(value), nil
 	case TxNum:
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 	case TxCount:
 	case TxHash:
 		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
