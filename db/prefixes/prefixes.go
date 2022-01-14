@@ -285,18 +285,110 @@ type ClaimToTXOKey struct {
 }
 
 type ClaimToTXOValue struct {
-	TxNum                   int32  `json:"tx_num"`
-	Position                int32  `json:"position"`
-	RootTxNum               int32  `json:"root_tx_num"`
-	RootPosition            int32  `json:"root_position"`
-	Amount                  int32  `json:"amount"`
+	TxNum                   uint32 `json:"tx_num"`
+	Position                uint16 `json:"position"`
+	RootTxNum               uint32 `json:"root_tx_num"`
+	RootPosition            uint16 `json:"root_position"`
+	Amount                  uint64 `json:"amount"`
 	ChannelSignatureIsValid bool   `json:"channel_signature_is_valid"`
 	Name                    string `json:"name"`
 }
 
 func (v *ClaimToTXOValue) NormalizedName() string {
-	//TODO implemented
+	//TODO implement
 	return v.Name
+}
+
+func (k *ClaimToTXOKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20s'
+	n := prefixLen + 20
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ClaimHash[:20])
+
+	return key
+}
+
+func (v *ClaimToTXOValue) PackValue() []byte {
+	nameLen := len(v.Name)
+	n := 4 + 2 + 4 + 2 + 8 + 1 + 2 + nameLen
+	value := make([]byte, n)
+	binary.BigEndian.PutUint32(value, v.TxNum)
+	binary.BigEndian.PutUint16(value[4:], v.Position)
+	binary.BigEndian.PutUint32(value[6:], v.RootTxNum)
+	binary.BigEndian.PutUint16(value[10:], v.RootPosition)
+	binary.BigEndian.PutUint64(value[12:], v.Amount)
+	var bitSetVar uint8
+	if v.ChannelSignatureIsValid {
+		bitSetVar = 1
+	}
+	value[20] = bitSetVar
+	binary.BigEndian.PutUint16(value[21:], uint16(nameLen))
+	copy(value[23:], []byte(v.Name[:nameLen]))
+
+	return value
+}
+
+func ClaimToTXOKeyPackPartialNFields(nFields int) func(*ClaimToTXOKey) []byte {
+	return func(u *ClaimToTXOKey) []byte {
+		return ClaimToTXOKeyPackPartial(u, nFields)
+	}
+}
+
+func ClaimToTXOKeyPackPartial(k *ClaimToTXOKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ClaimHash[:20])
+		}
+	}
+
+	return key
+}
+
+func ClaimToTXOKeyUnpack(key []byte) *ClaimToTXOKey {
+	prefixLen := 1
+	return &ClaimToTXOKey{
+		Prefix:    key[:prefixLen],
+		ClaimHash: key[prefixLen : prefixLen+20],
+	}
+}
+
+func ClaimToTXOValueUnpack(value []byte) *ClaimToTXOValue {
+	nameLen := binary.BigEndian.Uint16(value[21:])
+	return &ClaimToTXOValue{
+		TxNum:                   binary.BigEndian.Uint32(value),
+		Position:                binary.BigEndian.Uint16(value[4:]),
+		RootTxNum:               binary.BigEndian.Uint32(value[6:]),
+		RootPosition:            binary.BigEndian.Uint16(value[10:]),
+		Amount:                  binary.BigEndian.Uint64(value[12:]),
+		ChannelSignatureIsValid: value[20] == 1,
+		Name:                    string(value[23 : 23+nameLen]),
+	}
 }
 
 /*
@@ -2390,7 +2482,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 		return SupportToClaim, SupportToClaimKeyUnpack(key), nil
 
 	case ClaimToTXO:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return ClaimToTXO, ClaimToTXOKeyUnpack(key), nil
 	case TXOToClaim:
 		return TXOToClaim, TXOToClaimKeyUnpack(key), nil
 
@@ -2461,7 +2553,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 		return SupportToClaim, SupportToClaimValueUnpack(value), nil
 
 	case ClaimToTXO:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+		return ClaimToTXO, ClaimToTXOValueUnpack(value), nil
 	case TXOToClaim:
 		return TXOToClaim, TXOToClaimValueUnpack(value), nil
 
