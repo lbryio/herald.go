@@ -38,7 +38,7 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
-			Prefix:       []byte{prefixes.ClaimExpiration},
+			Prefix:       []byte{prefixes.SupportToClaim},
 			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
@@ -49,7 +49,7 @@ func main() {
 			RawValue:     true,
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/claim_expiration.csv", 10)
+		db.ReadWriteRawN(dbVal, options, "./resources/support_to_claim.csv", 10)
 
 		return
 	}
