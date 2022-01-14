@@ -346,13 +346,116 @@ type ClaimShortIDKey struct {
 	Prefix         []byte `json:"prefix"`
 	NormalizedName string `json:"normalized_name"`
 	PartialClaimId string `json:"partial_claim_id"`
-	RootTxNum      int32  `json:"root_tx_num"`
-	RootPosition   int32  `json:"root_position"`
+	RootTxNum      uint32 `json:"root_tx_num"`
+	RootPosition   uint16 `json:"root_position"`
 }
 
 type ClaimShortIDValue struct {
-	TxNum    int32 `json:"tx_num"`
-	Position int32 `json:"position"`
+	TxNum    uint32 `json:"tx_num"`
+	Position uint16 `json:"position"`
+}
+
+func (k *ClaimShortIDKey) PackKey() []byte {
+	prefixLen := 1
+	nameLen := len(k.NormalizedName)
+	partialClaimLen := len(k.PartialClaimId)
+	log.Printf("nameLen: %d, partialClaimLen: %d\n", nameLen, partialClaimLen)
+	n := prefixLen + 2 + nameLen + 1 + partialClaimLen + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
+	copy(key[prefixLen+2:], []byte(k.NormalizedName[:nameLen]))
+	key[prefixLen+2+nameLen] = uint8(partialClaimLen)
+	copy(key[prefixLen+2+nameLen+1:], []byte(k.PartialClaimId[:partialClaimLen]))
+	binary.BigEndian.PutUint32(key[prefixLen+2+nameLen+1+partialClaimLen:], k.RootTxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+2+nameLen+1+partialClaimLen+4:], k.RootPosition)
+
+	return key
+}
+
+func (v *ClaimShortIDValue) PackValue() []byte {
+	value := make([]byte, 6)
+	binary.BigEndian.PutUint32(value, v.TxNum)
+	binary.BigEndian.PutUint16(value[4:], v.Position)
+
+	return value
+}
+
+func ClaimShortIDKeyPackPartialNFields(nFields int) func(*ClaimShortIDKey) []byte {
+	return func(u *ClaimShortIDKey) []byte {
+		return ClaimShortIDKeyPackPartial(u, nFields)
+	}
+}
+
+func ClaimShortIDKeyPackPartial(k *ClaimShortIDKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 4 {
+		nFields = 4
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	nameLen := len(k.NormalizedName)
+	partialClaimLen := len(k.PartialClaimId)
+
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 2 + nameLen
+		case 2:
+			n += 1 + partialClaimLen
+		case 3:
+			n += 4
+		case 4:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
+			copy(key[prefixLen+2:], []byte(k.NormalizedName))
+		case 2:
+			key[prefixLen+2+nameLen] = uint8(partialClaimLen)
+			copy(key[prefixLen+2+nameLen+1:], []byte(k.PartialClaimId))
+		case 3:
+			binary.BigEndian.PutUint32(key[prefixLen+2+nameLen+1+partialClaimLen:], k.RootTxNum)
+		case 4:
+			binary.BigEndian.PutUint16(key[prefixLen+2+nameLen+1+partialClaimLen+4:], k.RootPosition)
+		}
+	}
+
+	return key
+}
+
+func ClaimShortIDKeyUnpack(key []byte) *ClaimShortIDKey {
+	prefixLen := 1
+	nameLen := int(binary.BigEndian.Uint16(key[prefixLen:]))
+	partialClaimLen := int(uint8(key[prefixLen+2+nameLen]))
+	return &ClaimShortIDKey{
+		Prefix:         key[:prefixLen],
+		NormalizedName: string(key[prefixLen+2 : prefixLen+2+nameLen]),
+		PartialClaimId: string(key[prefixLen+2+nameLen+1 : prefixLen+2+nameLen+1+partialClaimLen]),
+		RootTxNum:      binary.BigEndian.Uint32(key[prefixLen+2+nameLen+1+partialClaimLen:]),
+		RootPosition:   binary.BigEndian.Uint16(key[prefixLen+2+nameLen+1+partialClaimLen+4:]),
+	}
+}
+
+func ClaimShortIDValueUnpack(value []byte) *ClaimShortIDValue {
+	return &ClaimShortIDValue{
+		TxNum:    binary.BigEndian.Uint32(value),
+		Position: binary.BigEndian.Uint16(value[4:]),
+	}
 }
 
 /*
@@ -2213,7 +2316,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 		return ChannelToClaim, ChannelToClaimKeyUnpack(key), nil
 
 	case ClaimShortIdPrefix:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return ClaimShortIdPrefix, ClaimShortIDKeyUnpack(key), nil
 	case EffectiveAmount:
 		return EffectiveAmount, EffectiveAmountKeyUnpack(key), nil
 	case ClaimExpiration:
@@ -2283,7 +2386,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 		return ChannelToClaim, ChannelToClaimValueUnpack(value), nil
 
 	case ClaimShortIdPrefix:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+		return ClaimShortIdPrefix, ClaimShortIDValueUnpack(value), nil
 	case EffectiveAmount:
 		return EffectiveAmount, EffectiveAmountValueUnpack(value), nil
 	case ClaimExpiration:
