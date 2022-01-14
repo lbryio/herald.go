@@ -407,12 +407,105 @@ type ChannelToClaimKey struct {
 	Prefix      []byte `json:"prefix"`
 	SigningHash []byte `json:"signing_hash"`
 	Name        string `json:"name"`
-	TxNum       int32  `json:"tx_num"`
-	Position    int32  `json:"position"`
+	TxNum       uint32 `json:"tx_num"`
+	Position    uint16 `json:"position"`
 }
 
 type ChannelToClaimValue struct {
 	ClaimHash []byte `json:"claim_hash"`
+}
+
+func (k *ChannelToClaimKey) PackKey() []byte {
+	prefixLen := 1
+	nameLen := len(k.Name)
+	n := prefixLen + 20 + 2 + nameLen + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.SigningHash[:20])
+	binary.BigEndian.PutUint16(key[prefixLen+20:], uint16(nameLen))
+	copy(key[prefixLen+22:], []byte(k.Name[:nameLen]))
+	binary.BigEndian.PutUint32(key[prefixLen+22+nameLen:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+22+nameLen+4:], k.Position)
+
+	return key
+}
+
+func (v *ChannelToClaimValue) PackValue() []byte {
+	value := make([]byte, 20)
+	copy(value, v.ClaimHash[:20])
+
+	return value
+}
+
+func ChannelToClaimKeyPackPartialNFields(nFields int) func(*ChannelToClaimKey) []byte {
+	return func(u *ChannelToClaimKey) []byte {
+		return ChannelToClaimKeyPackPartial(u, nFields)
+	}
+}
+
+func ChannelToClaimKeyPackPartial(k *ChannelToClaimKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 4 {
+		nFields = 4
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	nameLen := len(k.Name)
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		case 2:
+			n += 2 + nameLen
+		case 3:
+			n += 4
+		case 4:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.SigningHash[:20])
+		case 2:
+			binary.BigEndian.PutUint16(key[prefixLen+20:], uint16(nameLen))
+			copy(key[prefixLen+22:], []byte(k.Name))
+		case 3:
+			binary.BigEndian.PutUint32(key[prefixLen+22+nameLen:], k.TxNum)
+		case 4:
+			binary.BigEndian.PutUint16(key[prefixLen+22+nameLen+4:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func ChannelToClaimKeyUnpack(key []byte) *ChannelToClaimKey {
+	prefixLen := 1
+	nameLen := int(binary.BigEndian.Uint16(key[prefixLen+20:]))
+	return &ChannelToClaimKey{
+		Prefix:      key[:prefixLen],
+		SigningHash: key[prefixLen : prefixLen+20],
+		Name:        string(key[prefixLen+22 : prefixLen+22+nameLen]),
+		TxNum:       binary.BigEndian.Uint32(key[prefixLen+22+nameLen:]),
+		Position:    binary.BigEndian.Uint16(key[prefixLen+22+nameLen+4:]),
+	}
+}
+
+func ChannelToClaimValueUnpack(value []byte) *ChannelToClaimValue {
+	return &ChannelToClaimValue{
+		ClaimHash: value[:20],
+	}
 }
 
 /*
@@ -2031,7 +2124,9 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case TXOToClaim:
 
 	case ClaimToChannel:
+		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
 	case ChannelToClaim:
+		return ChannelToClaim, ChannelToClaimKeyUnpack(key), nil
 
 	case ClaimShortIdPrefix:
 		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
@@ -2099,7 +2194,9 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case TXOToClaim:
 
 	case ClaimToChannel:
+		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
 	case ChannelToClaim:
+		return ChannelToClaim, ChannelToClaimValueUnpack(value), nil
 
 	case ClaimShortIdPrefix:
 		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
