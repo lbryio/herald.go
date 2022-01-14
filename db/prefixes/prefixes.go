@@ -525,14 +525,104 @@ class ClaimExpirationValue(typing.NamedTuple):
 
 type ClaimExpirationKey struct {
 	Prefix     []byte `json:"prefix"`
-	Expiration int32  `json:"expiration"`
-	TxNum      int32  `json:"tx_num"`
-	Position   int32  `json:"position"`
+	Expiration uint32 `json:"expiration"`
+	TxNum      uint32 `json:"tx_num"`
+	Position   uint16 `json:"position"`
 }
 
 type ClaimExpirationValue struct {
 	ClaimHash      []byte `json:"claim_hash"`
 	NormalizedName string `json:"normalized_name"`
+}
+
+func (k *ClaimExpirationKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>LLH'
+	n := prefixLen + 4 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], k.Expiration)
+	binary.BigEndian.PutUint32(key[prefixLen+4:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+8:], k.Position)
+
+	return key
+}
+
+func (v *ClaimExpirationValue) PackValue() []byte {
+	nameLen := len(v.NormalizedName)
+	n := 20 + 2 + nameLen
+	value := make([]byte, n)
+	copy(value, v.ClaimHash)
+	binary.BigEndian.PutUint16(value[20:], uint16(nameLen))
+	copy(value[22:], []byte(v.NormalizedName))
+
+	return value
+}
+
+func ClaimExpirationKeyPackPartialNFields(nFields int) func(*ClaimExpirationKey) []byte {
+	return func(u *ClaimExpirationKey) []byte {
+		return ClaimExpirationKeyPackPartial(u, nFields)
+	}
+}
+
+func ClaimExpirationKeyPackPartial(k *ClaimExpirationKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 3 {
+		nFields = 3
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		case 2:
+			n += 4
+		case 3:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], k.Expiration)
+		case 2:
+			binary.BigEndian.PutUint32(key[prefixLen+4:], k.TxNum)
+		case 3:
+			binary.BigEndian.PutUint16(key[prefixLen+8:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func ClaimExpirationKeyUnpack(key []byte) *ClaimExpirationKey {
+	prefixLen := 1
+	return &ClaimExpirationKey{
+		Prefix:     key[:prefixLen],
+		Expiration: binary.BigEndian.Uint32(key[prefixLen:]),
+		TxNum:      binary.BigEndian.Uint32(key[prefixLen+4:]),
+		Position:   binary.BigEndian.Uint16(key[prefixLen+8:]),
+	}
+}
+
+func ClaimExpirationValueUnpack(value []byte) *ClaimExpirationValue {
+	nameLen := binary.BigEndian.Uint16(value[20:])
+	return &ClaimExpirationValue{
+		ClaimHash:      value[:20],
+		NormalizedName: string(value[22 : 22+nameLen]),
+	}
 }
 
 /*
@@ -1784,7 +1874,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case EffectiveAmount:
 		return EffectiveAmount, EffectiveAmountKeyUnpack(key), nil
 	case ClaimExpiration:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return ClaimExpiration, ClaimExpirationKeyUnpack(key), nil
 
 	case ClaimTakeover:
 		return ClaimTakeover, ClaimTakeoverKeyUnpack(key), nil
@@ -1849,7 +1939,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case EffectiveAmount:
 		return EffectiveAmount, EffectiveAmountValueUnpack(value), nil
 	case ClaimExpiration:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+		return ClaimExpiration, ClaimExpirationValueUnpack(value), nil
 
 	case ClaimTakeover:
 		return ClaimTakeover, ClaimTakeoverValueUnpack(value), nil
