@@ -477,12 +477,96 @@ class ClaimToSupportValue(typing.NamedTuple):
 type ClaimToSupportKey struct {
 	Prefix    []byte `json:"prefix"`
 	ClaimHash []byte `json:"claim_hash"`
-	TxNum     int32  `json:"tx_num"`
-	Position  int32  `json:"position"`
+	TxNum     uint32 `json:"tx_num"`
+	Position  uint16 `json:"position"`
 }
 
 type ClaimToSupportValue struct {
-	Amount int32 `json:"amount"`
+	Amount uint64 `json:"amount"`
+}
+
+func (k *ClaimToSupportKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20sLH'
+	n := prefixLen + 20 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ClaimHash[:20])
+	binary.BigEndian.PutUint32(key[prefixLen+20:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+24:], k.Position)
+
+	return key
+}
+
+func (v *ClaimToSupportValue) PackValue() []byte {
+	value := make([]byte, 8)
+	binary.BigEndian.PutUint64(value, v.Amount)
+
+	return value
+}
+
+func ClaimToSupportKeyPackPartialNFields(nFields int) func(*ClaimToSupportKey) []byte {
+	return func(u *ClaimToSupportKey) []byte {
+		return ClaimToSupportKeyPackPartial(u, nFields)
+	}
+}
+
+func ClaimToSupportKeyPackPartial(k *ClaimToSupportKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 3 {
+		nFields = 3
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		case 2:
+			n += 4
+		case 3:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ClaimHash)
+		case 2:
+			binary.BigEndian.PutUint32(key[prefixLen+20:], k.TxNum)
+		case 3:
+			binary.BigEndian.PutUint16(key[prefixLen+24:], k.Position)
+		}
+	}
+
+	return key
+}
+
+func ClaimToSupportKeyUnpack(key []byte) *ClaimToSupportKey {
+	prefixLen := 1
+	return &ClaimToSupportKey{
+		Prefix:    key[:prefixLen],
+		ClaimHash: key[prefixLen : prefixLen+20],
+		TxNum:     binary.BigEndian.Uint32(key[prefixLen+20:]),
+		Position:  binary.BigEndian.Uint16(key[prefixLen+24:]),
+	}
+}
+
+func ClaimToSupportValueUnpack(value []byte) *ClaimToSupportValue {
+	return &ClaimToSupportValue{
+		Amount: binary.BigEndian.Uint64(value),
+	}
 }
 
 /*
@@ -1938,7 +2022,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	firstByte := key[0]
 	switch firstByte {
 	case ClaimToSupport:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return ClaimToSupport, ClaimToSupportKeyUnpack(key), nil
 	case SupportToClaim:
 		return SupportToClaim, SupportToClaimKeyUnpack(key), nil
 
@@ -2006,7 +2090,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	firstByte := key[0]
 	switch firstByte {
 	case ClaimToSupport:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+		return ClaimToSupport, ClaimToSupportValueUnpack(value), nil
 	case SupportToClaim:
 		return SupportToClaim, SupportToClaimValueUnpack(value), nil
 
