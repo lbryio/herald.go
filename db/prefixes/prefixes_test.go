@@ -44,6 +44,86 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 	return db, records, toDefer
 }
 
+func TestHashXHistory(t *testing.T) {
+
+	filePath := "../../resources/hashx_history.csv"
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	db, records, toDefer := testInit(filePath)
+	defer toDefer()
+	for _, record := range records {
+		key, err := hex.DecodeString(record[0])
+		if err != nil {
+			log.Println(err)
+		}
+		val, err := hex.DecodeString(record[1])
+		if err != nil {
+			log.Println(err)
+		}
+		db.Put(wOpts, key, val)
+	}
+	// test prefix
+	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.HashXHistory}).WithIncludeValue(true)
+	ch := dbpkg.Iter(db, options)
+	var i = 0
+	for kv := range ch {
+		// log.Println(kv.Key)
+		gotKey := kv.Key.(*prefixes.HashXHistoryKey).PackKey()
+
+		keyPartial1 := prefixes.HashXHistoryKeyPackPartial(kv.Key.(*prefixes.HashXHistoryKey), 1)
+		keyPartial2 := prefixes.HashXHistoryKeyPackPartial(kv.Key.(*prefixes.HashXHistoryKey), 2)
+
+		// Check pack partial for sanity
+		if !bytes.HasPrefix(gotKey, keyPartial1) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
+		}
+		if !bytes.HasPrefix(gotKey, keyPartial2) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
+		}
+
+		got := kv.Value.(*prefixes.HashXHistoryValue).PackValue()
+		wantKey, err := hex.DecodeString(records[i][0])
+		if err != nil {
+			log.Println(err)
+		}
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(gotKey, wantKey) {
+			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+
+	// Test start / stop
+	start, err := hex.DecodeString(records[0][0])
+	if err != nil {
+		log.Println(err)
+	}
+	stop, err := hex.DecodeString(records[9][0])
+	if err != nil {
+		log.Println(err)
+	}
+	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+	ch2 := dbpkg.Iter(db, options2)
+	i = 0
+	for kv := range ch2 {
+		got := kv.Value.(*prefixes.HashXHistoryValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+}
+
 func TestUndo(t *testing.T) {
 
 	filePath := "../../resources/undo.csv"

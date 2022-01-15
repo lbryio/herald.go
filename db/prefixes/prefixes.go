@@ -167,6 +167,115 @@ type HashXUTXOValue struct {
 	HashX []byte `json:"hashx"`
 }
 
+//
+// HashXUTXOKey / HashXUTXOValue
+//
+
+func (k *HashXUTXOKey) String() string {
+	return fmt.Sprintf(
+		"%s(short_tx_hash=%s, tx_num=%d, nout=%d)",
+		reflect.TypeOf(k),
+		hex.EncodeToString(k.ShortTXHash),
+		k.TxNum,
+		k.Nout,
+	)
+}
+
+func (v *HashXUTXOValue) String() string {
+	return fmt.Sprintf(
+		"%s(hashX=%s)",
+		reflect.TypeOf(v),
+		hex.EncodeToString(v.HashX),
+	)
+}
+
+func (k *HashXUTXOKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>4sLH'
+	n := prefixLen + 4 + 4 + 2
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ShortTXHash)
+	binary.BigEndian.PutUint32(key[prefixLen+4:], k.TxNum)
+	binary.BigEndian.PutUint16(key[prefixLen+8:], k.Nout)
+
+	return key
+}
+
+func (v *HashXUTXOValue) PackValue() []byte {
+	value := make([]byte, 11)
+	copy(value, v.HashX)
+
+	return value
+}
+
+// HashXUTXOKeyPackPartialNFields creates a pack partial key function for n fields.
+func HashXUTXOKeyPackPartialNFields(nFields int) func(*HashXUTXOKey) []byte {
+	return func(u *HashXUTXOKey) []byte {
+		return HashXUTXOKeyPackPartial(u, nFields)
+	}
+}
+
+// HashXUTXOKeyPackPartial packs a variable number of fields into a byte
+// array
+func HashXUTXOKeyPackPartial(k *HashXUTXOKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 3 {
+		nFields = 3
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		case 2:
+			n += 4
+		case 3:
+			n += 2
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ShortTXHash)
+		case 2:
+			binary.BigEndian.PutUint32(key[prefixLen+4:], k.TxNum)
+		case 3:
+			binary.BigEndian.PutUint16(key[prefixLen+8:], k.Nout)
+		}
+	}
+
+	return key
+}
+
+func HashXUTXOKeyUnpack(key []byte) *HashXUTXOKey {
+	prefixLen := 1
+	return &HashXUTXOKey{
+		Prefix:      key[:prefixLen],
+		ShortTXHash: key[prefixLen : prefixLen+4],
+		TxNum:       binary.BigEndian.Uint32(key[prefixLen+4:]),
+		Nout:        binary.BigEndian.Uint16(key[prefixLen+8:]),
+	}
+}
+
+func HashXUTXOValueUnpack(value []byte) *HashXUTXOValue {
+	return &HashXUTXOValue{
+		HashX: value[:11],
+	}
+}
+
 /*
 class HashXHistoryKey(NamedTuple):
     hashX: bytes
@@ -187,7 +296,104 @@ type HashXHistoryKey struct {
 }
 
 type HashXHistoryValue struct {
-	HashXes []uint32 `json:"hashxes"`
+	HashXes []uint16 `json:"hashxes"`
+}
+
+func (k *HashXHistoryKey) String() string {
+	return fmt.Sprintf(
+		"%s(hashx=%s, height=%d)",
+		reflect.TypeOf(k),
+		hex.EncodeToString(k.HashX),
+		k.Height,
+	)
+}
+
+func (k *HashXHistoryKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>11sL'
+	n := prefixLen + 11 + 4
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.HashX)
+	binary.BigEndian.PutUint32(key[prefixLen+11:], k.Height)
+
+	return key
+}
+
+func (v *HashXHistoryValue) PackValue() []byte {
+	n := len(v.HashXes)
+	value := make([]byte, n*2)
+	for i, x := range v.HashXes {
+		binary.BigEndian.PutUint16(value[i*2:], x)
+	}
+
+	return value
+}
+
+// HashXHistoryKeyPackPartialNFields creates a pack partial key function for n fields.
+func HashXHistoryKeyPackPartialNFields(nFields int) func(*HashXHistoryKey) []byte {
+	return func(u *HashXHistoryKey) []byte {
+		return HashXHistoryKeyPackPartial(u, nFields)
+	}
+}
+
+// HashXHistoryKeyPackPartial packs a variable number of fields into a byte
+// array
+func HashXHistoryKeyPackPartial(k *HashXHistoryKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 2 {
+		nFields = 2
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 11
+		case 2:
+			n += 4
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.HashX[:11])
+		case 2:
+			binary.BigEndian.PutUint32(key[prefixLen+11:], k.Height)
+		}
+	}
+
+	return key
+}
+
+func HashXHistoryKeyUnpack(key []byte) *HashXHistoryKey {
+	prefixLen := 1
+	return &HashXHistoryKey{
+		Prefix: key[:prefixLen],
+		HashX:  key[prefixLen : prefixLen+11],
+		Height: binary.BigEndian.Uint32(key[prefixLen+11:]),
+	}
+}
+
+func HashXHistoryValueUnpack(value []byte) *HashXHistoryValue {
+	n := len(value) / 2
+	hashxes := make([]uint16, n)
+	for i := 0; i < n; i++ {
+		hashxes[i] = binary.BigEndian.Uint16(value[i*2:])
+	}
+	return &HashXHistoryValue{
+		HashXes: hashxes,
+	}
 }
 
 /*
@@ -2491,115 +2697,6 @@ func TouchedOrDeletedClaimValueUnpack(value []byte) *TouchedOrDeletedClaimValue 
 }
 
 //
-// HashXUTXOKey / HashXUTXOValue
-//
-
-func (k *HashXUTXOKey) String() string {
-	return fmt.Sprintf(
-		"%s(short_tx_hash=%s, tx_num=%d, nout=%d)",
-		reflect.TypeOf(k),
-		hex.EncodeToString(k.ShortTXHash),
-		k.TxNum,
-		k.Nout,
-	)
-}
-
-func (v *HashXUTXOValue) String() string {
-	return fmt.Sprintf(
-		"%s(hashX=%s)",
-		reflect.TypeOf(v),
-		hex.EncodeToString(v.HashX),
-	)
-}
-
-func (k *HashXUTXOKey) PackKey() []byte {
-	prefixLen := 1
-	// b'>4sLH'
-	n := prefixLen + 4 + 4 + 2
-	key := make([]byte, n)
-	copy(key, k.Prefix)
-	copy(key[prefixLen:], k.ShortTXHash)
-	binary.BigEndian.PutUint32(key[prefixLen+4:], k.TxNum)
-	binary.BigEndian.PutUint16(key[prefixLen+8:], k.Nout)
-
-	return key
-}
-
-func (v *HashXUTXOValue) PackValue() []byte {
-	value := make([]byte, 11)
-	copy(value, v.HashX)
-
-	return value
-}
-
-// HashXUTXOKeyPackPartialNFields creates a pack partial key function for n fields.
-func HashXUTXOKeyPackPartialNFields(nFields int) func(*HashXUTXOKey) []byte {
-	return func(u *HashXUTXOKey) []byte {
-		return HashXUTXOKeyPackPartial(u, nFields)
-	}
-}
-
-// HashXUTXOKeyPackPartial packs a variable number of fields into a byte
-// array
-func HashXUTXOKeyPackPartial(k *HashXUTXOKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
-	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
-	}
-	if nFields < 0 {
-		nFields = 0
-	}
-
-	// b'>4sLH'
-	prefixLen := 1
-	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
-		switch i {
-		case 1:
-			n += 4
-		case 2:
-			n += 4
-		case 3:
-			n += 2
-		}
-	}
-
-	key := make([]byte, n)
-
-	for i := 0; i <= nFields; i++ {
-		switch i {
-		case 0:
-			copy(key, k.Prefix)
-		case 1:
-			copy(key[prefixLen:], k.ShortTXHash)
-		case 2:
-			binary.BigEndian.PutUint32(key[prefixLen+4:], k.TxNum)
-		case 3:
-			binary.BigEndian.PutUint16(key[prefixLen+8:], k.Nout)
-		}
-	}
-
-	return key
-}
-
-func HashXUTXOKeyUnpack(key []byte) *HashXUTXOKey {
-	prefixLen := 1
-	return &HashXUTXOKey{
-		Prefix:      key[:prefixLen],
-		ShortTXHash: key[prefixLen : prefixLen+4],
-		TxNum:       binary.BigEndian.Uint32(key[prefixLen+4:]),
-		Nout:        binary.BigEndian.Uint16(key[prefixLen+8:]),
-	}
-}
-
-func HashXUTXOValueUnpack(value []byte) *HashXUTXOValue {
-	return &HashXUTXOValue{
-		HashX: value[:11],
-	}
-}
-
-//
 // UTXOKey / UTXOValue
 //
 
@@ -2763,6 +2860,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 	case HashXUTXO:
 		return UTXO, HashXUTXOKeyUnpack(key), nil
 	case HashXHistory:
+		return HashXHistory, HashXHistoryKeyUnpack(key), nil
 	case DBState:
 	case ChannelCount:
 	case SupportAmount:
@@ -2838,6 +2936,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	case HashXUTXO:
 		return HashXUTXO, HashXUTXOValueUnpack(value), nil
 	case HashXHistory:
+		return HashXHistory, HashXHistoryValueUnpack(value), nil
 	case DBState:
 	case ChannelCount:
 	case SupportAmount:
