@@ -44,1742 +44,203 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 	return db, records, toDefer
 }
 
+func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T) {
+	return func(t *testing.T) {
+
+		wOpts := grocksdb.NewDefaultWriteOptions()
+		db, records, toDefer := testInit(filePath)
+		defer toDefer()
+		for _, record := range records {
+			key, err := hex.DecodeString(record[0])
+			if err != nil {
+				log.Println(err)
+			}
+			val, err := hex.DecodeString(record[1])
+			if err != nil {
+				log.Println(err)
+			}
+			db.Put(wOpts, key, val)
+		}
+		// test prefix
+		options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefix}).WithIncludeValue(true)
+		ch := dbpkg.Iter(db, options)
+		var i = 0
+		for kv := range ch {
+			// log.Println(kv.Key)
+			_, gotKey, err := prefixes.PackGenericKey(prefix, kv.Key)
+			if err != nil {
+				log.Println(err)
+			}
+
+			for j := 1; j <= numPartials; j++ {
+				_, keyPartial, _ := prefixes.PackPartialGenericKey(prefix, kv.Key, j)
+				// Check pack partial for sanity
+				if !bytes.HasPrefix(gotKey, keyPartial) {
+					t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
+				}
+			}
+
+			_, got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			if err != nil {
+				log.Println(err)
+			}
+			wantKey, err := hex.DecodeString(records[i][0])
+			if err != nil {
+				log.Println(err)
+			}
+			want, err := hex.DecodeString(records[i][1])
+			if err != nil {
+				log.Println(err)
+			}
+			if !bytes.Equal(gotKey, wantKey) {
+				t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("got: %+v, want: %+v\n", got, want)
+			}
+			i++
+		}
+
+		// Test start / stop
+		start, err := hex.DecodeString(records[0][0])
+		if err != nil {
+			log.Println(err)
+		}
+		var numRecords = 9
+		if prefix == prefixes.Undo {
+			numRecords = 1
+		}
+		stop, err := hex.DecodeString(records[numRecords][0])
+		if err != nil {
+			log.Println(err)
+		}
+		options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+		ch2 := dbpkg.Iter(db, options2)
+		i = 0
+		for kv := range ch2 {
+			_, got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			if err != nil {
+				log.Println(err)
+			}
+			want, err := hex.DecodeString(records[i][1])
+			if err != nil {
+				log.Println(err)
+			}
+			if !bytes.Equal(got, want) {
+				t.Errorf("got: %+v, want: %+v\n", got, want)
+			}
+			i++
+		}
+	}
+}
+
+func TestTx(t *testing.T) {
+	testGeneric("../../resources/tx.csv", prefixes.Tx, 1)(t)
+}
+
 func TestHashXHistory(t *testing.T) {
-
 	filePath := "../../resources/hashx_history.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.HashXHistory}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.HashXHistoryKey).PackKey()
-
-		keyPartial1 := prefixes.HashXHistoryKeyPackPartial(kv.Key.(*prefixes.HashXHistoryKey), 1)
-		keyPartial2 := prefixes.HashXHistoryKeyPackPartial(kv.Key.(*prefixes.HashXHistoryKey), 2)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.HashXHistoryValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.HashXHistoryValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.HashXHistory, 2)(t)
 }
 
 func TestUndo(t *testing.T) {
-
 	filePath := "../../resources/undo.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.Undo}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.UndoKey).PackKey()
-
-		keyPartial1 := prefixes.UndoKeyPackPartial(kv.Key.(*prefixes.UndoKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.UndoValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[1][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.UndoValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.Undo, 1)(t)
 }
 
 func TestBlockHash(t *testing.T) {
-
 	filePath := "../../resources/block_hash.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.BlockHash}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.BlockHashKey).PackKey()
-
-		keyPartial1 := prefixes.BlockHashKeyPackPartial(kv.Key.(*prefixes.BlockHashKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.BlockHashValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.BlockHashValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.BlockHash, 1)(t)
 }
 
 func TestBlockHeader(t *testing.T) {
-
 	filePath := "../../resources/header.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.BlockHeaderKey).PackKey()
-
-		keyPartial1 := prefixes.BlockHeaderKeyPackPartial(kv.Key.(*prefixes.BlockHeaderKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.BlockHeaderValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.BlockHeaderValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.Header, 1)(t)
 }
 
 func TestClaimToTXO(t *testing.T) {
-
 	filePath := "../../resources/claim_to_txo.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimToTXO}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ClaimToTXOKey).PackKey()
-
-		keyPartial1 := prefixes.ClaimToTXOKeyPackPartial(kv.Key.(*prefixes.ClaimToTXOKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ClaimToTXOValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ClaimToTXOValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimToTXO, 1)(t)
 }
 
 func TestTXOToClaim(t *testing.T) {
-
 	filePath := "../../resources/txo_to_claim.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.TXOToClaim}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.TXOToClaimKey).PackKey()
-
-		keyPartial1 := prefixes.TXOToClaimKeyPackPartial(kv.Key.(*prefixes.TXOToClaimKey), 1)
-		keyPartial2 := prefixes.TXOToClaimKeyPackPartial(kv.Key.(*prefixes.TXOToClaimKey), 2)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.TXOToClaimValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.TXOToClaimValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.TXOToClaim, 2)(t)
 }
 
 func TestClaimShortID(t *testing.T) {
-
 	filePath := "../../resources/claim_short_id_prefix.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimShortIdPrefix}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ClaimShortIDKey).PackKey()
-
-		keyPartial1 := prefixes.ClaimShortIDKeyPackPartial(kv.Key.(*prefixes.ClaimShortIDKey), 1)
-		keyPartial2 := prefixes.ClaimShortIDKeyPackPartial(kv.Key.(*prefixes.ClaimShortIDKey), 2)
-		keyPartial3 := prefixes.ClaimShortIDKeyPackPartial(kv.Key.(*prefixes.ClaimShortIDKey), 3)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ClaimShortIDValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ClaimShortIDValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimShortIdPrefix, 3)(t)
 }
 
 func TestClaimToChannel(t *testing.T) {
-
 	filePath := "../../resources/claim_to_channel.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimToChannel}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ClaimToChannelKey).PackKey()
-
-		keyPartial1 := prefixes.ClaimToChannelKeyPackPartial(kv.Key.(*prefixes.ClaimToChannelKey), 1)
-		keyPartial2 := prefixes.ClaimToChannelKeyPackPartial(kv.Key.(*prefixes.ClaimToChannelKey), 2)
-		keyPartial3 := prefixes.ClaimToChannelKeyPackPartial(kv.Key.(*prefixes.ClaimToChannelKey), 3)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ClaimToChannelValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ClaimToChannelValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimToChannel, 3)(t)
 }
 
 func TestChannelToClaim(t *testing.T) {
-
 	filePath := "../../resources/channel_to_claim.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ChannelToClaim}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ChannelToClaimKey).PackKey()
-
-		keyPartial1 := prefixes.ChannelToClaimKeyPackPartial(kv.Key.(*prefixes.ChannelToClaimKey), 1)
-		keyPartial2 := prefixes.ChannelToClaimKeyPackPartial(kv.Key.(*prefixes.ChannelToClaimKey), 2)
-		keyPartial3 := prefixes.ChannelToClaimKeyPackPartial(kv.Key.(*prefixes.ChannelToClaimKey), 3)
-		keyPartial4 := prefixes.ChannelToClaimKeyPackPartial(kv.Key.(*prefixes.ChannelToClaimKey), 4)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial4) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial4, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ChannelToClaimValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ChannelToClaimValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ChannelToClaim, 4)(t)
 }
 
 func TestClaimToSupport(t *testing.T) {
-
 	filePath := "../../resources/claim_to_support.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimToSupport}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ClaimToSupportKey).PackKey()
-
-		keyPartial1 := prefixes.ClaimToSupportKeyPackPartial(kv.Key.(*prefixes.ClaimToSupportKey), 1)
-		keyPartial2 := prefixes.ClaimToSupportKeyPackPartial(kv.Key.(*prefixes.ClaimToSupportKey), 2)
-		keyPartial3 := prefixes.ClaimToSupportKeyPackPartial(kv.Key.(*prefixes.ClaimToSupportKey), 3)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ClaimToSupportValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ClaimToSupportValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimToSupport, 3)(t)
 }
 
 func TestSupportToClaim(t *testing.T) {
-
 	filePath := "../../resources/support_to_claim.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.SupportToClaim}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.SupportToClaimKey).PackKey()
-
-		keyPartial1 := prefixes.SupportToClaimKeyPackPartial(kv.Key.(*prefixes.SupportToClaimKey), 1)
-		keyPartial2 := prefixes.SupportToClaimKeyPackPartial(kv.Key.(*prefixes.SupportToClaimKey), 2)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.SupportToClaimValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.SupportToClaimValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.SupportToClaim, 2)(t)
 }
 
 func TestClaimExpiration(t *testing.T) {
-
 	filePath := "../../resources/claim_expiration.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimExpiration}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ClaimExpirationKey).PackKey()
-
-		keyPartial1 := prefixes.ClaimExpirationKeyPackPartial(kv.Key.(*prefixes.ClaimExpirationKey), 1)
-		keyPartial2 := prefixes.ClaimExpirationKeyPackPartial(kv.Key.(*prefixes.ClaimExpirationKey), 2)
-		keyPartial3 := prefixes.ClaimExpirationKeyPackPartial(kv.Key.(*prefixes.ClaimExpirationKey), 3)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ClaimExpirationValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ClaimExpirationValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimExpiration, 3)(t)
 }
 
 func TestClaimTakeover(t *testing.T) {
-
 	filePath := "../../resources/claim_takeover.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimTakeover}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ClaimTakeoverKey).PackKey()
-
-		keyPartial1 := prefixes.ClaimTakeoverKeyPackPartial(kv.Key.(*prefixes.ClaimTakeoverKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ClaimTakeoverValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ClaimTakeoverValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimTakeover, 1)(t)
 }
 
 func TestPendingActivation(t *testing.T) {
-
 	filePath := "../../resources/pending_activation.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.PendingActivation}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.PendingActivationKey).PackKey()
-
-		keyPartial1 := prefixes.PendingActivationKeyPackPartial(kv.Key.(*prefixes.PendingActivationKey), 1)
-		keyPartial2 := prefixes.PendingActivationKeyPackPartial(kv.Key.(*prefixes.PendingActivationKey), 2)
-		keyPartial3 := prefixes.PendingActivationKeyPackPartial(kv.Key.(*prefixes.PendingActivationKey), 3)
-		keyPartial4 := prefixes.PendingActivationKeyPackPartial(kv.Key.(*prefixes.PendingActivationKey), 4)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial4) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial4, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.PendingActivationValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.PendingActivationValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.PendingActivation, 4)(t)
 }
 
 func TestActivated(t *testing.T) {
-
 	filePath := "../../resources/activated_claim_and_support.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ActivatedClaimAndSupport}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ActivationKey).PackKey()
-
-		keyPartial1 := prefixes.ActivationKeyPackPartial(kv.Key.(*prefixes.ActivationKey), 1)
-		keyPartial2 := prefixes.ActivationKeyPackPartial(kv.Key.(*prefixes.ActivationKey), 2)
-		keyPartial3 := prefixes.ActivationKeyPackPartial(kv.Key.(*prefixes.ActivationKey), 3)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ActivationValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ActivationValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ActivatedClaimAndSupport, 3)(t)
 }
 
 func TestActiveAmount(t *testing.T) {
-
 	filePath := "../../resources/active_amount.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ActiveAmount}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.ActiveAmountKey).PackKey()
-
-		keyPartial1 := prefixes.ActiveAmountKeyPackPartial(kv.Key.(*prefixes.ActiveAmountKey), 1)
-		keyPartial2 := prefixes.ActiveAmountKeyPackPartial(kv.Key.(*prefixes.ActiveAmountKey), 2)
-		keyPartial3 := prefixes.ActiveAmountKeyPackPartial(kv.Key.(*prefixes.ActiveAmountKey), 3)
-		keyPartial4 := prefixes.ActiveAmountKeyPackPartial(kv.Key.(*prefixes.ActiveAmountKey), 4)
-		keyPartial5 := prefixes.ActiveAmountKeyPackPartial(kv.Key.(*prefixes.ActiveAmountKey), 5)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial4) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial4, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial5) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial5, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.ActiveAmountValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.ActiveAmountValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ActiveAmount, 5)(t)
 }
 
 func TestEffectiveAmount(t *testing.T) {
-
 	filePath := "../../resources/effective_amount.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.EffectiveAmount}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.EffectiveAmountKey).PackKey()
-
-		keyPartial1 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 1)
-		keyPartial2 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 2)
-		keyPartial3 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 3)
-		keyPartial4 := prefixes.EffectiveAmountKeyPackPartial(kv.Key.(*prefixes.EffectiveAmountKey), 4)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial4) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial4, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.EffectiveAmountValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.EffectiveAmountValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.EffectiveAmount, 4)(t)
 }
 
 func TestRepost(t *testing.T) {
-
 	filePath := "../../resources/repost.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.Repost}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.RepostKey).PackKey()
-
-		keyPartial1 := prefixes.RepostKeyPackPartial(kv.Key.(*prefixes.RepostKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.RepostValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.RepostValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.Repost, 1)(t)
 }
 
 func TestRepostedClaim(t *testing.T) {
-
 	filePath := "../../resources/reposted_claim.csv"
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	db, records, toDefer := testInit(filePath)
-	defer toDefer()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.RepostedClaim}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.RepostedKey).PackKey()
-
-		keyPartial3 := prefixes.RepostedKeyPackPartial(kv.Key.(*prefixes.RepostedKey), 3)
-		keyPartial2 := prefixes.RepostedKeyPackPartial(kv.Key.(*prefixes.RepostedKey), 2)
-		keyPartial1 := prefixes.RepostedKeyPackPartial(kv.Key.(*prefixes.RepostedKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial3) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial3, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial2) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial2, gotKey)
-		}
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.RepostedValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		got := kv.Value.(*prefixes.RepostedValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.RepostedClaim, 3)(t)
 }
 
 func TestClaimDiff(t *testing.T) {
-
 	filePath := "../../resources/claim_diff.csv"
-
-	log.Println(filePath)
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Println(err)
-	}
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		log.Println(err)
-	}
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	opts := grocksdb.NewDefaultOptions()
-	opts.SetCreateIfMissing(true)
-	db, err := grocksdb.OpenDb(opts, "tmp")
-	if err != nil {
-		log.Println(err)
-	}
-	defer func() {
-		db.Close()
-		err = os.RemoveAll("./tmp")
-		if err != nil {
-			log.Println(err)
-		}
-	}()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.ClaimDiff}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		// log.Println(kv.Key)
-		gotKey := kv.Key.(*prefixes.TouchedOrDeletedClaimKey).PackKey()
-
-		keyPartial1 := prefixes.TouchedOrDeletedClaimKeyPackPartial(kv.Key.(*prefixes.TouchedOrDeletedClaimKey), 1)
-
-		// Check pack partial for sanity
-		if !bytes.HasPrefix(gotKey, keyPartial1) {
-			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
-		}
-
-		got := kv.Value.(*prefixes.TouchedOrDeletedClaimValue).PackValue()
-		wantKey, err := hex.DecodeString(records[i][0])
-		if err != nil {
-			log.Println(err)
-		}
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(gotKey, wantKey) {
-			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		log.Println(kv.Key)
-		got := kv.Value.(*prefixes.TouchedOrDeletedClaimValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.ClaimDiff, 1)(t)
 }
 
 func TestUTXO(t *testing.T) {
-
 	filePath := "../../resources/utxo.csv"
-
-	log.Println(filePath)
-	file, err := os.Open(filePath)
-	if err != nil {
-		log.Println(err)
-	}
-	reader := csv.NewReader(file)
-	records, err := reader.ReadAll()
-	if err != nil {
-		log.Println(err)
-	}
-
-	wOpts := grocksdb.NewDefaultWriteOptions()
-	opts := grocksdb.NewDefaultOptions()
-	opts.SetCreateIfMissing(true)
-	db, err := grocksdb.OpenDb(opts, "tmp")
-	if err != nil {
-		log.Println(err)
-	}
-	defer func() {
-		db.Close()
-		err = os.RemoveAll("./tmp")
-		if err != nil {
-			log.Println(err)
-		}
-	}()
-	for _, record := range records {
-		key, err := hex.DecodeString(record[0])
-		if err != nil {
-			log.Println(err)
-		}
-		val, err := hex.DecodeString(record[1])
-		if err != nil {
-			log.Println(err)
-		}
-		db.Put(wOpts, key, val)
-	}
-	// test prefix
-	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.UTXO}).WithIncludeValue(true)
-	ch := dbpkg.Iter(db, options)
-	var i = 0
-	for kv := range ch {
-		log.Println(kv.Key)
-		got := kv.Value.(*prefixes.UTXOValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
-
-	// Test start / stop
-	start, err := hex.DecodeString(records[0][0])
-	if err != nil {
-		log.Println(err)
-	}
-	stop, err := hex.DecodeString(records[9][0])
-	if err != nil {
-		log.Println(err)
-	}
-	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-	ch2 := dbpkg.Iter(db, options2)
-	i = 0
-	for kv := range ch2 {
-		log.Println(kv.Key)
-		got := kv.Value.(*prefixes.UTXOValue).PackValue()
-		want, err := hex.DecodeString(records[i][1])
-		if err != nil {
-			log.Println(err)
-		}
-		if !bytes.Equal(got, want) {
-			t.Errorf("got: %+v, want: %+v\n", got, want)
-		}
-		i++
-	}
+	testGeneric(filePath, prefixes.UTXO, 1)(t)
 }
 
 func TestHashXUTXO(t *testing.T) {

@@ -91,6 +91,12 @@ func (v *UndoValue) PackValue() []byte {
 	return value
 }
 
+func UndoKeyPackPartialKey(key *UndoKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return UndoKeyPackPartial(key, nFields)
+	}
+}
+
 func UndoKeyPackPartialNFields(nFields int) func(*UndoKey) []byte {
 	return func(u *UndoKey) []byte {
 		return UndoKeyPackPartial(u, nFields)
@@ -207,6 +213,13 @@ func (v *HashXUTXOValue) PackValue() []byte {
 	copy(value, v.HashX)
 
 	return value
+}
+
+// HashXUTXOKeyPackPartialKey creates a pack partial key function for n fields.
+func HashXUTXOKeyPackPartialKey(key *HashXUTXOKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return HashXUTXOKeyPackPartial(key, nFields)
+	}
 }
 
 // HashXUTXOKeyPackPartialNFields creates a pack partial key function for n fields.
@@ -330,6 +343,13 @@ func (v *HashXHistoryValue) PackValue() []byte {
 	return value
 }
 
+// HashXHistoryKeyPackPartialKey creates a pack partial key function for n fields.
+func HashXHistoryKeyPackPartialKey(key *HashXHistoryKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return HashXHistoryKeyPackPartial(key, nFields)
+	}
+}
+
 // HashXHistoryKeyPackPartialNFields creates a pack partial key function for n fields.
 func HashXHistoryKeyPackPartialNFields(nFields int) func(*HashXHistoryKey) []byte {
 	return func(u *HashXHistoryKey) []byte {
@@ -433,6 +453,12 @@ func (v *BlockHashValue) PackValue() []byte {
 	copy(value, v.BlockHash[:32])
 
 	return value
+}
+
+func BlockHashKeyPackPartialKey(key *BlockHashKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return BlockHashKeyPackPartial(key, nFields)
+	}
 }
 
 func BlockHashKeyPackPartialNFields(nFields int) func(*BlockHashKey) []byte {
@@ -595,6 +621,83 @@ type TxValue struct {
 	RawTx []byte `json:"raw_tx"`
 }
 
+func (k *TxKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 32
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.TxHash[:32])
+
+	return key
+}
+
+func (v *TxValue) PackValue() []byte {
+	value := make([]byte, len(v.RawTx))
+	copy(value, v.RawTx)
+
+	return value
+}
+
+func TxKeyPackPartialKey(key *TxKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return TxKeyPackPartial(key, nFields)
+	}
+}
+
+func TxKeyPackPartialNFields(nFields int) func(*TxKey) []byte {
+	return func(u *TxKey) []byte {
+		return TxKeyPackPartial(u, nFields)
+	}
+}
+
+func TxKeyPackPartial(k *TxKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 32
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.TxHash[:32])
+		}
+	}
+
+	return key
+}
+
+func TxKeyUnpack(key []byte) *TxKey {
+	prefixLen := 1
+	return &TxKey{
+		Prefix: key[:prefixLen],
+		TxHash: key[prefixLen : prefixLen+32],
+	}
+}
+
+func TxValueUnpack(value []byte) *TxValue {
+	return &TxValue{
+		RawTx: value,
+	}
+}
+
 /*
 class BlockHeaderKey(NamedTuple):
     height: int
@@ -632,6 +735,12 @@ func (v *BlockHeaderValue) PackValue() []byte {
 	copy(value, v.Header)
 
 	return value
+}
+
+func BlockHeaderKeyPackPartialKey(key *BlockHeaderKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return BlockHeaderKeyPackPartial(key, nFields)
+	}
 }
 
 func BlockHeaderKeyPackPartialNFields(nFields int) func(*BlockHeaderKey) []byte {
@@ -766,6 +875,12 @@ func (v *ClaimToTXOValue) PackValue() []byte {
 	return value
 }
 
+func ClaimToTXOKeyPackPartialKey(key *ClaimToTXOKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ClaimToTXOKeyPackPartial(key, nFields)
+	}
+}
+
 func ClaimToTXOKeyPackPartialNFields(nFields int) func(*ClaimToTXOKey) []byte {
 	return func(u *ClaimToTXOKey) []byte {
 		return ClaimToTXOKeyPackPartial(u, nFields)
@@ -873,6 +988,12 @@ func (v *TXOToClaimValue) PackValue() []byte {
 	copy(value[22:], []byte(v.Name))
 
 	return value
+}
+
+func TXOToClaimKeyPackPartialKey(key *TXOToClaimKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return TXOToClaimKeyPackPartial(key, nFields)
+	}
 }
 
 func TXOToClaimKeyPackPartialNFields(nFields int) func(*TXOToClaimKey) []byte {
@@ -990,6 +1111,12 @@ func (v *ClaimShortIDValue) PackValue() []byte {
 	binary.BigEndian.PutUint16(value[4:], v.Position)
 
 	return value
+}
+
+func ClaimShortIDKeyPackPartialKey(key *ClaimShortIDKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ClaimShortIDKeyPackPartial(key, nFields)
+	}
 }
 
 func ClaimShortIDKeyPackPartialNFields(nFields int) func(*ClaimShortIDKey) []byte {
@@ -1118,6 +1245,12 @@ func (v *ClaimToChannelValue) PackValue() []byte {
 	return value
 }
 
+func ClaimToChannelKeyPackPartialKey(key *ClaimToChannelKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ClaimToChannelKeyPackPartial(key, nFields)
+	}
+}
+
 func ClaimToChannelKeyPackPartialNFields(nFields int) func(*ClaimToChannelKey) []byte {
 	return func(u *ClaimToChannelKey) []byte {
 		return ClaimToChannelKeyPackPartial(u, nFields)
@@ -1233,6 +1366,12 @@ func (v *ChannelToClaimValue) PackValue() []byte {
 	copy(value, v.ClaimHash[:20])
 
 	return value
+}
+
+func ChannelToClaimKeyPackPartialKey(key *ChannelToClaimKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ChannelToClaimKeyPackPartial(key, nFields)
+	}
 }
 
 func ChannelToClaimKeyPackPartialNFields(nFields int) func(*ChannelToClaimKey) []byte {
@@ -1396,6 +1535,12 @@ func (v *ClaimToSupportValue) PackValue() []byte {
 	return value
 }
 
+func ClaimToSupportKeyPackPartialKey(key *ClaimToSupportKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ClaimToSupportKeyPackPartial(key, nFields)
+	}
+}
+
 func ClaimToSupportKeyPackPartialNFields(nFields int) func(*ClaimToSupportKey) []byte {
 	return func(u *ClaimToSupportKey) []byte {
 		return ClaimToSupportKeyPackPartial(u, nFields)
@@ -1500,6 +1645,12 @@ func (v *SupportToClaimValue) PackValue() []byte {
 	copy(value, v.ClaimHash)
 
 	return value
+}
+
+func SupportToClaimKeyPackPartialKey(key *SupportToClaimKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return SupportToClaimKeyPackPartial(key, nFields)
+	}
 }
 
 func SupportToClaimKeyPackPartialNFields(nFields int) func(*SupportToClaimKey) []byte {
@@ -1609,6 +1760,12 @@ func (v *ClaimExpirationValue) PackValue() []byte {
 	copy(value[22:], []byte(v.NormalizedName))
 
 	return value
+}
+
+func ClaimExpirationKeyPackPartialKey(key *ClaimExpirationKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ClaimExpirationKeyPackPartial(key, nFields)
+	}
 }
 
 func ClaimExpirationKeyPackPartialNFields(nFields int) func(*ClaimExpirationKey) []byte {
@@ -1728,6 +1885,12 @@ func (v *ClaimTakeoverValue) PackValue() []byte {
 	binary.BigEndian.PutUint32(value[20:], uint32(v.Height))
 
 	return value
+}
+
+func ClaimTakeoverKeyPackPartialKey(key *ClaimTakeoverKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ClaimTakeoverKeyPackPartial(key, nFields)
+	}
 }
 
 func ClaimTakeoverKeyPackPartialNFields(nFields int) func(*ClaimTakeoverKey) []byte {
@@ -1858,6 +2021,12 @@ func (v *PendingActivationValue) PackValue() []byte {
 	return value
 }
 
+func PendingActivationKeyPackPartialKey(key *PendingActivationKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return PendingActivationKeyPackPartial(key, nFields)
+	}
+}
+
 func PendingActivationKeyPackPartialNFields(nFields int) func(*PendingActivationKey) []byte {
 	return func(u *PendingActivationKey) []byte {
 		return PendingActivationKeyPackPartial(u, nFields)
@@ -1984,6 +2153,12 @@ func (v *ActivationValue) PackValue() []byte {
 	return value
 }
 
+func ActivationKeyPackPartialKey(key *ActivationKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ActivationKeyPackPartial(key, nFields)
+	}
+}
+
 func ActivationKeyPackPartialNFields(nFields int) func(*ActivationKey) []byte {
 	return func(u *ActivationKey) []byte {
 		return ActivationKeyPackPartial(u, nFields)
@@ -2102,6 +2277,12 @@ func (v *ActiveAmountValue) PackValue() []byte {
 	binary.BigEndian.PutUint64(value, v.Amount)
 
 	return value
+}
+
+func ActiveAmountKeyPackPartialKey(key *ActiveAmountKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ActiveAmountKeyPackPartial(key, nFields)
+	}
 }
 
 func ActiveAmountKeyPackPartialNFields(nFields int) func(*ActiveAmountKey) []byte {
@@ -2235,6 +2416,12 @@ func (v *EffectiveAmountValue) PackValue() []byte {
 	return value
 }
 
+func EffectiveAmountKeyPackPartialKey(key *EffectiveAmountKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return EffectiveAmountKeyPackPartial(key, nFields)
+	}
+}
+
 func EffectiveAmountKeyPackPartialNFields(nFields int) func(*EffectiveAmountKey) []byte {
 	return func(u *EffectiveAmountKey) []byte {
 		return EffectiveAmountKeyPackPartial(u, nFields)
@@ -2352,6 +2539,12 @@ func (v *RepostValue) PackValue() []byte {
 	return value
 }
 
+func RepostKeyPackPartialKey(key *RepostKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return RepostKeyPackPartial(key, nFields)
+	}
+}
+
 func RepostKeyPackPartialNFields(nFields int) func(*RepostKey) []byte {
 	return func(u *RepostKey) []byte {
 		return RepostKeyPackPartial(u, nFields)
@@ -2454,6 +2647,12 @@ func (v *RepostedValue) PackValue() []byte {
 	copy(value, v.ClaimHash)
 
 	return value
+}
+
+func RepostedKeyPackPartialKey(key *RepostedKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return RepostedKeyPackPartial(key, nFields)
+	}
 }
 
 func RepostedKeyPackPartialNFields(nFields int) func(*RepostedKey) []byte {
@@ -2629,6 +2828,12 @@ func (v *TouchedOrDeletedClaimValue) PackValue() []byte {
 	return value
 }
 
+func TouchedOrDeletedClaimKeyPackPartialKey(key *TouchedOrDeletedClaimKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return TouchedOrDeletedClaimKeyPackPartial(key, nFields)
+	}
+}
+
 func TouchedOrDeletedClaimPackPartialNFields(nFields int) func(*TouchedOrDeletedClaimKey) []byte {
 	return func(u *TouchedOrDeletedClaimKey) []byte {
 		return TouchedOrDeletedClaimKeyPackPartial(u, nFields)
@@ -2730,7 +2935,12 @@ func (k *UTXOValue) PackValue() []byte {
 	return value
 }
 
-// UTXOKeyPackPartialNFields creates a pack partial key function for n fields.
+func UTXOKeyPackPartialKey(key *UTXOKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return UTXOKeyPackPartial(key, nFields)
+	}
+}
+
 func UTXOKeyPackPartialNFields(nFields int) func(*UTXOKey) []byte {
 	return func(u *UTXOKey) []byte {
 		return UTXOKeyPackPartial(u, nFields)
@@ -2797,76 +3007,267 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 	}
 }
 
-func UnpackGenericKey(key []byte) (byte, interface{}, error) {
-	if len(key) == 0 {
-		return 0x0, nil, errors.Base("key length zero")
+func generic(voidstar interface{}, firstByte byte, function byte, functionName string) (byte, interface{}, error) {
+	var data []byte
+	if function < 2 {
+		data = voidstar.([]byte)
 	}
-	firstByte := key[0]
-	switch firstByte {
+	switch uint16(firstByte) | uint16(function)<<8 {
 	case ClaimToSupport:
-		return ClaimToSupport, ClaimToSupportKeyUnpack(key), nil
+		return ClaimToSupport, ClaimToSupportKeyUnpack(data), nil
+	case ClaimToSupport | 1<<8:
+		return ClaimToSupport, ClaimToSupportValueUnpack(data), nil
+	case ClaimToSupport | 2<<8:
+		return ClaimToSupport, voidstar.(*ClaimToSupportKey).PackKey(), nil
+	case ClaimToSupport | 3<<8:
+		return ClaimToSupport, voidstar.(*ClaimToSupportValue).PackValue(), nil
+	case ClaimToSupport | 4<<8:
+		return ClaimToSupport, ClaimToSupportKeyPackPartialKey(voidstar.(*ClaimToSupportKey)), nil
 	case SupportToClaim:
-		return SupportToClaim, SupportToClaimKeyUnpack(key), nil
-
+		return SupportToClaim, SupportToClaimKeyUnpack(data), nil
+	case SupportToClaim | 1<<8:
+		return SupportToClaim, SupportToClaimValueUnpack(data), nil
+	case SupportToClaim | 2<<8:
+		return SupportToClaim, voidstar.(*SupportToClaimKey).PackKey(), nil
+	case SupportToClaim | 3<<8:
+		return SupportToClaim, voidstar.(*SupportToClaimValue).PackValue(), nil
+	case SupportToClaim | 4<<8:
+		return SupportToClaim, SupportToClaimKeyPackPartialKey(voidstar.(*SupportToClaimKey)), nil
 	case ClaimToTXO:
-		return ClaimToTXO, ClaimToTXOKeyUnpack(key), nil
+		return ClaimToTXO, ClaimToTXOKeyUnpack(data), nil
+	case ClaimToTXO | 1<<8:
+		return ClaimToTXO, ClaimToTXOValueUnpack(data), nil
+	case ClaimToTXO | 2<<8:
+		return ClaimToTXO, voidstar.(*ClaimToTXOKey).PackKey(), nil
+	case ClaimToTXO | 3<<8:
+		return ClaimToTXO, voidstar.(*ClaimToTXOValue).PackValue(), nil
+	case ClaimToTXO | 4<<8:
+		return ClaimToTXO, ClaimToTXOKeyPackPartialKey(voidstar.(*ClaimToTXOKey)), nil
 	case TXOToClaim:
-		return TXOToClaim, TXOToClaimKeyUnpack(key), nil
+		return TXOToClaim, TXOToClaimKeyUnpack(data), nil
+	case TXOToClaim | 1<<8:
+		return TXOToClaim, TXOToClaimValueUnpack(data), nil
+	case TXOToClaim | 2<<8:
+		return TXOToClaim, voidstar.(*TXOToClaimKey).PackKey(), nil
+	case TXOToClaim | 3<<8:
+		return TXOToClaim, voidstar.(*TXOToClaimValue).PackValue(), nil
+	case TXOToClaim | 4<<8:
+		return TXOToClaim, TXOToClaimKeyPackPartialKey(voidstar.(*TXOToClaimKey)), nil
 
 	case ClaimToChannel:
-		return ClaimToChannel, ClaimToChannelKeyUnpack(key), nil
+		return ClaimToChannel, ClaimToChannelKeyUnpack(data), nil
+	case ClaimToChannel | 1<<8:
+		return ClaimToChannel, ClaimToChannelValueUnpack(data), nil
+	case ClaimToChannel | 2<<8:
+		return ClaimToChannel, voidstar.(*ClaimToChannelKey).PackKey(), nil
+	case ClaimToChannel | 3<<8:
+		return ClaimToChannel, voidstar.(*ClaimToChannelValue).PackValue(), nil
+	case ClaimToChannel | 4<<8:
+		return ClaimToChannel, ClaimToChannelKeyPackPartialKey(voidstar.(*ClaimToChannelKey)), nil
 	case ChannelToClaim:
-		return ChannelToClaim, ChannelToClaimKeyUnpack(key), nil
+		return ChannelToClaim, ChannelToClaimKeyUnpack(data), nil
+	case ChannelToClaim | 1<<8:
+		return ChannelToClaim, ChannelToClaimValueUnpack(data), nil
+	case ChannelToClaim | 2<<8:
+		return ChannelToClaim, voidstar.(*ChannelToClaimKey).PackKey(), nil
+	case ChannelToClaim | 3<<8:
+		return ChannelToClaim, voidstar.(*ChannelToClaimValue).PackValue(), nil
+	case ChannelToClaim | 4<<8:
+		return ChannelToClaim, ChannelToClaimKeyPackPartialKey(voidstar.(*ChannelToClaimKey)), nil
 
 	case ClaimShortIdPrefix:
-		return ClaimShortIdPrefix, ClaimShortIDKeyUnpack(key), nil
+		return ClaimShortIdPrefix, ClaimShortIDKeyUnpack(data), nil
+	case ClaimShortIdPrefix | 1<<8:
+		return ClaimShortIdPrefix, ClaimShortIDValueUnpack(data), nil
+	case ClaimShortIdPrefix | 2<<8:
+		return ClaimShortIdPrefix, voidstar.(*ClaimShortIDKey).PackKey(), nil
+	case ClaimShortIdPrefix | 3<<8:
+		return ClaimShortIdPrefix, voidstar.(*ClaimShortIDValue).PackValue(), nil
+	case ClaimShortIdPrefix | 4<<8:
+		return ClaimShortIdPrefix, ClaimShortIDKeyPackPartialKey(voidstar.(*ClaimShortIDKey)), nil
 	case EffectiveAmount:
-		return EffectiveAmount, EffectiveAmountKeyUnpack(key), nil
+		return EffectiveAmount, EffectiveAmountKeyUnpack(data), nil
+	case EffectiveAmount | 1<<8:
+		return EffectiveAmount, EffectiveAmountValueUnpack(data), nil
+	case EffectiveAmount | 2<<8:
+		return EffectiveAmount, voidstar.(*EffectiveAmountKey).PackKey(), nil
+	case EffectiveAmount | 3<<8:
+		return EffectiveAmount, voidstar.(*EffectiveAmountValue).PackValue(), nil
+	case EffectiveAmount | 4<<8:
+		return EffectiveAmount, EffectiveAmountKeyPackPartialKey(voidstar.(*EffectiveAmountKey)), nil
 	case ClaimExpiration:
-		return ClaimExpiration, ClaimExpirationKeyUnpack(key), nil
+		return ClaimExpiration, ClaimExpirationKeyUnpack(data), nil
+	case ClaimExpiration | 1<<8:
+		return ClaimExpiration, ClaimExpirationValueUnpack(data), nil
+	case ClaimExpiration | 2<<8:
+		return ClaimExpiration, voidstar.(*ClaimExpirationKey).PackKey(), nil
+	case ClaimExpiration | 3<<8:
+		return ClaimExpiration, voidstar.(*ClaimExpirationValue).PackValue(), nil
+	case ClaimExpiration | 4<<8:
+		return ClaimExpiration, ClaimExpirationKeyPackPartialKey(voidstar.(*ClaimExpirationKey)), nil
 
 	case ClaimTakeover:
-		return ClaimTakeover, ClaimTakeoverKeyUnpack(key), nil
+		return ClaimTakeover, ClaimTakeoverKeyUnpack(data), nil
+	case ClaimTakeover | 1<<8:
+		return ClaimTakeover, ClaimTakeoverValueUnpack(data), nil
+	case ClaimTakeover | 2<<8:
+		return ClaimTakeover, voidstar.(*ClaimTakeoverKey).PackKey(), nil
+	case ClaimTakeover | 3<<8:
+		return ClaimTakeover, voidstar.(*ClaimTakeoverValue).PackValue(), nil
+	case ClaimTakeover | 4<<8:
+		return ClaimTakeover, ClaimTakeoverKeyPackPartialKey(voidstar.(*ClaimTakeoverKey)), nil
 	case PendingActivation:
-		return PendingActivation, PendingActivationKeyUnpack(key), nil
+		return PendingActivation, PendingActivationKeyUnpack(data), nil
+	case PendingActivation | 1<<8:
+		return PendingActivation, PendingActivationValueUnpack(data), nil
+	case PendingActivation | 2<<8:
+		return PendingActivation, voidstar.(*PendingActivationKey).PackKey(), nil
+	case PendingActivation | 3<<8:
+		return PendingActivation, voidstar.(*PendingActivationValue).PackValue(), nil
+	case PendingActivation | 4<<8:
+		return PendingActivation, PendingActivationKeyPackPartialKey(voidstar.(*PendingActivationKey)), nil
 	case ActivatedClaimAndSupport:
-		return ActivatedClaimAndSupport, ActivationKeyUnpack(key), nil
+		return ActivatedClaimAndSupport, ActivationKeyUnpack(data), nil
+	case ActivatedClaimAndSupport | 1<<8:
+		return ActivatedClaimAndSupport, ActivationValueUnpack(data), nil
+	case ActivatedClaimAndSupport | 2<<8:
+		return ActivatedClaimAndSupport, voidstar.(*ActivationKey).PackKey(), nil
+	case ActivatedClaimAndSupport | 3<<8:
+		return ActivatedClaimAndSupport, voidstar.(*ActivationValue).PackValue(), nil
+	case ActivatedClaimAndSupport | 4<<8:
+		return ActivatedClaimAndSupport, ActivationKeyPackPartialKey(voidstar.(*ActivationKey)), nil
 	case ActiveAmount:
-		return ActiveAmount, ActiveAmountKeyUnpack(key), nil
+		return ActiveAmount, ActiveAmountKeyUnpack(data), nil
+	case ActiveAmount | 1<<8:
+		return ActiveAmount, ActiveAmountValueUnpack(data), nil
+	case ActiveAmount | 2<<8:
+		return ActiveAmount, voidstar.(*ActiveAmountKey).PackKey(), nil
+	case ActiveAmount | 3<<8:
+		return ActiveAmount, voidstar.(*ActiveAmountValue).PackValue(), nil
+	case ActiveAmount | 4<<8:
+		return ActiveAmount, ActiveAmountKeyPackPartialKey(voidstar.(*ActiveAmountKey)), nil
 
 	case Repost:
-		return Repost, RepostKeyUnpack(key), nil
+		return Repost, RepostKeyUnpack(data), nil
+	case Repost | 1<<8:
+		return Repost, RepostValueUnpack(data), nil
+	case Repost | 2<<8:
+		return Repost, voidstar.(*RepostKey).PackKey(), nil
+	case Repost | 3<<8:
+		return Repost, voidstar.(*RepostValue).PackValue(), nil
+	case Repost | 4<<8:
+		return Repost, RepostKeyPackPartialKey(voidstar.(*RepostKey)), nil
 	case RepostedClaim:
-		return RepostedClaim, RepostedKeyUnpack(key), nil
+		return RepostedClaim, RepostedKeyUnpack(data), nil
+	case RepostedClaim | 1<<8:
+		return RepostedClaim, RepostedValueUnpack(data), nil
+	case RepostedClaim | 2<<8:
+		return RepostedClaim, voidstar.(*RepostedKey).PackKey(), nil
+	case RepostedClaim | 3<<8:
+		return RepostedClaim, voidstar.(*RepostedValue).PackValue(), nil
+	case RepostedClaim | 4<<8:
+		return RepostedClaim, RepostedKeyPackPartialKey(voidstar.(*RepostedKey)), nil
 
 	case Undo:
-		return Undo, UndoKeyUnpack(key), nil
+		return Undo, UndoKeyUnpack(data), nil
+	case Undo | 1<<8:
+		return Undo, UndoValueUnpack(data), nil
+	case Undo | 2<<8:
+		return Undo, voidstar.(*UndoKey).PackKey(), nil
+	case Undo | 3<<8:
+		return Undo, voidstar.(*UndoValue).PackValue(), nil
+	case Undo | 4<<8:
+		return Undo, UndoKeyPackPartialKey(voidstar.(*UndoKey)), nil
 	case ClaimDiff:
-		return ClaimDiff, TouchedOrDeletedClaimKeyUnpack(key), nil
+		return ClaimDiff, TouchedOrDeletedClaimKeyUnpack(data), nil
+	case ClaimDiff | 1<<8:
+		return ClaimDiff, TouchedOrDeletedClaimValueUnpack(data), nil
+	case ClaimDiff | 2<<8:
+		return ClaimDiff, voidstar.(*TouchedOrDeletedClaimKey).PackKey(), nil
+	case ClaimDiff | 3<<8:
+		return ClaimDiff, voidstar.(*TouchedOrDeletedClaimValue).PackValue(), nil
+	case ClaimDiff | 4<<8:
+		return ClaimDiff, TouchedOrDeletedClaimKeyPackPartialKey(voidstar.(*TouchedOrDeletedClaimKey)), nil
 
 	case Tx:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return Tx, TxKeyUnpack(data), nil
+	case Tx | 1<<8:
+		return Tx, TxValueUnpack(data), nil
+	case Tx | 2<<8:
+		return Tx, voidstar.(*TxKey).PackKey(), nil
+	case Tx | 3<<8:
+		return Tx, voidstar.(*TxValue).PackValue(), nil
+	case Tx | 4<<8:
+		return Tx, TxKeyPackPartialKey(voidstar.(*TxKey)), nil
 	case BlockHash:
-		return BlockHash, BlockHashKeyUnpack(key), nil
+		return BlockHash, BlockHashKeyUnpack(data), nil
+	case BlockHash | 1<<8:
+		return BlockHash, BlockHashValueUnpack(data), nil
+	case BlockHash | 2<<8:
+		return BlockHash, voidstar.(*BlockHashKey).PackKey(), nil
+	case BlockHash | 3<<8:
+		return BlockHash, voidstar.(*BlockHashValue).PackValue(), nil
+	case BlockHash | 4<<8:
+		return BlockHash, BlockHashKeyPackPartialKey(voidstar.(*BlockHashKey)), nil
 	case Header:
-		return Header, BlockHeaderKeyUnpack(key), nil
+		return Header, BlockHeaderKeyUnpack(data), nil
+	case Header | 1<<8:
+		return Header, BlockHeaderValueUnpack(data), nil
+	case Header | 2<<8:
+		return Header, voidstar.(*BlockHeaderKey).PackKey(), nil
+	case Header | 3<<8:
+		return Header, voidstar.(*BlockHeaderValue).PackValue(), nil
+	case Header | 4<<8:
+		return Header, BlockHeaderKeyPackPartialKey(voidstar.(*BlockHeaderKey)), nil
 	case TxNum:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
 	case TxCount:
 	case TxHash:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
 	case UTXO:
-		return UTXO, UTXOKeyUnpack(key), nil
+		return UTXO, UTXOKeyUnpack(data), nil
+	case UTXO | 1<<8:
+		return UTXO, UTXOValueUnpack(data), nil
+	case UTXO | 2<<8:
+		return UTXO, voidstar.(*UTXOKey).PackKey(), nil
+	case UTXO | 3<<8:
+		return UTXO, voidstar.(*UTXOValue).PackValue(), nil
+	case UTXO | 4<<8:
+		return UTXO, UTXOKeyPackPartialKey(voidstar.(*UTXOKey)), nil
 	case HashXUTXO:
-		return UTXO, HashXUTXOKeyUnpack(key), nil
+		return UTXO, HashXUTXOKeyUnpack(data), nil
+	case HashXUTXO | 1<<8:
+		return UTXO, HashXUTXOValueUnpack(data), nil
+	case HashXUTXO | 2<<8:
+		return UTXO, voidstar.(*HashXUTXOKey).PackKey(), nil
+	case HashXUTXO | 3<<8:
+		return UTXO, voidstar.(*HashXUTXOValue).PackValue(), nil
+	case HashXUTXO | 4<<8:
+		return UTXO, HashXUTXOKeyPackPartialKey(voidstar.(*HashXUTXOKey)), nil
 	case HashXHistory:
-		return HashXHistory, HashXHistoryKeyUnpack(key), nil
+		return HashXHistory, HashXHistoryKeyUnpack(data), nil
+	case HashXHistory | 1<<8:
+		return HashXHistory, HashXHistoryValueUnpack(data), nil
+	case HashXHistory | 2<<8:
+		return HashXHistory, voidstar.(*HashXHistoryKey).PackKey(), nil
+	case HashXHistory | 3<<8:
+		return HashXHistory, voidstar.(*HashXHistoryValue).PackValue(), nil
+	case HashXHistory | 4<<8:
+		return HashXHistory, HashXHistoryKeyPackPartialKey(voidstar.(*HashXHistoryKey)), nil
 	case DBState:
 	case ChannelCount:
 	case SupportAmount:
 	case BlockTXs:
+
 	}
-	return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+	return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
+}
+
+func UnpackGenericKey(key []byte) (byte, interface{}, error) {
+	if len(key) == 0 {
+		return 0x0, nil, errors.Base("key length zero")
+	}
+	return generic(key, key[0], 0, "unpack key")
 }
 
 func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
@@ -2876,71 +3277,30 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 	if len(value) == 0 {
 		return 0x0, nil, errors.Base("value length zero")
 	}
+	return generic(value, key[0], 1, "unpack value")
+}
 
-	firstByte := key[0]
-	switch firstByte {
-	case ClaimToSupport:
-		return ClaimToSupport, ClaimToSupportValueUnpack(value), nil
-	case SupportToClaim:
-		return SupportToClaim, SupportToClaimValueUnpack(value), nil
-
-	case ClaimToTXO:
-		return ClaimToTXO, ClaimToTXOValueUnpack(value), nil
-	case TXOToClaim:
-		return TXOToClaim, TXOToClaimValueUnpack(value), nil
-
-	case ClaimToChannel:
-		return ClaimToChannel, ClaimToChannelValueUnpack(value), nil
-	case ChannelToClaim:
-		return ChannelToClaim, ChannelToClaimValueUnpack(value), nil
-
-	case ClaimShortIdPrefix:
-		return ClaimShortIdPrefix, ClaimShortIDValueUnpack(value), nil
-	case EffectiveAmount:
-		return EffectiveAmount, EffectiveAmountValueUnpack(value), nil
-	case ClaimExpiration:
-		return ClaimExpiration, ClaimExpirationValueUnpack(value), nil
-
-	case ClaimTakeover:
-		return ClaimTakeover, ClaimTakeoverValueUnpack(value), nil
-	case PendingActivation:
-		return PendingActivation, PendingActivationValueUnpack(value), nil
-	case ActivatedClaimAndSupport:
-		return ActivatedClaimAndSupport, ActivationValueUnpack(value), nil
-	case ActiveAmount:
-		return ActiveAmount, ActiveAmountValueUnpack(value), nil
-
-	case Repost:
-		return Repost, RepostValueUnpack(value), nil
-	case RepostedClaim:
-		return RepostedClaim, RepostedValueUnpack(value), nil
-
-	case Undo:
-		return Undo, UndoValueUnpack(value), nil
-	case ClaimDiff:
-		return ClaimDiff, TouchedOrDeletedClaimValueUnpack(value), nil
-
-	case Tx:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
-	case BlockHash:
-		return BlockHash, BlockHashValueUnpack(value), nil
-	case Header:
-		return Header, BlockHeaderValueUnpack(value), nil
-	case TxNum:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
-	case TxCount:
-	case TxHash:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
-	case UTXO:
-		return UTXO, UTXOValueUnpack(value), nil
-	case HashXUTXO:
-		return HashXUTXO, HashXUTXOValueUnpack(value), nil
-	case HashXHistory:
-		return HashXHistory, HashXHistoryValueUnpack(value), nil
-	case DBState:
-	case ChannelCount:
-	case SupportAmount:
-	case BlockTXs:
+func PackPartialGenericKey(prefix byte, key interface{}, nFields int) (byte, []byte, error) {
+	if key == nil {
+		return 0x0, nil, errors.Base("key length zero")
 	}
-	return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+	x, y, z := generic(key, prefix, 4, "pack partial key")
+	res := y.(func(int) []byte)(nFields)
+	return x, res, z
+}
+
+func PackGenericKey(prefix byte, key interface{}) (byte, []byte, error) {
+	if key == nil {
+		return 0x0, nil, errors.Base("key length zero")
+	}
+	x, y, z := generic(key, prefix, 2, "pack key")
+	return x, y.([]byte), z
+}
+
+func PackGenericValue(prefix byte, value interface{}) (byte, []byte, error) {
+	if value == nil {
+		return 0x0, nil, errors.Base("value length zero")
+	}
+	x, y, z := generic(value, prefix, 3, "pack value")
+	return x, y.([]byte), z
 }
