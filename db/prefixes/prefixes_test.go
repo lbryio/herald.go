@@ -106,11 +106,12 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 		if err != nil {
 			log.Println(err)
 		}
-		var numRecords = 9
-		if prefix == prefixes.Undo {
-			numRecords = 1
-		}
-		stop, err := hex.DecodeString(records[numRecords][0])
+		numRecords := i
+		// var numRecords = 9
+		// if prefix == prefixes.Undo || prefix == prefixes.DBState {
+		// 	numRecords = 1
+		// }
+		stop, err := hex.DecodeString(records[numRecords-1][0])
 		if err != nil {
 			log.Println(err)
 		}
@@ -132,6 +133,34 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 			i++
 		}
 	}
+}
+
+func TestSupportAmount(t *testing.T) {
+	testGeneric("../../resources/support_amount.csv", prefixes.SupportAmount, 1)(t)
+}
+
+func TestChannelCount(t *testing.T) {
+	testGeneric("../../resources/channel_count.csv", prefixes.ChannelCount, 1)(t)
+}
+
+func TestDBState(t *testing.T) {
+	testGeneric("../../resources/db_state.csv", prefixes.DBState, 0)(t)
+}
+
+func TestBlockTxs(t *testing.T) {
+	testGeneric("../../resources/block_txs.csv", prefixes.BlockTXs, 1)(t)
+}
+
+func TestTxCount(t *testing.T) {
+	testGeneric("../../resources/tx_count.csv", prefixes.TxCount, 1)(t)
+}
+
+func TestTxHash(t *testing.T) {
+	testGeneric("../../resources/tx_hash.csv", prefixes.TxHash, 1)(t)
+}
+
+func TestTxNum(t *testing.T) {
+	testGeneric("../../resources/tx_num.csv", prefixes.TxNum, 1)(t)
 }
 
 func TestTx(t *testing.T) {
@@ -244,79 +273,8 @@ func TestUTXO(t *testing.T) {
 }
 
 func TestHashXUTXO(t *testing.T) {
-
-	tests := []struct {
-		name     string
-		filePath string
-	}{
-		{
-			name:     "Read HashX_UTXO correctly",
-			filePath: "../../resources/hashx_utxo.csv",
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			log.Println(tt.filePath)
-			file, err := os.Open(tt.filePath)
-			if err != nil {
-				log.Println(err)
-			}
-			reader := csv.NewReader(file)
-			records, err := reader.ReadAll()
-			if err != nil {
-				log.Println(err)
-			}
-
-			wOpts := grocksdb.NewDefaultWriteOptions()
-			opts := grocksdb.NewDefaultOptions()
-			opts.SetCreateIfMissing(true)
-			db, err := grocksdb.OpenDb(opts, "tmp")
-			if err != nil {
-				log.Println(err)
-			}
-			defer func() {
-				db.Close()
-				err = os.RemoveAll("./tmp")
-				if err != nil {
-					log.Println(err)
-				}
-			}()
-			for _, record := range records {
-				key, err := hex.DecodeString(record[0])
-				if err != nil {
-					log.Println(err)
-				}
-				val, err := hex.DecodeString(record[1])
-				if err != nil {
-					log.Println(err)
-				}
-				db.Put(wOpts, key, val)
-			}
-			start, err := hex.DecodeString(records[0][0])
-			if err != nil {
-				log.Println(err)
-			}
-			options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.HashXUTXO}).WithStart(start).WithIncludeValue(true)
-			ch := dbpkg.Iter(db, options)
-			var i = 0
-			for kv := range ch {
-				log.Println(kv.Key)
-				got := kv.Value.(*prefixes.HashXUTXOValue).PackValue()
-				want, err := hex.DecodeString(records[i][1])
-				if err != nil {
-					log.Println(err)
-				}
-				if !bytes.Equal(got, want) {
-					t.Errorf("got: %+v, want: %+v\n", got, want)
-				}
-				i++
-				if i > 9 {
-					return
-				}
-			}
-		})
-	}
+	filePath := "../../resources/hashx_utxo.csv"
+	testGeneric(filePath, prefixes.HashXUTXO, 3)(t)
 }
 
 func TestUTXOKey_String(t *testing.T) {

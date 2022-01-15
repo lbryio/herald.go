@@ -55,12 +55,144 @@ const (
 	ACTIVATED_CLAIM_TXO_TYPE   = 1
 	ACTIVATED_SUPPORT_TXO_TYPE = 2
 
-	OnesCompTwiddle uint64 = 0xffffffffffffffff
+	OnesCompTwiddle64 uint64 = 0xffffffffffffffff
+	OnesCompTwiddle32 uint32 = 0xffffffff
 )
 
 type PrefixRowKV struct {
 	Key   interface{}
 	Value interface{}
+}
+
+/*
+class DBState(typing.NamedTuple):
+    genesis: bytes
+    height: int
+    tx_count: int
+    tip: bytes
+    utxo_flush_count: int
+    wall_time: int
+    first_sync: bool
+    db_version: int
+    hist_flush_count: int
+    comp_flush_count: int
+    comp_cursor: int
+    es_sync_height: int
+
+
+*/
+
+type DBStateKey struct {
+	Prefix []byte `json:"prefix"`
+}
+
+type DBStateValue struct {
+	Genesis        []byte
+	Height         uint32
+	TxCount        uint32
+	Tip            []byte
+	UtxoFlushCount uint32
+	WallTime       uint32
+	FirstSync      bool
+	DDVersion      uint8
+	HistFlushCount int32
+	CompFlushCount int32
+	CompCursor     int32
+	EsSyncHeight   uint32
+}
+
+func (k *DBStateKey) PackKey() []byte {
+	prefixLen := 1
+	n := prefixLen
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+
+	return key
+}
+
+func (v *DBStateValue) PackValue() []byte {
+	// b'>32sLL32sLLBBlllL'
+	n := 32 + 4 + 4 + 32 + 4 + 4 + 1 + 1 + 4 + 4 + 4 + 4
+	value := make([]byte, n)
+	copy(value, v.Genesis[:32])
+	binary.BigEndian.PutUint32(value[32:], v.Height)
+	binary.BigEndian.PutUint32(value[32+4:], v.TxCount)
+	copy(value[32+4+4:], v.Tip[:32])
+	binary.BigEndian.PutUint32(value[32+4+4+32:], v.UtxoFlushCount)
+	binary.BigEndian.PutUint32(value[32+4+4+32+4:], v.WallTime)
+	var bitSetVar uint8
+	if v.FirstSync {
+		bitSetVar = 1
+	}
+	value[32+4+4+32+4+4] = bitSetVar
+	value[32+4+4+32+4+4+1] = v.DDVersion
+	var histFlushCount uint32
+	var compFlushCount uint32
+	var compCursor uint32
+	histFlushCount = (OnesCompTwiddle32 - uint32(v.HistFlushCount))
+	compFlushCount = (OnesCompTwiddle32 - uint32(v.CompFlushCount))
+	compCursor = (OnesCompTwiddle32 - uint32(v.CompCursor))
+	// if v.HistFlushCount < 0 {
+	// }
+	// if v.CompFlushCount < 0 {
+	// }
+	// if v.CompCursor < 0 {
+	// }
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1:], histFlushCount)
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4:], compFlushCount)
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4:], compCursor)
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4+4:], v.EsSyncHeight)
+	log.Printf("%+v\n", v)
+
+	return value
+}
+
+func DBStateKeyPackPartialKey(key *DBStateKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return DBStateKeyPackPartial(key, nFields)
+	}
+}
+
+func DBStateKeyPackPartialNFields(nFields int) func(*DBStateKey) []byte {
+	return func(u *DBStateKey) []byte {
+		return DBStateKeyPackPartial(u, nFields)
+	}
+}
+
+func DBStateKeyPackPartial(k *DBStateKey, nFields int) []byte {
+	prefixLen := 1
+	var n = prefixLen
+
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+
+	return key
+}
+
+func DBStateKeyUnpack(key []byte) *DBStateKey {
+	prefixLen := 1
+	return &DBStateKey{
+		Prefix: key[:prefixLen],
+	}
+}
+
+func DBStateValueUnpack(value []byte) *DBStateValue {
+	x := &DBStateValue{
+		Genesis:        value[:32],
+		Height:         binary.BigEndian.Uint32(value[32:]),
+		TxCount:        binary.BigEndian.Uint32(value[32+4:]),
+		Tip:            value[32+4+4 : 32+4+4+32],
+		UtxoFlushCount: binary.BigEndian.Uint32(value[32+4+4+32:]),
+		WallTime:       binary.BigEndian.Uint32(value[32+4+4+32+4:]),
+		FirstSync:      value[32+4+4+32+4+4] == 1,
+		DDVersion:      value[32+4+4+32+4+4+1],
+		HistFlushCount: int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1:])),
+		CompFlushCount: int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4:])),
+		CompCursor:     int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4:])),
+		EsSyncHeight:   binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4+4:]),
+	}
+	log.Printf("%+v\n", x)
+	return x
 }
 
 type UndoKey struct {
@@ -534,7 +666,98 @@ type BlockTxsKey struct {
 }
 
 type BlockTxsValue struct {
-	TxHashes []byte `json:"tx_hashes"`
+	TxHashes [][]byte `json:"tx_hashes"`
+}
+
+func (k *BlockTxsKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 4
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+
+	return key
+}
+
+func (v *BlockTxsValue) PackValue() []byte {
+	numHashes := len(v.TxHashes)
+	n := numHashes * 32
+	value := make([]byte, n)
+
+	for i, tx := range v.TxHashes {
+		if len(tx) != 32 {
+			log.Println("Warning, txhash not 32 bytes", tx)
+			return nil
+		}
+		copy(value[i*32:], tx)
+	}
+
+	return value
+}
+
+func BlockTxsKeyPackPartialKey(key *BlockTxsKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return BlockTxsKeyPackPartial(key, nFields)
+	}
+}
+
+func BlockTxsKeyPackPartialNFields(nFields int) func(*BlockTxsKey) []byte {
+	return func(u *BlockTxsKey) []byte {
+		return BlockTxsKeyPackPartial(u, nFields)
+	}
+}
+
+func BlockTxsKeyPackPartial(k *BlockTxsKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+		}
+	}
+
+	return key
+}
+
+func BlockTxsKeyUnpack(key []byte) *BlockTxsKey {
+	prefixLen := 1
+	return &BlockTxsKey{
+		Prefix: key[:prefixLen],
+		Height: binary.BigEndian.Uint32(key[prefixLen:]),
+	}
+}
+
+func BlockTxsValueUnpack(value []byte) *BlockTxsValue {
+	numHashes := len(value) / 32
+	txs := make([][]byte, numHashes)
+	for i := 0; i < numHashes; i++ {
+		txs[i] = value[i*32 : (i+1)*32]
+	}
+	return &BlockTxsValue{
+		TxHashes: txs,
+	}
 }
 
 /*
@@ -553,6 +776,83 @@ type TxCountKey struct {
 
 type TxCountValue struct {
 	TxCount uint32 `json:"tx_count"`
+}
+
+func (k *TxCountKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 4
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+
+	return key
+}
+
+func (v *TxCountValue) PackValue() []byte {
+	value := make([]byte, 4)
+	binary.BigEndian.PutUint32(value, v.TxCount)
+
+	return value
+}
+
+func TxCountKeyPackPartialKey(key *TxCountKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return TxCountKeyPackPartial(key, nFields)
+	}
+}
+
+func TxCountKeyPackPartialNFields(nFields int) func(*TxCountKey) []byte {
+	return func(u *TxCountKey) []byte {
+		return TxCountKeyPackPartial(u, nFields)
+	}
+}
+
+func TxCountKeyPackPartial(k *TxCountKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], k.Height)
+		}
+	}
+
+	return key
+}
+
+func TxCountKeyUnpack(key []byte) *TxCountKey {
+	prefixLen := 1
+	return &TxCountKey{
+		Prefix: key[:prefixLen],
+		Height: binary.BigEndian.Uint32(key[prefixLen:]),
+	}
+}
+
+func TxCountValueUnpack(value []byte) *TxCountValue {
+	return &TxCountValue{
+		TxCount: binary.BigEndian.Uint32(value),
+	}
 }
 
 /*
@@ -576,6 +876,84 @@ type TxHashValue struct {
 	TxHash []byte `json:"tx_hash"`
 }
 
+func (k *TxHashKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 4
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint32(key[prefixLen:], k.TxNum)
+
+	return key
+}
+
+func (v *TxHashValue) PackValue() []byte {
+	n := len(v.TxHash)
+	value := make([]byte, n)
+	copy(value, v.TxHash[:n])
+
+	return value
+}
+
+func TxHashKeyPackPartialKey(key *TxHashKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return TxHashKeyPackPartial(key, nFields)
+	}
+}
+
+func TxHashKeyPackPartialNFields(nFields int) func(*TxHashKey) []byte {
+	return func(u *TxHashKey) []byte {
+		return TxHashKeyPackPartial(u, nFields)
+	}
+}
+
+func TxHashKeyPackPartial(k *TxHashKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 4
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint32(key[prefixLen:], k.TxNum)
+		}
+	}
+
+	return key
+}
+
+func TxHashKeyUnpack(key []byte) *TxHashKey {
+	prefixLen := 1
+	return &TxHashKey{
+		Prefix: key[:prefixLen],
+		TxNum:  binary.BigEndian.Uint32(key[prefixLen:]),
+	}
+}
+
+func TxHashValueUnpack(value []byte) *TxHashValue {
+	return &TxHashValue{
+		TxHash: value,
+	}
+}
+
 /*
 class TxNumKey(NamedTuple):
     tx_hash: bytes
@@ -594,7 +972,84 @@ type TxNumKey struct {
 }
 
 type TxNumValue struct {
-	TxNum int32 `json:"tx_num"`
+	TxNum uint32 `json:"tx_num"`
+}
+
+func (k *TxNumKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 32
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.TxHash[:32])
+
+	return key
+}
+
+func (v *TxNumValue) PackValue() []byte {
+	value := make([]byte, 4)
+	binary.BigEndian.PutUint32(value, v.TxNum)
+
+	return value
+}
+
+func TxNumKeyPackPartialKey(key *TxNumKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return TxNumKeyPackPartial(key, nFields)
+	}
+}
+
+func TxNumKeyPackPartialNFields(nFields int) func(*TxNumKey) []byte {
+	return func(u *TxNumKey) []byte {
+		return TxNumKeyPackPartial(u, nFields)
+	}
+}
+
+func TxNumKeyPackPartial(k *TxNumKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 32
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.TxHash[:32])
+		}
+	}
+
+	return key
+}
+
+func TxNumKeyUnpack(key []byte) *TxNumKey {
+	prefixLen := 1
+	return &TxNumKey{
+		Prefix: key[:prefixLen],
+		TxHash: key[prefixLen : prefixLen+32],
+	}
+}
+
+func TxNumValueUnpack(value []byte) *TxNumValue {
+	return &TxNumValue{
+		TxNum: binary.BigEndian.Uint32(value),
+	}
 }
 
 /*
@@ -1464,7 +1919,84 @@ type ChannelCountKey struct {
 }
 
 type ChannelCountValue struct {
-	Count int32 `json:"count"`
+	Count uint32 `json:"count"`
+}
+
+func (k *ChannelCountKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20sLH'
+	n := prefixLen + 20
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ChannelHash[:20])
+
+	return key
+}
+
+func (v *ChannelCountValue) PackValue() []byte {
+	value := make([]byte, 4)
+	binary.BigEndian.PutUint32(value, v.Count)
+
+	return value
+}
+
+func ChannelCountKeyPackPartialKey(key *ChannelCountKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return ChannelCountKeyPackPartial(key, nFields)
+	}
+}
+
+func ChannelCountKeyPackPartialNFields(nFields int) func(*ChannelCountKey) []byte {
+	return func(u *ChannelCountKey) []byte {
+		return ChannelCountKeyPackPartial(u, nFields)
+	}
+}
+
+func ChannelCountKeyPackPartial(k *ChannelCountKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ChannelHash)
+		}
+	}
+
+	return key
+}
+
+func ChannelCountKeyUnpack(key []byte) *ChannelCountKey {
+	prefixLen := 1
+	return &ChannelCountKey{
+		Prefix:      key[:prefixLen],
+		ChannelHash: key[prefixLen : prefixLen+20],
+	}
+}
+
+func ChannelCountValueUnpack(value []byte) *ChannelCountValue {
+	return &ChannelCountValue{
+		Count: binary.BigEndian.Uint32(value),
+	}
 }
 
 /*
@@ -1485,7 +2017,84 @@ type SupportAmountKey struct {
 }
 
 type SupportAmountValue struct {
-	Amount int32 `json:"amount"`
+	Amount uint64 `json:"amount"`
+}
+
+func (k *SupportAmountKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>20sLH'
+	n := prefixLen + 20
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	copy(key[prefixLen:], k.ClaimHash[:20])
+
+	return key
+}
+
+func (v *SupportAmountValue) PackValue() []byte {
+	value := make([]byte, 8)
+	binary.BigEndian.PutUint64(value, v.Amount)
+
+	return value
+}
+
+func SupportAmountKeyPackPartialKey(key *SupportAmountKey) func(int) []byte {
+	return func(nFields int) []byte {
+		return SupportAmountKeyPackPartial(key, nFields)
+	}
+}
+
+func SupportAmountKeyPackPartialNFields(nFields int) func(*SupportAmountKey) []byte {
+	return func(u *SupportAmountKey) []byte {
+		return SupportAmountKeyPackPartial(u, nFields)
+	}
+}
+
+func SupportAmountKeyPackPartial(k *SupportAmountKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 20
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			copy(key[prefixLen:], k.ClaimHash)
+		}
+	}
+
+	return key
+}
+
+func SupportAmountKeyUnpack(key []byte) *SupportAmountKey {
+	prefixLen := 1
+	return &SupportAmountKey{
+		Prefix:    key[:prefixLen],
+		ClaimHash: key[prefixLen : prefixLen+20],
+	}
+}
+
+func SupportAmountValueUnpack(value []byte) *SupportAmountValue {
+	return &SupportAmountValue{
+		Amount: binary.BigEndian.Uint64(value),
+	}
 }
 
 /*
@@ -2401,7 +3010,7 @@ func (k *EffectiveAmountKey) PackKey() []byte {
 
 	binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
 	copy(key[prefixLen+2:], []byte(k.NormalizedName))
-	binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle-k.EffectiveAmount)
+	binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle64-k.EffectiveAmount)
 	binary.BigEndian.PutUint32(key[prefixLen+nameLenLen+8:], k.TxNum)
 	binary.BigEndian.PutUint16(key[prefixLen+nameLenLen+8+4:], k.Position)
 
@@ -2465,7 +3074,7 @@ func EffectiveAmountKeyPackPartial(k *EffectiveAmountKey, nFields int) []byte {
 			binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
 			copy(key[prefixLen+2:], []byte(k.NormalizedName))
 		case 2:
-			binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle-k.EffectiveAmount)
+			binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle64-k.EffectiveAmount)
 		case 3:
 			binary.BigEndian.PutUint32(key[prefixLen+nameLenLen+8:], k.TxNum)
 		case 4:
@@ -2482,7 +3091,7 @@ func EffectiveAmountKeyUnpack(key []byte) *EffectiveAmountKey {
 	return &EffectiveAmountKey{
 		Prefix:          key[:prefixLen],
 		NormalizedName:  string(key[prefixLen+2 : prefixLen+2+int(nameLen)]),
-		EffectiveAmount: OnesCompTwiddle - binary.BigEndian.Uint64(key[prefixLen+2+int(nameLen):]),
+		EffectiveAmount: OnesCompTwiddle64 - binary.BigEndian.Uint64(key[prefixLen+2+int(nameLen):]),
 		TxNum:           binary.BigEndian.Uint32(key[prefixLen+2+int(nameLen)+8:]),
 		Position:        binary.BigEndian.Uint16(key[prefixLen+2+int(nameLen)+8+4:]),
 	}
@@ -3220,10 +3829,36 @@ func generic(voidstar interface{}, firstByte byte, function byte, functionName s
 	case Header | 4<<8:
 		return Header, BlockHeaderKeyPackPartialKey(voidstar.(*BlockHeaderKey)), nil
 	case TxNum:
-		return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
+		return TxNum, TxNumKeyUnpack(data), nil
+	case TxNum | 1<<8:
+		return TxNum, TxNumValueUnpack(data), nil
+	case TxNum | 2<<8:
+		return TxNum, voidstar.(*TxNumKey).PackKey(), nil
+	case TxNum | 3<<8:
+		return TxNum, voidstar.(*TxNumValue).PackValue(), nil
+	case TxNum | 4<<8:
+		return TxNum, TxNumKeyPackPartialKey(voidstar.(*TxNumKey)), nil
+
 	case TxCount:
+		return TxCount, TxCountKeyUnpack(data), nil
+	case TxCount | 1<<8:
+		return TxCount, TxCountValueUnpack(data), nil
+	case TxCount | 2<<8:
+		return TxCount, voidstar.(*TxCountKey).PackKey(), nil
+	case TxCount | 3<<8:
+		return TxCount, voidstar.(*TxCountValue).PackValue(), nil
+	case TxCount | 4<<8:
+		return TxCount, TxCountKeyPackPartialKey(voidstar.(*TxCountKey)), nil
 	case TxHash:
-		return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
+		return TxHash, TxHashKeyUnpack(data), nil
+	case TxHash | 1<<8:
+		return TxHash, TxHashValueUnpack(data), nil
+	case TxHash | 2<<8:
+		return TxHash, voidstar.(*TxHashKey).PackKey(), nil
+	case TxHash | 3<<8:
+		return TxHash, voidstar.(*TxHashValue).PackValue(), nil
+	case TxHash | 4<<8:
+		return TxHash, TxHashKeyPackPartialKey(voidstar.(*TxHashKey)), nil
 	case UTXO:
 		return UTXO, UTXOKeyUnpack(data), nil
 	case UTXO | 1<<8:
@@ -3255,9 +3890,46 @@ func generic(voidstar interface{}, firstByte byte, function byte, functionName s
 	case HashXHistory | 4<<8:
 		return HashXHistory, HashXHistoryKeyPackPartialKey(voidstar.(*HashXHistoryKey)), nil
 	case DBState:
+		return DBState, DBStateKeyUnpack(data), nil
+	case DBState | 1<<8:
+		return DBState, DBStateValueUnpack(data), nil
+	case DBState | 2<<8:
+		return DBState, voidstar.(*DBStateKey).PackKey(), nil
+	case DBState | 3<<8:
+		return DBState, voidstar.(*DBStateValue).PackValue(), nil
+	case DBState | 4<<8:
+		return DBState, DBStateKeyPackPartialKey(voidstar.(*DBStateKey)), nil
+
 	case ChannelCount:
+		return ChannelCount, ChannelCountKeyUnpack(data), nil
+	case ChannelCount | 1<<8:
+		return ChannelCount, ChannelCountValueUnpack(data), nil
+	case ChannelCount | 2<<8:
+		return ChannelCount, voidstar.(*ChannelCountKey).PackKey(), nil
+	case ChannelCount | 3<<8:
+		return ChannelCount, voidstar.(*ChannelCountValue).PackValue(), nil
+	case ChannelCount | 4<<8:
+		return ChannelCount, ChannelCountKeyPackPartialKey(voidstar.(*ChannelCountKey)), nil
 	case SupportAmount:
+		return SupportAmount, SupportAmountKeyUnpack(data), nil
+	case SupportAmount | 1<<8:
+		return SupportAmount, SupportAmountValueUnpack(data), nil
+	case SupportAmount | 2<<8:
+		return SupportAmount, voidstar.(*SupportAmountKey).PackKey(), nil
+	case SupportAmount | 3<<8:
+		return SupportAmount, voidstar.(*SupportAmountValue).PackValue(), nil
+	case SupportAmount | 4<<8:
+		return SupportAmount, SupportAmountKeyPackPartialKey(voidstar.(*SupportAmountKey)), nil
 	case BlockTXs:
+		return BlockTXs, BlockTxsKeyUnpack(data), nil
+	case BlockTXs | 1<<8:
+		return BlockTXs, BlockTxsValueUnpack(data), nil
+	case BlockTXs | 2<<8:
+		return BlockTXs, voidstar.(*BlockTxsKey).PackKey(), nil
+	case BlockTXs | 3<<8:
+		return BlockTXs, voidstar.(*BlockTxsValue).PackValue(), nil
+	case BlockTXs | 4<<8:
+		return BlockTXs, BlockTxsKeyPackPartialKey(voidstar.(*BlockTxsKey)), nil
 
 	}
 	return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
