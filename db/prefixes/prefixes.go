@@ -63,6 +63,88 @@ type PrefixRowKV struct {
 	Value interface{}
 }
 
+type UndoKey struct {
+	Prefix []byte `json:"prefix"`
+	Height uint64 `json:"height"`
+}
+
+type UndoValue struct {
+	Data []byte `json:"data"`
+}
+
+func (k *UndoKey) PackKey() []byte {
+	prefixLen := 1
+	// b'>L'
+	n := prefixLen + 8
+	key := make([]byte, n)
+	copy(key, k.Prefix)
+	binary.BigEndian.PutUint64(key[prefixLen:], k.Height)
+
+	return key
+}
+
+func (v *UndoValue) PackValue() []byte {
+	len := len(v.Data)
+	value := make([]byte, len)
+	copy(value, v.Data)
+
+	return value
+}
+
+func UndoKeyPackPartialNFields(nFields int) func(*UndoKey) []byte {
+	return func(u *UndoKey) []byte {
+		return UndoKeyPackPartial(u, nFields)
+	}
+}
+
+func UndoKeyPackPartial(k *UndoKey, nFields int) []byte {
+	// Limit nFields between 0 and number of fields, we always at least need
+	// the prefix, and we never need to iterate past the number of fields.
+	if nFields > 1 {
+		nFields = 1
+	}
+	if nFields < 0 {
+		nFields = 0
+	}
+
+	// b'>4sLH'
+	prefixLen := 1
+	var n = prefixLen
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 1:
+			n += 8
+		}
+	}
+
+	key := make([]byte, n)
+
+	for i := 0; i <= nFields; i++ {
+		switch i {
+		case 0:
+			copy(key, k.Prefix)
+		case 1:
+			binary.BigEndian.PutUint64(key[prefixLen:], k.Height)
+		}
+	}
+
+	return key
+}
+
+func UndoKeyUnpack(key []byte) *UndoKey {
+	prefixLen := 1
+	return &UndoKey{
+		Prefix: key[:prefixLen],
+		Height: binary.BigEndian.Uint64(key[prefixLen:]),
+	}
+}
+
+func UndoValueUnpack(value []byte) *UndoValue {
+	return &UndoValue{
+		Data: value,
+	}
+}
+
 type UTXOKey struct {
 	Prefix []byte `json:"prefix"`
 	HashX  []byte `json:"hashx"`
@@ -2661,7 +2743,7 @@ func UnpackGenericKey(key []byte) (byte, interface{}, error) {
 		return RepostedClaim, RepostedKeyUnpack(key), nil
 
 	case Undo:
-		return 0x0, nil, errors.Base("key unpack function for %v not implemented", firstByte)
+		return Undo, UndoKeyUnpack(key), nil
 	case ClaimDiff:
 		return ClaimDiff, TouchedOrDeletedClaimKeyUnpack(key), nil
 
@@ -2736,7 +2818,7 @@ func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
 		return RepostedClaim, RepostedValueUnpack(value), nil
 
 	case Undo:
-		return 0x0, nil, errors.Base("value unpack not implemented for key %v", key)
+		return Undo, UndoValueUnpack(value), nil
 	case ClaimDiff:
 		return ClaimDiff, TouchedOrDeletedClaimValueUnpack(value), nil
 

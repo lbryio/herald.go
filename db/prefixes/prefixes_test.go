@@ -44,6 +44,82 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 	return db, records, toDefer
 }
 
+func TestUndo(t *testing.T) {
+
+	filePath := "../../resources/undo.csv"
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	db, records, toDefer := testInit(filePath)
+	defer toDefer()
+	for _, record := range records {
+		key, err := hex.DecodeString(record[0])
+		if err != nil {
+			log.Println(err)
+		}
+		val, err := hex.DecodeString(record[1])
+		if err != nil {
+			log.Println(err)
+		}
+		db.Put(wOpts, key, val)
+	}
+	// test prefix
+	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.Undo}).WithIncludeValue(true)
+	ch := dbpkg.Iter(db, options)
+	var i = 0
+	for kv := range ch {
+		// log.Println(kv.Key)
+		gotKey := kv.Key.(*prefixes.UndoKey).PackKey()
+
+		keyPartial1 := prefixes.UndoKeyPackPartial(kv.Key.(*prefixes.UndoKey), 1)
+
+		// Check pack partial for sanity
+		if !bytes.HasPrefix(gotKey, keyPartial1) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
+		}
+
+		got := kv.Value.(*prefixes.UndoValue).PackValue()
+		wantKey, err := hex.DecodeString(records[i][0])
+		if err != nil {
+			log.Println(err)
+		}
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(gotKey, wantKey) {
+			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+
+	// Test start / stop
+	start, err := hex.DecodeString(records[0][0])
+	if err != nil {
+		log.Println(err)
+	}
+	stop, err := hex.DecodeString(records[1][0])
+	if err != nil {
+		log.Println(err)
+	}
+	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+	ch2 := dbpkg.Iter(db, options2)
+	i = 0
+	for kv := range ch2 {
+		got := kv.Value.(*prefixes.UndoValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+}
+
 func TestBlockHash(t *testing.T) {
 
 	filePath := "../../resources/block_hash.csv"

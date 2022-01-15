@@ -38,7 +38,7 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
-			Prefix:       []byte{prefixes.BlockHash},
+			Prefix:       []byte{prefixes.Undo},
 			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
@@ -49,7 +49,7 @@ func main() {
 			RawValue:     true,
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/block_hash.csv", 10)
+		db.ReadWriteRawN(dbVal, options, "./resources/undo.csv", 2)
 
 		return
 	}
