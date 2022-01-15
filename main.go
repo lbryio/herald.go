@@ -38,7 +38,7 @@ func main() {
 
 		options := &db.IterOptions{
 			FillCache:    false,
-			Prefix:       []byte{prefixes.Header},
+			Prefix:       []byte{prefixes.BlockHash},
 			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
@@ -49,7 +49,7 @@ func main() {
 			RawValue:     true,
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/header.csv", 10)
+		db.ReadWriteRawN(dbVal, options, "./resources/block_hash.csv", 10)
 
 		return
 	}

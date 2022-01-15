@@ -44,6 +44,82 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 	return db, records, toDefer
 }
 
+func TestBlockHash(t *testing.T) {
+
+	filePath := "../../resources/block_hash.csv"
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	db, records, toDefer := testInit(filePath)
+	defer toDefer()
+	for _, record := range records {
+		key, err := hex.DecodeString(record[0])
+		if err != nil {
+			log.Println(err)
+		}
+		val, err := hex.DecodeString(record[1])
+		if err != nil {
+			log.Println(err)
+		}
+		db.Put(wOpts, key, val)
+	}
+	// test prefix
+	options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefixes.BlockHash}).WithIncludeValue(true)
+	ch := dbpkg.Iter(db, options)
+	var i = 0
+	for kv := range ch {
+		// log.Println(kv.Key)
+		gotKey := kv.Key.(*prefixes.BlockHashKey).PackKey()
+
+		keyPartial1 := prefixes.BlockHashKeyPackPartial(kv.Key.(*prefixes.BlockHashKey), 1)
+
+		// Check pack partial for sanity
+		if !bytes.HasPrefix(gotKey, keyPartial1) {
+			t.Errorf("%+v should be prefix of %+v\n", keyPartial1, gotKey)
+		}
+
+		got := kv.Value.(*prefixes.BlockHashValue).PackValue()
+		wantKey, err := hex.DecodeString(records[i][0])
+		if err != nil {
+			log.Println(err)
+		}
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(gotKey, wantKey) {
+			t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+
+	// Test start / stop
+	start, err := hex.DecodeString(records[0][0])
+	if err != nil {
+		log.Println(err)
+	}
+	stop, err := hex.DecodeString(records[9][0])
+	if err != nil {
+		log.Println(err)
+	}
+	options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+	ch2 := dbpkg.Iter(db, options2)
+	i = 0
+	for kv := range ch2 {
+		got := kv.Value.(*prefixes.BlockHashValue).PackValue()
+		want, err := hex.DecodeString(records[i][1])
+		if err != nil {
+			log.Println(err)
+		}
+		if !bytes.Equal(got, want) {
+			t.Errorf("got: %+v, want: %+v\n", got, want)
+		}
+		i++
+	}
+}
+
 func TestBlockHeader(t *testing.T) {
 
 	filePath := "../../resources/header.csv"
