@@ -1,10 +1,12 @@
-package server
+package server_test
 
 import (
 	"log"
 	"os/exec"
 	"strings"
 	"testing"
+
+	server "github.com/lbryio/hub/server"
 )
 
 // TestUDPPing tests UDPPing correctness against prod server.
@@ -36,7 +38,7 @@ func TestUDPPing(t *testing.T) {
 			toAddr := "spv16.lbry.com"
 			toPort := "50001"
 
-			pong, err := UDPPing(toAddr, toPort)
+			pong, err := server.UDPPing(toAddr, toPort)
 			gotCountry := pong.DecodeCountry()
 			if err != nil {
 				log.Println(err)

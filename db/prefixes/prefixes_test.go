@@ -10,7 +10,7 @@ import (
 	"testing"
 
 	dbpkg "github.com/lbryio/hub/db"
-	"github.com/lbryio/hub/db/prefixes"
+	prefixes "github.com/lbryio/hub/db/prefixes"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -67,20 +67,20 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 		var i = 0
 		for kv := range ch {
 			// log.Println(kv.Key)
-			_, gotKey, err := prefixes.PackGenericKey(prefix, kv.Key)
+			gotKey, err := prefixes.PackGenericKey(prefix, kv.Key)
 			if err != nil {
 				log.Println(err)
 			}
 
 			for j := 1; j <= numPartials; j++ {
-				_, keyPartial, _ := prefixes.PackPartialGenericKey(prefix, kv.Key, j)
+				keyPartial, _ := prefixes.PackPartialGenericKey(prefix, kv.Key, j)
 				// Check pack partial for sanity
 				if !bytes.HasPrefix(gotKey, keyPartial) {
 					t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
 				}
 			}
 
-			_, got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			got, err := prefixes.PackGenericValue(prefix, kv.Value)
 			if err != nil {
 				log.Println(err)
 			}
@@ -119,7 +119,7 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 		ch2 := dbpkg.Iter(db, options2)
 		i = 0
 		for kv := range ch2 {
-			_, got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			got, err := prefixes.PackGenericValue(prefix, kv.Value)
 			if err != nil {
 				log.Println(err)
 			}

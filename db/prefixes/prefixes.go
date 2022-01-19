@@ -3616,363 +3616,363 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 	}
 }
 
-func generic(voidstar interface{}, firstByte byte, function byte, functionName string) (byte, interface{}, error) {
+func generic(voidstar interface{}, firstByte byte, function byte, functionName string) (interface{}, error) {
 	var data []byte
 	if function < 2 {
 		data = voidstar.([]byte)
 	}
 	switch uint16(firstByte) | uint16(function)<<8 {
 	case ClaimToSupport:
-		return ClaimToSupport, ClaimToSupportKeyUnpack(data), nil
+		return ClaimToSupportKeyUnpack(data), nil
 	case ClaimToSupport | 1<<8:
-		return ClaimToSupport, ClaimToSupportValueUnpack(data), nil
+		return ClaimToSupportValueUnpack(data), nil
 	case ClaimToSupport | 2<<8:
-		return ClaimToSupport, voidstar.(*ClaimToSupportKey).PackKey(), nil
+		return voidstar.(*ClaimToSupportKey).PackKey(), nil
 	case ClaimToSupport | 3<<8:
-		return ClaimToSupport, voidstar.(*ClaimToSupportValue).PackValue(), nil
+		return voidstar.(*ClaimToSupportValue).PackValue(), nil
 	case ClaimToSupport | 4<<8:
-		return ClaimToSupport, ClaimToSupportKeyPackPartialKey(voidstar.(*ClaimToSupportKey)), nil
+		return ClaimToSupportKeyPackPartialKey(voidstar.(*ClaimToSupportKey)), nil
 	case SupportToClaim:
-		return SupportToClaim, SupportToClaimKeyUnpack(data), nil
+		return SupportToClaimKeyUnpack(data), nil
 	case SupportToClaim | 1<<8:
-		return SupportToClaim, SupportToClaimValueUnpack(data), nil
+		return SupportToClaimValueUnpack(data), nil
 	case SupportToClaim | 2<<8:
-		return SupportToClaim, voidstar.(*SupportToClaimKey).PackKey(), nil
+		return voidstar.(*SupportToClaimKey).PackKey(), nil
 	case SupportToClaim | 3<<8:
-		return SupportToClaim, voidstar.(*SupportToClaimValue).PackValue(), nil
+		return voidstar.(*SupportToClaimValue).PackValue(), nil
 	case SupportToClaim | 4<<8:
-		return SupportToClaim, SupportToClaimKeyPackPartialKey(voidstar.(*SupportToClaimKey)), nil
+		return SupportToClaimKeyPackPartialKey(voidstar.(*SupportToClaimKey)), nil
 	case ClaimToTXO:
-		return ClaimToTXO, ClaimToTXOKeyUnpack(data), nil
+		return ClaimToTXOKeyUnpack(data), nil
 	case ClaimToTXO | 1<<8:
-		return ClaimToTXO, ClaimToTXOValueUnpack(data), nil
+		return ClaimToTXOValueUnpack(data), nil
 	case ClaimToTXO | 2<<8:
-		return ClaimToTXO, voidstar.(*ClaimToTXOKey).PackKey(), nil
+		return voidstar.(*ClaimToTXOKey).PackKey(), nil
 	case ClaimToTXO | 3<<8:
-		return ClaimToTXO, voidstar.(*ClaimToTXOValue).PackValue(), nil
+		return voidstar.(*ClaimToTXOValue).PackValue(), nil
 	case ClaimToTXO | 4<<8:
-		return ClaimToTXO, ClaimToTXOKeyPackPartialKey(voidstar.(*ClaimToTXOKey)), nil
+		return ClaimToTXOKeyPackPartialKey(voidstar.(*ClaimToTXOKey)), nil
 	case TXOToClaim:
-		return TXOToClaim, TXOToClaimKeyUnpack(data), nil
+		return TXOToClaimKeyUnpack(data), nil
 	case TXOToClaim | 1<<8:
-		return TXOToClaim, TXOToClaimValueUnpack(data), nil
+		return TXOToClaimValueUnpack(data), nil
 	case TXOToClaim | 2<<8:
-		return TXOToClaim, voidstar.(*TXOToClaimKey).PackKey(), nil
+		return voidstar.(*TXOToClaimKey).PackKey(), nil
 	case TXOToClaim | 3<<8:
-		return TXOToClaim, voidstar.(*TXOToClaimValue).PackValue(), nil
+		return voidstar.(*TXOToClaimValue).PackValue(), nil
 	case TXOToClaim | 4<<8:
-		return TXOToClaim, TXOToClaimKeyPackPartialKey(voidstar.(*TXOToClaimKey)), nil
+		return TXOToClaimKeyPackPartialKey(voidstar.(*TXOToClaimKey)), nil
 
 	case ClaimToChannel:
-		return ClaimToChannel, ClaimToChannelKeyUnpack(data), nil
+		return ClaimToChannelKeyUnpack(data), nil
 	case ClaimToChannel | 1<<8:
-		return ClaimToChannel, ClaimToChannelValueUnpack(data), nil
+		return ClaimToChannelValueUnpack(data), nil
 	case ClaimToChannel | 2<<8:
-		return ClaimToChannel, voidstar.(*ClaimToChannelKey).PackKey(), nil
+		return voidstar.(*ClaimToChannelKey).PackKey(), nil
 	case ClaimToChannel | 3<<8:
-		return ClaimToChannel, voidstar.(*ClaimToChannelValue).PackValue(), nil
+		return voidstar.(*ClaimToChannelValue).PackValue(), nil
 	case ClaimToChannel | 4<<8:
-		return ClaimToChannel, ClaimToChannelKeyPackPartialKey(voidstar.(*ClaimToChannelKey)), nil
+		return ClaimToChannelKeyPackPartialKey(voidstar.(*ClaimToChannelKey)), nil
 	case ChannelToClaim:
-		return ChannelToClaim, ChannelToClaimKeyUnpack(data), nil
+		return ChannelToClaimKeyUnpack(data), nil
 	case ChannelToClaim | 1<<8:
-		return ChannelToClaim, ChannelToClaimValueUnpack(data), nil
+		return ChannelToClaimValueUnpack(data), nil
 	case ChannelToClaim | 2<<8:
-		return ChannelToClaim, voidstar.(*ChannelToClaimKey).PackKey(), nil
+		return voidstar.(*ChannelToClaimKey).PackKey(), nil
 	case ChannelToClaim | 3<<8:
-		return ChannelToClaim, voidstar.(*ChannelToClaimValue).PackValue(), nil
+		return voidstar.(*ChannelToClaimValue).PackValue(), nil
 	case ChannelToClaim | 4<<8:
-		return ChannelToClaim, ChannelToClaimKeyPackPartialKey(voidstar.(*ChannelToClaimKey)), nil
+		return ChannelToClaimKeyPackPartialKey(voidstar.(*ChannelToClaimKey)), nil
 
 	case ClaimShortIdPrefix:
-		return ClaimShortIdPrefix, ClaimShortIDKeyUnpack(data), nil
+		return ClaimShortIDKeyUnpack(data), nil
 	case ClaimShortIdPrefix | 1<<8:
-		return ClaimShortIdPrefix, ClaimShortIDValueUnpack(data), nil
+		return ClaimShortIDValueUnpack(data), nil
 	case ClaimShortIdPrefix | 2<<8:
-		return ClaimShortIdPrefix, voidstar.(*ClaimShortIDKey).PackKey(), nil
+		return voidstar.(*ClaimShortIDKey).PackKey(), nil
 	case ClaimShortIdPrefix | 3<<8:
-		return ClaimShortIdPrefix, voidstar.(*ClaimShortIDValue).PackValue(), nil
+		return voidstar.(*ClaimShortIDValue).PackValue(), nil
 	case ClaimShortIdPrefix | 4<<8:
-		return ClaimShortIdPrefix, ClaimShortIDKeyPackPartialKey(voidstar.(*ClaimShortIDKey)), nil
+		return ClaimShortIDKeyPackPartialKey(voidstar.(*ClaimShortIDKey)), nil
 	case EffectiveAmount:
-		return EffectiveAmount, EffectiveAmountKeyUnpack(data), nil
+		return EffectiveAmountKeyUnpack(data), nil
 	case EffectiveAmount | 1<<8:
-		return EffectiveAmount, EffectiveAmountValueUnpack(data), nil
+		return EffectiveAmountValueUnpack(data), nil
 	case EffectiveAmount | 2<<8:
-		return EffectiveAmount, voidstar.(*EffectiveAmountKey).PackKey(), nil
+		return voidstar.(*EffectiveAmountKey).PackKey(), nil
 	case EffectiveAmount | 3<<8:
-		return EffectiveAmount, voidstar.(*EffectiveAmountValue).PackValue(), nil
+		return voidstar.(*EffectiveAmountValue).PackValue(), nil
 	case EffectiveAmount | 4<<8:
-		return EffectiveAmount, EffectiveAmountKeyPackPartialKey(voidstar.(*EffectiveAmountKey)), nil
+		return EffectiveAmountKeyPackPartialKey(voidstar.(*EffectiveAmountKey)), nil
 	case ClaimExpiration:
-		return ClaimExpiration, ClaimExpirationKeyUnpack(data), nil
+		return ClaimExpirationKeyUnpack(data), nil
 	case ClaimExpiration | 1<<8:
-		return ClaimExpiration, ClaimExpirationValueUnpack(data), nil
+		return ClaimExpirationValueUnpack(data), nil
 	case ClaimExpiration | 2<<8:
-		return ClaimExpiration, voidstar.(*ClaimExpirationKey).PackKey(), nil
+		return voidstar.(*ClaimExpirationKey).PackKey(), nil
 	case ClaimExpiration | 3<<8:
-		return ClaimExpiration, voidstar.(*ClaimExpirationValue).PackValue(), nil
+		return voidstar.(*ClaimExpirationValue).PackValue(), nil
 	case ClaimExpiration | 4<<8:
-		return ClaimExpiration, ClaimExpirationKeyPackPartialKey(voidstar.(*ClaimExpirationKey)), nil
+		return ClaimExpirationKeyPackPartialKey(voidstar.(*ClaimExpirationKey)), nil
 
 	case ClaimTakeover:
-		return ClaimTakeover, ClaimTakeoverKeyUnpack(data), nil
+		return ClaimTakeoverKeyUnpack(data), nil
 	case ClaimTakeover | 1<<8:
-		return ClaimTakeover, ClaimTakeoverValueUnpack(data), nil
+		return ClaimTakeoverValueUnpack(data), nil
 	case ClaimTakeover | 2<<8:
-		return ClaimTakeover, voidstar.(*ClaimTakeoverKey).PackKey(), nil
+		return voidstar.(*ClaimTakeoverKey).PackKey(), nil
 	case ClaimTakeover | 3<<8:
-		return ClaimTakeover, voidstar.(*ClaimTakeoverValue).PackValue(), nil
+		return voidstar.(*ClaimTakeoverValue).PackValue(), nil
 	case ClaimTakeover | 4<<8:
-		return ClaimTakeover, ClaimTakeoverKeyPackPartialKey(voidstar.(*ClaimTakeoverKey)), nil
+		return ClaimTakeoverKeyPackPartialKey(voidstar.(*ClaimTakeoverKey)), nil
 	case PendingActivation:
-		return PendingActivation, PendingActivationKeyUnpack(data), nil
+		return PendingActivationKeyUnpack(data), nil
 	case PendingActivation | 1<<8:
-		return PendingActivation, PendingActivationValueUnpack(data), nil
+		return PendingActivationValueUnpack(data), nil
 	case PendingActivation | 2<<8:
-		return PendingActivation, voidstar.(*PendingActivationKey).PackKey(), nil
+		return voidstar.(*PendingActivationKey).PackKey(), nil
 	case PendingActivation | 3<<8:
-		return PendingActivation, voidstar.(*PendingActivationValue).PackValue(), nil
+		return voidstar.(*PendingActivationValue).PackValue(), nil
 	case PendingActivation | 4<<8:
-		return PendingActivation, PendingActivationKeyPackPartialKey(voidstar.(*PendingActivationKey)), nil
+		return PendingActivationKeyPackPartialKey(voidstar.(*PendingActivationKey)), nil
 	case ActivatedClaimAndSupport:
-		return ActivatedClaimAndSupport, ActivationKeyUnpack(data), nil
+		return ActivationKeyUnpack(data), nil
 	case ActivatedClaimAndSupport | 1<<8:
-		return ActivatedClaimAndSupport, ActivationValueUnpack(data), nil
+		return ActivationValueUnpack(data), nil
 	case ActivatedClaimAndSupport | 2<<8:
-		return ActivatedClaimAndSupport, voidstar.(*ActivationKey).PackKey(), nil
+		return voidstar.(*ActivationKey).PackKey(), nil
 	case ActivatedClaimAndSupport | 3<<8:
-		return ActivatedClaimAndSupport, voidstar.(*ActivationValue).PackValue(), nil
+		return voidstar.(*ActivationValue).PackValue(), nil
 	case ActivatedClaimAndSupport | 4<<8:
-		return ActivatedClaimAndSupport, ActivationKeyPackPartialKey(voidstar.(*ActivationKey)), nil
+		return ActivationKeyPackPartialKey(voidstar.(*ActivationKey)), nil
 	case ActiveAmount:
-		return ActiveAmount, ActiveAmountKeyUnpack(data), nil
+		return ActiveAmountKeyUnpack(data), nil
 	case ActiveAmount | 1<<8:
-		return ActiveAmount, ActiveAmountValueUnpack(data), nil
+		return ActiveAmountValueUnpack(data), nil
 	case ActiveAmount | 2<<8:
-		return ActiveAmount, voidstar.(*ActiveAmountKey).PackKey(), nil
+		return voidstar.(*ActiveAmountKey).PackKey(), nil
 	case ActiveAmount | 3<<8:
-		return ActiveAmount, voidstar.(*ActiveAmountValue).PackValue(), nil
+		return voidstar.(*ActiveAmountValue).PackValue(), nil
 	case ActiveAmount | 4<<8:
-		return ActiveAmount, ActiveAmountKeyPackPartialKey(voidstar.(*ActiveAmountKey)), nil
+		return ActiveAmountKeyPackPartialKey(voidstar.(*ActiveAmountKey)), nil
 
 	case Repost:
-		return Repost, RepostKeyUnpack(data), nil
+		return RepostKeyUnpack(data), nil
 	case Repost | 1<<8:
-		return Repost, RepostValueUnpack(data), nil
+		return RepostValueUnpack(data), nil
 	case Repost | 2<<8:
-		return Repost, voidstar.(*RepostKey).PackKey(), nil
+		return voidstar.(*RepostKey).PackKey(), nil
 	case Repost | 3<<8:
-		return Repost, voidstar.(*RepostValue).PackValue(), nil
+		return voidstar.(*RepostValue).PackValue(), nil
 	case Repost | 4<<8:
-		return Repost, RepostKeyPackPartialKey(voidstar.(*RepostKey)), nil
+		return RepostKeyPackPartialKey(voidstar.(*RepostKey)), nil
 	case RepostedClaim:
-		return RepostedClaim, RepostedKeyUnpack(data), nil
+		return RepostedKeyUnpack(data), nil
 	case RepostedClaim | 1<<8:
-		return RepostedClaim, RepostedValueUnpack(data), nil
+		return RepostedValueUnpack(data), nil
 	case RepostedClaim | 2<<8:
-		return RepostedClaim, voidstar.(*RepostedKey).PackKey(), nil
+		return voidstar.(*RepostedKey).PackKey(), nil
 	case RepostedClaim | 3<<8:
-		return RepostedClaim, voidstar.(*RepostedValue).PackValue(), nil
+		return voidstar.(*RepostedValue).PackValue(), nil
 	case RepostedClaim | 4<<8:
-		return RepostedClaim, RepostedKeyPackPartialKey(voidstar.(*RepostedKey)), nil
+		return RepostedKeyPackPartialKey(voidstar.(*RepostedKey)), nil
 
 	case Undo:
-		return Undo, UndoKeyUnpack(data), nil
+		return UndoKeyUnpack(data), nil
 	case Undo | 1<<8:
-		return Undo, UndoValueUnpack(data), nil
+		return UndoValueUnpack(data), nil
 	case Undo | 2<<8:
-		return Undo, voidstar.(*UndoKey).PackKey(), nil
+		return voidstar.(*UndoKey).PackKey(), nil
 	case Undo | 3<<8:
-		return Undo, voidstar.(*UndoValue).PackValue(), nil
+		return voidstar.(*UndoValue).PackValue(), nil
 	case Undo | 4<<8:
-		return Undo, UndoKeyPackPartialKey(voidstar.(*UndoKey)), nil
+		return UndoKeyPackPartialKey(voidstar.(*UndoKey)), nil
 	case ClaimDiff:
-		return ClaimDiff, TouchedOrDeletedClaimKeyUnpack(data), nil
+		return TouchedOrDeletedClaimKeyUnpack(data), nil
 	case ClaimDiff | 1<<8:
-		return ClaimDiff, TouchedOrDeletedClaimValueUnpack(data), nil
+		return TouchedOrDeletedClaimValueUnpack(data), nil
 	case ClaimDiff | 2<<8:
-		return ClaimDiff, voidstar.(*TouchedOrDeletedClaimKey).PackKey(), nil
+		return voidstar.(*TouchedOrDeletedClaimKey).PackKey(), nil
 	case ClaimDiff | 3<<8:
-		return ClaimDiff, voidstar.(*TouchedOrDeletedClaimValue).PackValue(), nil
+		return voidstar.(*TouchedOrDeletedClaimValue).PackValue(), nil
 	case ClaimDiff | 4<<8:
-		return ClaimDiff, TouchedOrDeletedClaimKeyPackPartialKey(voidstar.(*TouchedOrDeletedClaimKey)), nil
+		return TouchedOrDeletedClaimKeyPackPartialKey(voidstar.(*TouchedOrDeletedClaimKey)), nil
 
 	case Tx:
-		return Tx, TxKeyUnpack(data), nil
+		return TxKeyUnpack(data), nil
 	case Tx | 1<<8:
-		return Tx, TxValueUnpack(data), nil
+		return TxValueUnpack(data), nil
 	case Tx | 2<<8:
-		return Tx, voidstar.(*TxKey).PackKey(), nil
+		return voidstar.(*TxKey).PackKey(), nil
 	case Tx | 3<<8:
-		return Tx, voidstar.(*TxValue).PackValue(), nil
+		return voidstar.(*TxValue).PackValue(), nil
 	case Tx | 4<<8:
-		return Tx, TxKeyPackPartialKey(voidstar.(*TxKey)), nil
+		return TxKeyPackPartialKey(voidstar.(*TxKey)), nil
 	case BlockHash:
-		return BlockHash, BlockHashKeyUnpack(data), nil
+		return BlockHashKeyUnpack(data), nil
 	case BlockHash | 1<<8:
-		return BlockHash, BlockHashValueUnpack(data), nil
+		return BlockHashValueUnpack(data), nil
 	case BlockHash | 2<<8:
-		return BlockHash, voidstar.(*BlockHashKey).PackKey(), nil
+		return voidstar.(*BlockHashKey).PackKey(), nil
 	case BlockHash | 3<<8:
-		return BlockHash, voidstar.(*BlockHashValue).PackValue(), nil
+		return voidstar.(*BlockHashValue).PackValue(), nil
 	case BlockHash | 4<<8:
-		return BlockHash, BlockHashKeyPackPartialKey(voidstar.(*BlockHashKey)), nil
+		return BlockHashKeyPackPartialKey(voidstar.(*BlockHashKey)), nil
 	case Header:
-		return Header, BlockHeaderKeyUnpack(data), nil
+		return BlockHeaderKeyUnpack(data), nil
 	case Header | 1<<8:
-		return Header, BlockHeaderValueUnpack(data), nil
+		return BlockHeaderValueUnpack(data), nil
 	case Header | 2<<8:
-		return Header, voidstar.(*BlockHeaderKey).PackKey(), nil
+		return voidstar.(*BlockHeaderKey).PackKey(), nil
 	case Header | 3<<8:
-		return Header, voidstar.(*BlockHeaderValue).PackValue(), nil
+		return voidstar.(*BlockHeaderValue).PackValue(), nil
 	case Header | 4<<8:
-		return Header, BlockHeaderKeyPackPartialKey(voidstar.(*BlockHeaderKey)), nil
+		return BlockHeaderKeyPackPartialKey(voidstar.(*BlockHeaderKey)), nil
 	case TxNum:
-		return TxNum, TxNumKeyUnpack(data), nil
+		return TxNumKeyUnpack(data), nil
 	case TxNum | 1<<8:
-		return TxNum, TxNumValueUnpack(data), nil
+		return TxNumValueUnpack(data), nil
 	case TxNum | 2<<8:
-		return TxNum, voidstar.(*TxNumKey).PackKey(), nil
+		return voidstar.(*TxNumKey).PackKey(), nil
 	case TxNum | 3<<8:
-		return TxNum, voidstar.(*TxNumValue).PackValue(), nil
+		return voidstar.(*TxNumValue).PackValue(), nil
 	case TxNum | 4<<8:
-		return TxNum, TxNumKeyPackPartialKey(voidstar.(*TxNumKey)), nil
+		return TxNumKeyPackPartialKey(voidstar.(*TxNumKey)), nil
 
 	case TxCount:
-		return TxCount, TxCountKeyUnpack(data), nil
+		return TxCountKeyUnpack(data), nil
 	case TxCount | 1<<8:
-		return TxCount, TxCountValueUnpack(data), nil
+		return TxCountValueUnpack(data), nil
 	case TxCount | 2<<8:
-		return TxCount, voidstar.(*TxCountKey).PackKey(), nil
+		return voidstar.(*TxCountKey).PackKey(), nil
 	case TxCount | 3<<8:
-		return TxCount, voidstar.(*TxCountValue).PackValue(), nil
+		return voidstar.(*TxCountValue).PackValue(), nil
 	case TxCount | 4<<8:
-		return TxCount, TxCountKeyPackPartialKey(voidstar.(*TxCountKey)), nil
+		return TxCountKeyPackPartialKey(voidstar.(*TxCountKey)), nil
 	case TxHash:
-		return TxHash, TxHashKeyUnpack(data), nil
+		return TxHashKeyUnpack(data), nil
 	case TxHash | 1<<8:
-		return TxHash, TxHashValueUnpack(data), nil
+		return TxHashValueUnpack(data), nil
 	case TxHash | 2<<8:
-		return TxHash, voidstar.(*TxHashKey).PackKey(), nil
+		return voidstar.(*TxHashKey).PackKey(), nil
 	case TxHash | 3<<8:
-		return TxHash, voidstar.(*TxHashValue).PackValue(), nil
+		return voidstar.(*TxHashValue).PackValue(), nil
 	case TxHash | 4<<8:
-		return TxHash, TxHashKeyPackPartialKey(voidstar.(*TxHashKey)), nil
+		return TxHashKeyPackPartialKey(voidstar.(*TxHashKey)), nil
 	case UTXO:
-		return UTXO, UTXOKeyUnpack(data), nil
+		return UTXOKeyUnpack(data), nil
 	case UTXO | 1<<8:
-		return UTXO, UTXOValueUnpack(data), nil
+		return UTXOValueUnpack(data), nil
 	case UTXO | 2<<8:
-		return UTXO, voidstar.(*UTXOKey).PackKey(), nil
+		return voidstar.(*UTXOKey).PackKey(), nil
 	case UTXO | 3<<8:
-		return UTXO, voidstar.(*UTXOValue).PackValue(), nil
+		return voidstar.(*UTXOValue).PackValue(), nil
 	case UTXO | 4<<8:
-		return UTXO, UTXOKeyPackPartialKey(voidstar.(*UTXOKey)), nil
+		return UTXOKeyPackPartialKey(voidstar.(*UTXOKey)), nil
 	case HashXUTXO:
-		return UTXO, HashXUTXOKeyUnpack(data), nil
+		return HashXUTXOKeyUnpack(data), nil
 	case HashXUTXO | 1<<8:
-		return UTXO, HashXUTXOValueUnpack(data), nil
+		return HashXUTXOValueUnpack(data), nil
 	case HashXUTXO | 2<<8:
-		return UTXO, voidstar.(*HashXUTXOKey).PackKey(), nil
+		return voidstar.(*HashXUTXOKey).PackKey(), nil
 	case HashXUTXO | 3<<8:
-		return UTXO, voidstar.(*HashXUTXOValue).PackValue(), nil
+		return voidstar.(*HashXUTXOValue).PackValue(), nil
 	case HashXUTXO | 4<<8:
-		return UTXO, HashXUTXOKeyPackPartialKey(voidstar.(*HashXUTXOKey)), nil
+		return HashXUTXOKeyPackPartialKey(voidstar.(*HashXUTXOKey)), nil
 	case HashXHistory:
-		return HashXHistory, HashXHistoryKeyUnpack(data), nil
+		return HashXHistoryKeyUnpack(data), nil
 	case HashXHistory | 1<<8:
-		return HashXHistory, HashXHistoryValueUnpack(data), nil
+		return HashXHistoryValueUnpack(data), nil
 	case HashXHistory | 2<<8:
-		return HashXHistory, voidstar.(*HashXHistoryKey).PackKey(), nil
+		return voidstar.(*HashXHistoryKey).PackKey(), nil
 	case HashXHistory | 3<<8:
-		return HashXHistory, voidstar.(*HashXHistoryValue).PackValue(), nil
+		return voidstar.(*HashXHistoryValue).PackValue(), nil
 	case HashXHistory | 4<<8:
-		return HashXHistory, HashXHistoryKeyPackPartialKey(voidstar.(*HashXHistoryKey)), nil
+		return HashXHistoryKeyPackPartialKey(voidstar.(*HashXHistoryKey)), nil
 	case DBState:
-		return DBState, DBStateKeyUnpack(data), nil
+		return DBStateKeyUnpack(data), nil
 	case DBState | 1<<8:
-		return DBState, DBStateValueUnpack(data), nil
+		return DBStateValueUnpack(data), nil
 	case DBState | 2<<8:
-		return DBState, voidstar.(*DBStateKey).PackKey(), nil
+		return voidstar.(*DBStateKey).PackKey(), nil
 	case DBState | 3<<8:
-		return DBState, voidstar.(*DBStateValue).PackValue(), nil
+		return voidstar.(*DBStateValue).PackValue(), nil
 	case DBState | 4<<8:
-		return DBState, DBStateKeyPackPartialKey(voidstar.(*DBStateKey)), nil
+		return DBStateKeyPackPartialKey(voidstar.(*DBStateKey)), nil
 
 	case ChannelCount:
-		return ChannelCount, ChannelCountKeyUnpack(data), nil
+		return ChannelCountKeyUnpack(data), nil
 	case ChannelCount | 1<<8:
-		return ChannelCount, ChannelCountValueUnpack(data), nil
+		return ChannelCountValueUnpack(data), nil
 	case ChannelCount | 2<<8:
-		return ChannelCount, voidstar.(*ChannelCountKey).PackKey(), nil
+		return voidstar.(*ChannelCountKey).PackKey(), nil
 	case ChannelCount | 3<<8:
-		return ChannelCount, voidstar.(*ChannelCountValue).PackValue(), nil
+		return voidstar.(*ChannelCountValue).PackValue(), nil
 	case ChannelCount | 4<<8:
-		return ChannelCount, ChannelCountKeyPackPartialKey(voidstar.(*ChannelCountKey)), nil
+		return ChannelCountKeyPackPartialKey(voidstar.(*ChannelCountKey)), nil
 	case SupportAmount:
-		return SupportAmount, SupportAmountKeyUnpack(data), nil
+		return SupportAmountKeyUnpack(data), nil
 	case SupportAmount | 1<<8:
-		return SupportAmount, SupportAmountValueUnpack(data), nil
+		return SupportAmountValueUnpack(data), nil
 	case SupportAmount | 2<<8:
-		return SupportAmount, voidstar.(*SupportAmountKey).PackKey(), nil
+		return voidstar.(*SupportAmountKey).PackKey(), nil
 	case SupportAmount | 3<<8:
-		return SupportAmount, voidstar.(*SupportAmountValue).PackValue(), nil
+		return voidstar.(*SupportAmountValue).PackValue(), nil
 	case SupportAmount | 4<<8:
-		return SupportAmount, SupportAmountKeyPackPartialKey(voidstar.(*SupportAmountKey)), nil
+		return SupportAmountKeyPackPartialKey(voidstar.(*SupportAmountKey)), nil
 	case BlockTXs:
-		return BlockTXs, BlockTxsKeyUnpack(data), nil
+		return BlockTxsKeyUnpack(data), nil
 	case BlockTXs | 1<<8:
-		return BlockTXs, BlockTxsValueUnpack(data), nil
+		return BlockTxsValueUnpack(data), nil
 	case BlockTXs | 2<<8:
-		return BlockTXs, voidstar.(*BlockTxsKey).PackKey(), nil
+		return voidstar.(*BlockTxsKey).PackKey(), nil
 	case BlockTXs | 3<<8:
-		return BlockTXs, voidstar.(*BlockTxsValue).PackValue(), nil
+		return voidstar.(*BlockTxsValue).PackValue(), nil
 	case BlockTXs | 4<<8:
-		return BlockTXs, BlockTxsKeyPackPartialKey(voidstar.(*BlockTxsKey)), nil
+		return BlockTxsKeyPackPartialKey(voidstar.(*BlockTxsKey)), nil
 
 	}
-	return 0x0, nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
+	return nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
 }
 
-func UnpackGenericKey(key []byte) (byte, interface{}, error) {
+func UnpackGenericKey(key []byte) (interface{}, error) {
 	if len(key) == 0 {
-		return 0x0, nil, errors.Base("key length zero")
+		return nil, errors.Base("key length zero")
 	}
 	return generic(key, key[0], 0, "unpack key")
 }
 
-func UnpackGenericValue(key, value []byte) (byte, interface{}, error) {
+func UnpackGenericValue(key, value []byte) (interface{}, error) {
 	if len(key) == 0 {
-		return 0x0, nil, errors.Base("key length zero")
+		return nil, errors.Base("key length zero")
 	}
 	if len(value) == 0 {
-		return 0x0, nil, errors.Base("value length zero")
+		return nil, errors.Base("value length zero")
 	}
 	return generic(value, key[0], 1, "unpack value")
 }
 
-func PackPartialGenericKey(prefix byte, key interface{}, nFields int) (byte, []byte, error) {
+func PackPartialGenericKey(prefix byte, key interface{}, nFields int) ([]byte, error) {
 	if key == nil {
-		return 0x0, nil, errors.Base("key length zero")
+		return nil, errors.Base("key length zero")
 	}
-	x, y, z := generic(key, prefix, 4, "pack partial key")
-	res := y.(func(int) []byte)(nFields)
-	return x, res, z
+	genericRes, err := generic(key, prefix, 4, "pack partial key")
+	res := genericRes.(func(int) []byte)(nFields)
+	return res, err
 }
 
-func PackGenericKey(prefix byte, key interface{}) (byte, []byte, error) {
+func PackGenericKey(prefix byte, key interface{}) ([]byte, error) {
 	if key == nil {
-		return 0x0, nil, errors.Base("key length zero")
+		return nil, errors.Base("key length zero")
 	}
-	x, y, z := generic(key, prefix, 2, "pack key")
-	return x, y.([]byte), z
+	genericRes, err := generic(key, prefix, 2, "pack key")
+	return genericRes.([]byte), err
 }
 
-func PackGenericValue(prefix byte, value interface{}) (byte, []byte, error) {
+func PackGenericValue(prefix byte, value interface{}) ([]byte, error) {
 	if value == nil {
-		return 0x0, nil, errors.Base("value length zero")
+		return nil, errors.Base("value length zero")
 	}
-	x, y, z := generic(value, prefix, 3, "pack value")
-	return x, y.([]byte), z
+	genericRes, err := generic(value, prefix, 3, "pack value")
+	return genericRes.([]byte), err
 }
