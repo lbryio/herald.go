@@ -14,7 +14,7 @@ import (
 	"github.com/linxGnu/grocksdb"
 )
 
-func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
+func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.ColumnFamilyHandle) {
 	log.Println(filePath)
 	file, err := os.Open(filePath)
 	if err != nil {
@@ -25,11 +25,17 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 	if err != nil {
 		log.Println(err)
 	}
+	columnFamily := records[0][0]
+	records = records[1:]
 
 	// wOpts := grocksdb.NewDefaultWriteOptions()
 	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	db, err := grocksdb.OpenDb(opts, "tmp")
+	if err != nil {
+		log.Println(err)
+	}
+	handle, err := db.CreateColumnFamily(opts, columnFamily)
 	if err != nil {
 		log.Println(err)
 	}
@@ -41,14 +47,14 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func()) {
 		}
 	}
 
-	return db, records, toDefer
+	return db, records, toDefer, handle
 }
 
 func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T) {
 	return func(t *testing.T) {
 
 		wOpts := grocksdb.NewDefaultWriteOptions()
-		db, records, toDefer := testInit(filePath)
+		db, records, toDefer, handle := testInit(filePath)
 		defer toDefer()
 		for _, record := range records {
 			key, err := hex.DecodeString(record[0])
@@ -59,11 +65,13 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 			if err != nil {
 				log.Println(err)
 			}
-			db.Put(wOpts, key, val)
+			// db.Put(wOpts, key, val)
+			db.PutCF(wOpts, handle, key, val)
 		}
 		// test prefix
 		options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefix}).WithIncludeValue(true)
-		ch := dbpkg.Iter(db, options)
+		options = options.WithCfHandle(handle)
+		ch := dbpkg.IterCF(db, options)
 		var i = 0
 		for kv := range ch {
 			// log.Println(kv.Key)
@@ -116,7 +124,8 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 			log.Println(err)
 		}
 		options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
-		ch2 := dbpkg.Iter(db, options2)
+		options2 = options2.WithCfHandle(handle)
+		ch2 := dbpkg.IterCF(db, options2)
 		i = 0
 		for kv := range ch2 {
 			got, err := prefixes.PackGenericValue(prefix, kv.Value)
@@ -258,7 +267,7 @@ func TestRepost(t *testing.T) {
 }
 
 func TestRepostedClaim(t *testing.T) {
-	filePath := "../../resources/reposted_claim.csv"
+	filePath := "../../resources/reposted_claim_cf.csv"
 	testGeneric(filePath, prefixes.RepostedClaim, 3)(t)
 }
 

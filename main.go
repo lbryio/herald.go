@@ -31,11 +31,6 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd {
-		dbVal, err := db.GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
-		if err != nil {
-			log.Fatalln(err)
-		}
-
 		options := &db.IterOptions{
 			FillCache:    false,
 			Prefix:       []byte{prefixes.SupportAmount},
@@ -49,7 +44,40 @@ func main() {
 			RawValue:     true,
 		}
 
+		dbVal, err := db.GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
+		if err != nil {
+			log.Fatalln(err)
+		}
+
 		db.ReadWriteRawN(dbVal, options, "./resources/support_amount.csv", 10)
+
+		return
+	} else if args.CmdType == server.DBCmd2 {
+		var rawPrefix byte = prefixes.RepostedClaim
+
+		prefix := []byte{rawPrefix}
+		columnFamily := string(prefix)
+		options := &db.IterOptions{
+			FillCache:    false,
+			Prefix:       prefix,
+			Start:        nil,
+			Stop:         nil,
+			IncludeStart: true,
+			IncludeStop:  false,
+			IncludeKey:   true,
+			IncludeValue: true,
+			RawKey:       true,
+			RawValue:     true,
+		}
+
+		dbVal, handles, err := db.GetDBCF("/mnt/d/data/snapshot_1072108/lbry-rocksdb/", columnFamily)
+		if err != nil {
+			log.Fatalln(err)
+		}
+
+		options.CfHandle = handles[1]
+
+		db.ReadWriteRawNCF(dbVal, options, "./resources/reposted_claim_cf.csv", 10)
 
 		return
 	}

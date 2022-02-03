@@ -3,11 +3,13 @@ package db
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math"
 	"os"
 
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -76,6 +78,7 @@ type IterOptions struct {
 	IncludeValue bool
 	RawKey       bool
 	RawValue     bool
+	CfHandle     *grocksdb.ColumnFamilyHandle
 	It           *grocksdb.Iterator
 }
 
@@ -92,8 +95,14 @@ func NewIterateOptions() *IterOptions {
 		IncludeValue: false,
 		RawKey:       false,
 		RawValue:     false,
+		CfHandle:     nil,
 		It:           nil,
 	}
+}
+
+func (o *IterOptions) WithCfHandle(cfHandle *grocksdb.ColumnFamilyHandle) *IterOptions {
+	o.CfHandle = cfHandle
+	return o
 }
 
 func (o *IterOptions) WithFillCache(fillCache bool) *IterOptions {
@@ -165,8 +174,47 @@ func (o *IterOptions) StopIteration(key []byte) bool {
 	return false
 }
 
-func ParseURL(url string) (stream string, channel string, err error) {
-	return "", "", nil
+type PathSegment struct {
+	name        string
+	claimId     string
+	amountOrder int
+}
+
+func (ps *PathSegment) Normalized() string {
+	return util.NormalizeName(ps.name)
+}
+
+func (ps *PathSegment) IsShortId() bool {
+	return ps.claimId != "" && len(ps.claimId) < 40
+}
+
+func (ps *PathSegment) IsFullId() bool {
+	return len(ps.claimId) == 40
+}
+
+func (ps *PathSegment) String() string {
+	if ps.claimId != "" {
+		return fmt.Sprintf("%s:%s", ps.name, ps.claimId)
+	} else if ps.amountOrder != 0 {
+		return fmt.Sprintf("%s:%d", ps.name, ps.amountOrder)
+	}
+	return ps.name
+}
+
+type URL struct {
+	stream  *PathSegment
+	channel *PathSegment
+}
+
+func NewURL() *URL {
+	return &URL{
+		stream:  nil,
+		channel: nil,
+	}
+}
+
+func ParseURL(url string) (parsed *URL, err error) {
+	return NewURL(), nil
 }
 
 func Resolve(db *grocksdb.DB, url string) *ExpandedResolveResult {
@@ -177,7 +225,7 @@ func Resolve(db *grocksdb.DB, url string) *ExpandedResolveResult {
 		RepostedChannel: nil,
 	}
 
-	stream, channel, err := ParseURL(url)
+	parsed, err := ParseURL(url)
 	if err != nil {
 		res.Stream = &optionalResolveResultOrError{
 			err: &ResolveError{err},
@@ -185,7 +233,7 @@ func Resolve(db *grocksdb.DB, url string) *ExpandedResolveResult {
 		return res
 	}
 
-	log.Println(stream, channel)
+	log.Printf("parsed: %+v\n", parsed)
 	return res
 }
 
@@ -248,6 +296,39 @@ func (opts *IterOptions) ReadRow(ch chan *prefixes.PrefixRowKV, prevKey *[]byte)
 	return true
 }
 
+func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
+	ch := make(chan *prefixes.PrefixRowKV)
+
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetFillCache(opts.FillCache)
+	it := db.NewIteratorCF(ro, opts.CfHandle)
+	// it := db.NewIterator(ro)
+	opts.It = it
+
+	it.Seek(opts.Prefix)
+	if opts.Start != nil {
+		it.Seek(opts.Start)
+	}
+
+	go func() {
+		defer it.Close()
+		defer close(ch)
+
+		var prevKey []byte = nil
+		if !opts.IncludeStart {
+			it.Next()
+		}
+		if !it.Valid() && opts.IncludeStop {
+			opts.ReadRow(ch, &prevKey)
+		}
+		for ; !opts.StopIteration(prevKey) && it.Valid(); it.Next() {
+			opts.ReadRow(ch, &prevKey)
+		}
+	}()
+
+	return ch
+}
+
 func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
 
@@ -278,6 +359,48 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	}()
 
 	return ch
+}
+
+func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
+	opts := grocksdb.NewDefaultOptions()
+	cfOpt := grocksdb.NewDefaultOptions()
+	cfNames, err := grocksdb.ListColumnFamilies(opts, name)
+	if err != nil {
+		return nil, nil, err
+	}
+	cfOpts := make([]*grocksdb.Options, len(cfNames))
+	for i, _ := range cfNames {
+		cfOpts[i] = cfOpt
+	}
+	db, handles, err := grocksdb.OpenDbColumnFamilies(opts, name, cfNames, cfOpts)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	for i, handle := range handles {
+		log.Printf("%d: %s, %+v\n", i, cfNames[i], handle)
+	}
+
+	return db, handles, nil
+}
+
+func GetDBCF(name string, cf string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
+	opts := grocksdb.NewDefaultOptions()
+	cfOpt := grocksdb.NewDefaultOptions()
+
+	cfNames := []string{"default", cf}
+	cfOpts := []*grocksdb.Options{cfOpt, cfOpt}
+
+	db, handles, err := grocksdb.OpenDbAsSecondaryColumnFamilies(opts, name, "asdf", cfNames, cfOpts)
+
+	for i, handle := range handles {
+		log.Printf("%d: %+v\n", i, handle)
+	}
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return db, handles, nil
 }
 
 func GetDB(name string) (*grocksdb.DB, error) {
@@ -319,6 +442,42 @@ func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*prefixes.PrefixRowKV 
 	}
 
 	return res
+}
+
+func ReadWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int) {
+
+	options.RawKey = true
+	options.RawValue = true
+	ch := IterCF(db, options)
+
+	file, err := os.Create(out)
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	defer file.Close()
+
+	var i = 0
+	log.Println(options.Prefix)
+	file.Write([]byte(fmt.Sprintf("%s,\n", options.Prefix)))
+	for kv := range ch {
+		log.Println(i)
+		if i >= n {
+			return
+		}
+		key := kv.Key.([]byte)
+		value := kv.Value.([]byte)
+		keyHex := hex.EncodeToString(key)
+		valueHex := hex.EncodeToString(value)
+		log.Println(keyHex)
+		log.Println(valueHex)
+		file.WriteString(keyHex)
+		file.WriteString(",")
+		file.WriteString(valueHex)
+		file.WriteString("\n")
+
+		i++
+	}
 }
 
 func ReadWriteRawN(db *grocksdb.DB, options *IterOptions, out string, n int) {
