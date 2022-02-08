@@ -59,6 +59,41 @@ const (
 	OnesCompTwiddle32 uint32 = 0xffffffff
 )
 
+func GetPrefixes() [][]byte {
+	return [][]byte{
+		{ClaimToSupport},
+		{SupportToClaim},
+		{ClaimToTXO},
+		{TXOToClaim},
+		{ClaimToChannel},
+		{ChannelToClaim},
+		{ClaimShortIdPrefix},
+		{EffectiveAmount},
+		{ClaimExpiration},
+		{ClaimTakeover},
+		{PendingActivation},
+		{ActivatedClaimAndSupport},
+		{ActiveAmount},
+		{Repost},
+		{RepostedClaim},
+		{Undo},
+		{ClaimDiff},
+		{Tx},
+		{BlockHash},
+		{Header},
+		{TxNum},
+		{TxCount},
+		{TxHash},
+		{UTXO},
+		{HashXUTXO},
+		{HashXHistory},
+		{DBState},
+		{ChannelCount},
+		{SupportAmount},
+		{BlockTXs},
+	}
+}
+
 type PrefixRowKV struct {
 	Key   interface{}
 	Value interface{}

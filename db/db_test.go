@@ -102,8 +102,8 @@ func OpenAndFillTmpDB(filePath string) (*grocksdb.DB, [][]string, func(), error)
 }
 
 func TestResolve(t *testing.T) {
-	filePath := "../resources/reposted_claim.csv"
-	db, _, toDefer, err := OpenAndFillTmpDB(filePath)
+	filePath := "../testdata/W.csv"
+	db, _, toDefer, _, err := OpenAndFillTmpDBCF(filePath)
 	if err != nil {
 		t.Error(err)
 		return
@@ -115,7 +115,7 @@ func TestResolve(t *testing.T) {
 
 func TestIter(t *testing.T) {
 
-	filePath := "../resources/reposted_claim.csv"
+	filePath := "../testdata/W.csv"
 
 	db, records, toDefer, handle, err := OpenAndFillTmpDBCF(filePath)
 	if err != nil {

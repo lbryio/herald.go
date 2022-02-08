@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
@@ -49,35 +50,42 @@ func main() {
 			log.Fatalln(err)
 		}
 
-		db.ReadWriteRawN(dbVal, options, "./resources/support_amount.csv", 10)
+		db.ReadWriteRawN(dbVal, options, "./testdata/support_amount.csv", 10)
 
 		return
 	} else if args.CmdType == server.DBCmd2 {
-		var rawPrefix byte = prefixes.RepostedClaim
+		pxs := prefixes.GetPrefixes()
+		for _, prefix := range pxs {
+			//var rawPrefix byte = prefixes.ClaimExpiration
 
-		prefix := []byte{rawPrefix}
-		columnFamily := string(prefix)
-		options := &db.IterOptions{
-			FillCache:    false,
-			Prefix:       prefix,
-			Start:        nil,
-			Stop:         nil,
-			IncludeStart: true,
-			IncludeStop:  false,
-			IncludeKey:   true,
-			IncludeValue: true,
-			RawKey:       true,
-			RawValue:     true,
+			//prefix := []byte{rawPrefix}
+			columnFamily := string(prefix)
+			options := &db.IterOptions{
+				FillCache:    false,
+				Prefix:       prefix,
+				Start:        nil,
+				Stop:         nil,
+				IncludeStart: true,
+				IncludeStop:  false,
+				IncludeKey:   true,
+				IncludeValue: true,
+				RawKey:       true,
+				RawValue:     true,
+			}
+
+			dbVal, handles, err := db.GetDBCF("/mnt/d/data/snapshot_1072108/lbry-rocksdb/", columnFamily)
+			if err != nil {
+				log.Fatalln(err)
+			}
+
+			options.CfHandle = handles[1]
+			var n = 10
+			if bytes.Equal(prefix, []byte{prefixes.Undo}) || bytes.Equal(prefix, []byte{prefixes.DBState}) {
+				n = 1
+			}
+
+			db.ReadWriteRawNCF(dbVal, options, fmt.Sprintf("./testdata/%s.csv", columnFamily), n)
 		}
-
-		dbVal, handles, err := db.GetDBCF("/mnt/d/data/snapshot_1072108/lbry-rocksdb/", columnFamily)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		options.CfHandle = handles[1]
-
-		db.ReadWriteRawNCF(dbVal, options, "./resources/reposted_claim_cf.csv", 10)
 
 		return
 	}

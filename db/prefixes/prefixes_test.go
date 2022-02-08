@@ -145,144 +145,152 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 }
 
 func TestSupportAmount(t *testing.T) {
-	testGeneric("../../resources/support_amount.csv", prefixes.SupportAmount, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.SupportAmount)
+	testGeneric(filePath, prefixes.SupportAmount, 1)(t)
 }
 
 func TestChannelCount(t *testing.T) {
-	testGeneric("../../resources/channel_count.csv", prefixes.ChannelCount, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ChannelCount)
+	testGeneric(filePath, prefixes.ChannelCount, 1)(t)
 }
 
 func TestDBState(t *testing.T) {
-	testGeneric("../../resources/db_state.csv", prefixes.DBState, 0)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.DBState)
+	testGeneric(filePath, prefixes.DBState, 0)(t)
 }
 
 func TestBlockTxs(t *testing.T) {
-	testGeneric("../../resources/block_txs.csv", prefixes.BlockTXs, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.BlockTXs)
+	testGeneric(filePath, prefixes.BlockTXs, 1)(t)
 }
 
 func TestTxCount(t *testing.T) {
-	testGeneric("../../resources/tx_count.csv", prefixes.TxCount, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.TxCount)
+	testGeneric(filePath, prefixes.TxCount, 1)(t)
 }
 
 func TestTxHash(t *testing.T) {
-	testGeneric("../../resources/tx_hash.csv", prefixes.TxHash, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.TxHash)
+	testGeneric(filePath, prefixes.TxHash, 1)(t)
 }
 
 func TestTxNum(t *testing.T) {
-	testGeneric("../../resources/tx_num.csv", prefixes.TxNum, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.TxNum)
+	testGeneric(filePath, prefixes.TxNum, 1)(t)
 }
 
 func TestTx(t *testing.T) {
-	testGeneric("../../resources/tx.csv", prefixes.Tx, 1)(t)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.Tx)
+	testGeneric(filePath, prefixes.Tx, 1)(t)
 }
 
 func TestHashXHistory(t *testing.T) {
-	filePath := "../../resources/hashx_history.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.HashXHistory)
 	testGeneric(filePath, prefixes.HashXHistory, 2)(t)
 }
 
 func TestUndo(t *testing.T) {
-	filePath := "../../resources/undo.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.Undo)
 	testGeneric(filePath, prefixes.Undo, 1)(t)
 }
 
 func TestBlockHash(t *testing.T) {
-	filePath := "../../resources/block_hash.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.BlockHash)
 	testGeneric(filePath, prefixes.BlockHash, 1)(t)
 }
 
 func TestBlockHeader(t *testing.T) {
-	filePath := "../../resources/header.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.Header)
 	testGeneric(filePath, prefixes.Header, 1)(t)
 }
 
 func TestClaimToTXO(t *testing.T) {
-	filePath := "../../resources/claim_to_txo.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimToTXO)
 	testGeneric(filePath, prefixes.ClaimToTXO, 1)(t)
 }
 
 func TestTXOToClaim(t *testing.T) {
-	filePath := "../../resources/txo_to_claim.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.TXOToClaim)
 	testGeneric(filePath, prefixes.TXOToClaim, 2)(t)
 }
 
 func TestClaimShortID(t *testing.T) {
-	filePath := "../../resources/claim_short_id_prefix.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimShortIdPrefix)
 	testGeneric(filePath, prefixes.ClaimShortIdPrefix, 3)(t)
 }
 
 func TestClaimToChannel(t *testing.T) {
-	filePath := "../../resources/claim_to_channel.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimToChannel)
 	testGeneric(filePath, prefixes.ClaimToChannel, 3)(t)
 }
 
 func TestChannelToClaim(t *testing.T) {
-	filePath := "../../resources/channel_to_claim.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ChannelToClaim)
 	testGeneric(filePath, prefixes.ChannelToClaim, 4)(t)
 }
 
 func TestClaimToSupport(t *testing.T) {
-	filePath := "../../resources/claim_to_support.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimToSupport)
 	testGeneric(filePath, prefixes.ClaimToSupport, 3)(t)
 }
 
 func TestSupportToClaim(t *testing.T) {
-	filePath := "../../resources/support_to_claim.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.SupportToClaim)
 	testGeneric(filePath, prefixes.SupportToClaim, 2)(t)
 }
 
 func TestClaimExpiration(t *testing.T) {
-	filePath := "../../resources/claim_expiration.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimExpiration)
 	testGeneric(filePath, prefixes.ClaimExpiration, 3)(t)
 }
 
 func TestClaimTakeover(t *testing.T) {
-	filePath := "../../resources/claim_takeover.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimTakeover)
 	testGeneric(filePath, prefixes.ClaimTakeover, 1)(t)
 }
 
 func TestPendingActivation(t *testing.T) {
-	filePath := "../../resources/pending_activation.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.PendingActivation)
 	testGeneric(filePath, prefixes.PendingActivation, 4)(t)
 }
 
 func TestActivated(t *testing.T) {
-	filePath := "../../resources/activated_claim_and_support.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ActivatedClaimAndSupport)
 	testGeneric(filePath, prefixes.ActivatedClaimAndSupport, 3)(t)
 }
 
 func TestActiveAmount(t *testing.T) {
-	filePath := "../../resources/active_amount.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ActiveAmount)
 	testGeneric(filePath, prefixes.ActiveAmount, 5)(t)
 }
 
 func TestEffectiveAmount(t *testing.T) {
-	filePath := "../../resources/effective_amount.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.EffectiveAmount)
 	testGeneric(filePath, prefixes.EffectiveAmount, 4)(t)
 }
 
 func TestRepost(t *testing.T) {
-	filePath := "../../resources/repost.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.Repost)
 	testGeneric(filePath, prefixes.Repost, 1)(t)
 }
 
 func TestRepostedClaim(t *testing.T) {
-	filePath := "../../resources/reposted_claim_cf.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.RepostedClaim)
 	testGeneric(filePath, prefixes.RepostedClaim, 3)(t)
 }
 
 func TestClaimDiff(t *testing.T) {
-	filePath := "../../resources/claim_diff.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimDiff)
 	testGeneric(filePath, prefixes.ClaimDiff, 1)(t)
 }
 
 func TestUTXO(t *testing.T) {
-	filePath := "../../resources/utxo.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.UTXO)
 	testGeneric(filePath, prefixes.UTXO, 1)(t)
 }
 
 func TestHashXUTXO(t *testing.T) {
-	filePath := "../../resources/hashx_utxo.csv"
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.HashXUTXO)
 	testGeneric(filePath, prefixes.HashXUTXO, 3)(t)
 }
 
