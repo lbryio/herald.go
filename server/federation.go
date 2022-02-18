@@ -246,7 +246,7 @@ func (s *Server) writePeers() {
 	}
 	writer := bufio.NewWriter(f)
 
-	for key, _ := range s.PeerServers {
+	for key := range s.PeerServers {
 		line := key + "\n"
 		_, err := writer.WriteString(line)
 		if err != nil {

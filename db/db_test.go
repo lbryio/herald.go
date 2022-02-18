@@ -13,6 +13,70 @@ import (
 	"github.com/linxGnu/grocksdb"
 )
 
+func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFamily, [][]string, func(), error) {
+
+	log.Println(filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Println(err)
+	}
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	wOpts := grocksdb.NewDefaultWriteOptions()
+	opts := grocksdb.NewDefaultOptions()
+	opts.SetCreateIfMissing(true)
+	db, err := grocksdb.OpenDb(opts, "tmp")
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	var handleMap map[string]*grocksdb.ColumnFamilyHandle = make(map[string]*grocksdb.ColumnFamilyHandle)
+
+	for _, cfNameRune := range records[0][0] {
+		cfName := string(cfNameRune)
+		log.Println(cfName)
+		handle, err := db.CreateColumnFamily(opts, cfName)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		handleMap[cfName] = handle
+	}
+	toDefer := func() {
+		db.Close()
+		err = os.RemoveAll("./tmp")
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	for _, record := range records[1:] {
+		cf := record[0]
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		handle := handleMap[string(cf)]
+		key, err := hex.DecodeString(record[1])
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		val, err := hex.DecodeString(record[2])
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		db.PutCF(wOpts, handle, key, val)
+	}
+
+	myDB := &dbpkg.ReadOnlyDBColumnFamily{
+		DB:      db,
+		Handles: handleMap,
+		Opts:    grocksdb.NewDefaultReadOptions(),
+	}
+
+	return myDB, records, toDefer, nil
+}
+
 func OpenAndFillTmpDBCF(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.ColumnFamilyHandle, error) {
 
 	log.Println(filePath)
@@ -101,9 +165,68 @@ func OpenAndFillTmpDB(filePath string) (*grocksdb.DB, [][]string, func(), error)
 	return db, records, toDefer, nil
 }
 
+func CatCSV(filePath string) {
+	log.Println(filePath)
+	file, err := os.Open(filePath)
+	if err != nil {
+		log.Println(err)
+	}
+	reader := csv.NewReader(file)
+	records, err := reader.ReadAll()
+	if err != nil {
+		log.Println(err)
+		return
+	}
+	for _, record := range records[1:] {
+		log.Println(record[1])
+		keyRaw, err := hex.DecodeString(record[1])
+		key, _ := prefixes.UnpackGenericKey(keyRaw)
+		log.Println(key)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+		valRaw, err := hex.DecodeString(record[2])
+		// val := prefixes.ClaimTakeoverValueUnpack(valRaw)
+		val, _ := prefixes.UnpackGenericValue(keyRaw, valRaw)
+		log.Println(val)
+		if err != nil {
+			log.Println(err)
+			return
+		}
+	}
+}
+
+func TestOpenFullDB(t *testing.T) {
+	url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
+	dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
+	prefixes := prefixes.GetPrefixes()
+	cfNames := []string{"default", "e", "d", "c"}
+	for _, prefix := range prefixes {
+		cfName := string(prefix)
+		cfNames = append(cfNames, cfName)
+	}
+	db, err := dbpkg.GetDBColumnFamlies(dbPath, cfNames)
+	toDefer := func() {
+		db.DB.Close()
+		err = os.RemoveAll("./asdf")
+		if err != nil {
+			log.Println(err)
+		}
+	}
+	defer toDefer()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	expandedResolveResult := dbpkg.Resolve(db, url)
+	log.Println(expandedResolveResult)
+}
+
+// FIXME: Needs new data format
 func TestResolve(t *testing.T) {
-	filePath := "../testdata/W.csv"
-	db, _, toDefer, _, err := OpenAndFillTmpDBCF(filePath)
+	filePath := "../testdata/P_cat.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
 		return
@@ -111,6 +234,81 @@ func TestResolve(t *testing.T) {
 	defer toDefer()
 	expandedResolveResult := dbpkg.Resolve(db, "asdf")
 	log.Println(expandedResolveResult)
+}
+
+func TestPrintClaimShortId(t *testing.T) {
+	filePath := "../testdata/F_cat.csv"
+	CatCSV(filePath)
+}
+
+func TestClaimShortIdIter(t *testing.T) {
+	filePath := "../testdata/F_cat.csv"
+	normalName := "cat"
+	claimId := "0"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer toDefer()
+
+	ch := dbpkg.ClaimShortIdIter(db, normalName, claimId)
+
+	for row := range ch {
+		key := row.Key.(*prefixes.ClaimShortIDKey)
+		log.Println(key)
+		if key.NormalizedName != normalName {
+			t.Errorf("Expected %s, got %s", normalName, key.NormalizedName)
+		}
+	}
+}
+
+func TestPrintClaimToTXO(t *testing.T) {
+	filePath := "../testdata/E_2.csv"
+	CatCSV(filePath)
+}
+
+func TestGetClaimToTXO(t *testing.T) {
+	claimHashStr := "00000324e40fcb63a0b517a3660645e9bd99244a"
+	claimHash, err := hex.DecodeString(claimHashStr)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	filePath := "../testdata/E_2.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer toDefer()
+	res, err := dbpkg.GetCachedClaimTxo(db, claimHash)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	log.Println(res)
+}
+
+func TestPrintClaimTakeover(t *testing.T) {
+	filePath := "../testdata/P_cat.csv"
+	CatCSV(filePath)
+}
+
+func TestGetControllingClaim(t *testing.T) {
+	filePath := "../testdata/P_cat.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer toDefer()
+	res, err := dbpkg.GetControllingClaim(db, "cat")
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	log.Println(res)
 }
 
 func TestIter(t *testing.T) {

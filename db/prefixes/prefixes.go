@@ -911,6 +911,13 @@ type TxHashValue struct {
 	TxHash []byte `json:"tx_hash"`
 }
 
+func NewTxHashKey(txNum uint32) *TxHashKey {
+	return &TxHashKey{
+		Prefix: []byte{TxHash},
+		TxNum:  txNum,
+	}
+}
+
 func (k *TxHashKey) PackKey() []byte {
 	prefixLen := 1
 	// b'>L'
@@ -1329,6 +1336,13 @@ type ClaimToTXOValue struct {
 	Name                    string `json:"name"`
 }
 
+func NewClaimToTXOKey(claimHash []byte) *ClaimToTXOKey {
+	return &ClaimToTXOKey{
+		Prefix:    []byte{ClaimToTXO},
+		ClaimHash: claimHash,
+	}
+}
+
 func (v *ClaimToTXOValue) NormalizedName() string {
 	//TODO implement? Might not need to do anything.
 	return v.Name
@@ -1577,6 +1591,14 @@ type ClaimShortIDValue struct {
 	Position uint16 `json:"position"`
 }
 
+func NewClaimShortIDKey(normalizedName, partialClaimId string) *ClaimShortIDKey {
+	return &ClaimShortIDKey{
+		Prefix:         []byte{ClaimShortIdPrefix},
+		NormalizedName: normalizedName,
+		PartialClaimId: partialClaimId,
+	}
+}
+
 func (k *ClaimShortIDKey) PackKey() []byte {
 	prefixLen := 1
 	nameLen := len(k.NormalizedName)
@@ -1713,6 +1735,15 @@ type ClaimToChannelKey struct {
 
 type ClaimToChannelValue struct {
 	SigningHash []byte `json:"signing_hash"`
+}
+
+func NewClaimToChannelKey(claimHash []byte, txNum uint32, position uint16) *ClaimToChannelKey {
+	return &ClaimToChannelKey{
+		Prefix:    []byte{ClaimToChannel},
+		ClaimHash: claimHash,
+		TxNum:     txNum,
+		Position:  position,
+	}
 }
 
 func (k *ClaimToChannelKey) PackKey() []byte {
@@ -2053,6 +2084,13 @@ type SupportAmountKey struct {
 
 type SupportAmountValue struct {
 	Amount uint64 `json:"amount"`
+}
+
+func NewSupportAmountKey(claimHash []byte) *SupportAmountKey {
+	return &SupportAmountKey{
+		Prefix:    []byte{SupportAmount},
+		ClaimHash: claimHash,
+	}
 }
 
 func (k *SupportAmountKey) PackKey() []byte {
@@ -2501,6 +2539,13 @@ type ClaimTakeoverValue struct {
 	Height    uint32 `json:"height"`
 }
 
+func NewClaimTakeoverKey(normalizedName string) *ClaimTakeoverKey {
+	return &ClaimTakeoverKey{
+		Prefix:         []byte{ClaimTakeover},
+		NormalizedName: normalizedName,
+	}
+}
+
 func (v *ClaimTakeoverValue) String() string {
 	return fmt.Sprintf(
 		"%s(claim_hash=%s, height=%d)",
@@ -2770,6 +2815,15 @@ type ActivationValue struct {
 	Height         uint32 `json:"height"`
 	ClaimHash      []byte `json:"claim_hash"`
 	NormalizedName string `json:"normalized_name"`
+}
+
+func NewActivationKey(txoType uint8, txNum uint32, position uint16) *ActivationKey {
+	return &ActivationKey{
+		Prefix:   []byte{ActivatedClaimAndSupport},
+		TxoType:  txoType,
+		TxNum:    txNum,
+		Position: position,
+	}
 }
 
 func (k *ActivationKey) PackKey() []byte {
