@@ -1471,6 +1471,14 @@ type TXOToClaimValue struct {
 	Name      string `json:"name"`
 }
 
+func NewTXOToClaimKey(txNum uint32, position uint16) *TXOToClaimKey {
+	return &TXOToClaimKey{
+		Prefix:   []byte{TXOToClaim},
+		TxNum:    txNum,
+		Position: position,
+	}
+}
+
 func (k *TXOToClaimKey) PackKey() []byte {
 	prefixLen := 1
 	// b'>LH'

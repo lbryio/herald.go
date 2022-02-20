@@ -5,6 +5,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/lbryio/hub/db"
@@ -27,8 +30,26 @@ func main() {
 		ctxWCancel, cancel := context.WithCancel(ctx)
 		defer cancel()
 
+		interrupt := make(chan os.Signal, 1)
+		signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+		defer signal.Stop(interrupt)
+
 		s := server.MakeHubServer(ctxWCancel, args)
 		s.Run()
+
+		select {
+		case <-interrupt:
+			break
+		case <-ctx.Done():
+			break
+		}
+
+		log.Println("Shutting down server...")
+
+		s.EsClient.Stop()
+		s.GrpcServer.GracefulStop()
+
+		log.Println("Returning from main...")
 
 		return
 	} else if args.CmdType == server.DBCmd {
@@ -89,21 +110,21 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd3 {
-		var rawPrefix byte = prefixes.ClaimShortIdPrefix
+		var rawPrefix byte = prefixes.TXOToClaim
 		prefix := []byte{rawPrefix}
 		columnFamily := string(prefix)
-		start := &prefixes.ClaimShortIDKey{
-			Prefix:         []byte{prefixes.ClaimShortIdPrefix},
-			NormalizedName: "cat",
-			PartialClaimId: "",
-			RootTxNum:      0,
-			RootPosition:   0,
-		}
-		startRaw := prefixes.ClaimShortIDKeyPackPartial(start, 1)
+		// start := &prefixes.ClaimShortIDKey{
+		// 	Prefix:         []byte{prefixes.ClaimShortIdPrefix},
+		// 	NormalizedName: "cat",
+		// 	PartialClaimId: "",
+		// 	RootTxNum:      0,
+		// 	RootPosition:   0,
+		// }
+		// startRaw := prefixes.ClaimShortIDKeyPackPartial(start, 1)
 		options := &db.IterOptions{
 			FillCache:    false,
 			Prefix:       prefix,
-			Start:        startRaw,
+			Start:        nil,
 			Stop:         nil,
 			IncludeStart: true,
 			IncludeStop:  false,
@@ -120,42 +141,9 @@ func main() {
 
 		options.CfHandle = handles[1]
 
-		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_cat.csv", columnFamily), 10)
+		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_2.csv", columnFamily), 10)
 		return
 	}
-	// } else if args.CmdType == server.DBCmd4 {
-	// 	var rawPrefix byte = prefixes.TxCount
-
-	// 	prefix := []byte{rawPrefix}
-	// 	columnFamily := string(prefix)
-	// 	options := &db.IterOptions{
-	// 		FillCache:    false,
-	// 		Prefix:       prefix,
-	// 		Start:        nil,
-	// 		Stop:         nil,
-	// 		IncludeStart: true,
-	// 		IncludeStop:  false,
-	// 		IncludeKey:   true,
-	// 		IncludeValue: true,
-	// 		RawKey:       true,
-	// 		RawValue:     true,
-	// 	}
-
-	// 	dbVal, handles, err := db.GetDBCF("/mnt/d/data/snapshot_1072108/lbry-rocksdb/", columnFamily)
-	// 	if err != nil {
-	// 		log.Fatalln(err)
-	// 	}
-
-	// 	options.CfHandle = handles[1]
-	// 	var n = 10
-	// 	if bytes.Equal(prefix, []byte{prefixes.Undo}) || bytes.Equal(prefix, []byte{prefixes.DBState}) {
-	// 		n = 1
-	// 	}
-
-	// 	db.ReadWriteRawNCF(dbVal, options, fmt.Sprintf("./testdata/%s.csv", columnFamily), n)
-
-	// 	return
-	// }
 
 	conn, err := grpc.Dial("localhost:"+args.Port,
 		grpc.WithInsecure(),
