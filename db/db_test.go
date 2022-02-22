@@ -209,6 +209,7 @@ func CatCSV(filePath string) {
 }
 
 func TestCatFullDB(t *testing.T) {
+	t.Skip("Skipping full db test")
 	// url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
 	// "lbry://@lbry", "lbry://@lbry#3", "lbry://@lbry3f", "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a", "lbry://@lbry:1", "lbry://@lbry$1"
 	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
@@ -248,12 +249,13 @@ func TestCatFullDB(t *testing.T) {
 
 // TestOpenFullDB Tests running a resolve on a full db.
 func TestOpenFullDB(t *testing.T) {
+	t.Skip("Skipping full db test")
 	// url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
 	// "lbry://@lbry", "lbry://@lbry#3", "lbry://@lbry3f", "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a", "lbry://@lbry:1", "lbry://@lbry$1"
-	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
+	url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
 	// url := "lbry://@lbry"
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
-	url := "lbry://@lbry$1"
+	// url := "lbry://@lbry$1"
 	dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	prefixNames := prefixes.GetPrefixes()
 	cfNames := []string{"default", "e", "d", "c"}
@@ -289,6 +291,49 @@ func TestResolve(t *testing.T) {
 	defer toDefer()
 	expandedResolveResult := dbpkg.Resolve(db, "asdf")
 	log.Println(expandedResolveResult)
+}
+
+// TestGetDBState Tests reading the db state from rocksdb
+func TestGetDBState(t *testing.T) {
+	filePath := "../testdata/s_resolve.csv"
+	want := uint32(1072108)
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+	state, err := dbpkg.GetDBState(db)
+	if err != nil {
+		t.Error(err)
+	}
+	log.Printf("state: %#v\n", state)
+	if state.Height != want {
+		t.Errorf("Expected %d, got %d", want, state.Height)
+	}
+}
+
+// TestPrintChannelCount Utility function to cat the ClaimShortId csv
+func TestPrintChannelCount(t *testing.T) {
+	filePath := "../testdata/Z_resolve.csv"
+	CatCSV(filePath)
+}
+
+func TestGetClaimsInChannelCount(t *testing.T) {
+	channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+	filePath := "../testdata/Z_resolve.csv"
+	want := uint32(3670)
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+	count, err := dbpkg.GetClaimsInChannelCount(db, channelHash)
+	if err != nil {
+		t.Error(err)
+	}
+	if count != want {
+		t.Errorf("Expected %d, got %d", want, count)
+	}
 }
 
 // TestPrintClaimShortId Utility function to cat the ClaimShortId csv

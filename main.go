@@ -110,17 +110,16 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd3 {
-		var rawPrefix byte = prefixes.TXOToClaim
+		// channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+		var rawPrefix byte = prefixes.DBState
 		prefix := []byte{rawPrefix}
 		columnFamily := string(prefix)
-		// start := &prefixes.ClaimShortIDKey{
-		// 	Prefix:         []byte{prefixes.ClaimShortIdPrefix},
-		// 	NormalizedName: "cat",
-		// 	PartialClaimId: "",
-		// 	RootTxNum:      0,
-		// 	RootPosition:   0,
+		// start := &prefixes.ChannelCountKey{
+		// 	Prefix:      prefix,
+		// 	ChannelHash: channelHash,
 		// }
-		// startRaw := prefixes.ClaimShortIDKeyPackPartial(start, 1)
+		// startRaw := prefixes.ChannelCountKeyPackPartial(start, 1)
+		// startRaw := start.PackKey()
 		options := &db.IterOptions{
 			FillCache:    false,
 			Prefix:       prefix,
@@ -141,7 +140,7 @@ func main() {
 
 		options.CfHandle = handles[1]
 
-		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_2.csv", columnFamily), 10)
+		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_resolve.csv", columnFamily), 1)
 		return
 	}
 

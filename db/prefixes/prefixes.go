@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/lbryio/lbry.go/v2/extras/errors"
+	"github.com/lbryio/lbry.go/v2/extras/util"
 )
 
 const (
@@ -134,6 +135,12 @@ type DBStateValue struct {
 	CompFlushCount int32
 	CompCursor     int32
 	EsSyncHeight   uint32
+}
+
+func NewDBStateKey() *DBStateKey {
+	return &DBStateKey{
+		Prefix: []byte{DBState},
+	}
 }
 
 func (k *DBStateKey) PackKey() []byte {
@@ -1345,7 +1352,7 @@ func NewClaimToTXOKey(claimHash []byte) *ClaimToTXOKey {
 
 func (v *ClaimToTXOValue) NormalizedName() string {
 	//TODO implement? Might not need to do anything.
-	return v.Name
+	return util.NormalizeName(v.Name)
 }
 
 func (k *ClaimToTXOKey) PackKey() []byte {
@@ -1875,6 +1882,14 @@ type ChannelToClaimValue struct {
 	ClaimHash []byte `json:"claim_hash"`
 }
 
+func NewChannelToClaimKey(channelHash []byte, normalizedName string) *ChannelToClaimKey {
+	return &ChannelToClaimKey{
+		Prefix:      []byte{ChannelToClaim},
+		SigningHash: channelHash,
+		Name:        normalizedName,
+	}
+}
+
 func (k *ChannelToClaimKey) PackKey() []byte {
 	prefixLen := 1
 	nameLen := len(k.Name)
@@ -1994,6 +2009,13 @@ type ChannelCountKey struct {
 
 type ChannelCountValue struct {
 	Count uint32 `json:"count"`
+}
+
+func NewChannelCountKey(channelHash []byte) *ChannelCountKey {
+	return &ChannelCountKey{
+		Prefix:      []byte{ChannelCount},
+		ChannelHash: channelHash,
+	}
 }
 
 func (k *ChannelCountKey) PackKey() []byte {
@@ -3225,6 +3247,13 @@ type RepostValue struct {
 	RepostedClaimHash []byte `json:"reposted_claim_hash"`
 }
 
+func NewRepostKey(claimHash []byte) *RepostKey {
+	return &RepostKey{
+		Prefix:    []byte{Repost},
+		ClaimHash: claimHash,
+	}
+}
+
 func (k *RepostKey) PackKey() []byte {
 	prefixLen := 1
 	// b'>20s'
@@ -3332,6 +3361,13 @@ type RepostedKey struct {
 
 type RepostedValue struct {
 	ClaimHash []byte `json:"claim_hash"`
+}
+
+func NewRepostedKey(claimHash []byte) *RepostedKey {
+	return &RepostedKey{
+		Prefix:            []byte{RepostedClaim},
+		RepostedClaimHash: claimHash,
+	}
 }
 
 func (k *RepostedKey) PackKey() []byte {
