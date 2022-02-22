@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -110,17 +111,17 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd3 {
-		// channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+		channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
 		// name := util.NormalizeName("@Styxhexenhammer666")
-		txNum := uint32(0x6284e3)
-		position := uint16(0x0)
-		typ := uint8(prefixes.ACTIVATED_CLAIM_TXO_TYPE)
-		var rawPrefix byte = prefixes.ActivatedClaimAndSupport
+		// txNum := uint32(0x6284e3)
+		// position := uint16(0x0)
+		// typ := uint8(prefixes.ACTIVATED_CLAIM_TXO_TYPE)
+		var rawPrefix byte = prefixes.SupportAmount
 		var startRaw []byte = nil
 		prefix := []byte{rawPrefix}
 		columnFamily := string(prefix)
 		// start := prefixes.NewClaimTakeoverKey(name)
-		start := prefixes.NewActivationKey(typ, txNum, position)
+		start := prefixes.NewSupportAmountKey(channelHash)
 		startRaw = start.PackKey()
 		// start := &prefixes.ChannelCountKey{
 		// 	Prefix:      prefix,

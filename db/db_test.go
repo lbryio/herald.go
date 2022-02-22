@@ -413,6 +413,38 @@ func TestGetTXOToClaim(t *testing.T) {
 	}
 }
 
+// TestPrintClaimToTXO Utility function to cat the ClaimToTXO csv.
+func TestPrintSupportAmount(t *testing.T) {
+	filePath := "../testdata/a_resolve.csv"
+	CatCSV(filePath)
+}
+
+// TestGetClaimToTXO Tests getting a ClaimToTXO value from the db.
+func TestGetSupportAmount(t *testing.T) {
+	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	want := uint64(8654754160700)
+	claimHash, err := hex.DecodeString(claimHashStr)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	filePath := "../testdata/a_resolve.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	defer toDefer()
+	res, err := dbpkg.GetSupportAmount(db, claimHash)
+	if err != nil {
+		t.Error(err)
+		return
+	}
+	if res != want {
+		t.Errorf("Expected %d, got %d", want, res)
+	}
+}
+
 func TestGetExpirationHeight(t *testing.T) {
 	var lastUpdated uint32 = 0
 	var expHeight uint32 = 0
