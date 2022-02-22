@@ -413,12 +413,6 @@ func TestGetTXOToClaim(t *testing.T) {
 	}
 }
 
-// TestPrintClaimToTXO Utility function to cat the ClaimToTXO csv.
-func TestPrintSupportAmount(t *testing.T) {
-	filePath := "../testdata/a_resolve.csv"
-	CatCSV(filePath)
-}
-
 // TestGetClaimToTXO Tests getting a ClaimToTXO value from the db.
 func TestGetSupportAmount(t *testing.T) {
 	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
@@ -442,6 +436,27 @@ func TestGetSupportAmount(t *testing.T) {
 	}
 	if res != want {
 		t.Errorf("Expected %d, got %d", want, res)
+	}
+}
+
+// TODO: verify where this hash comes from exactly.
+func TestGetTxHash(t *testing.T) {
+	txNum := uint32(0x6284e3)
+	want := "54e14ff0c404c29b3d39ae4d249435f167d5cd4ce5a428ecb745b3df1c8e3dde"
+
+	filePath := "../testdata/X_resolve.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+	resHash, err := dbpkg.GetTxHash(db, txNum)
+	if err != nil {
+		t.Error(err)
+	}
+	resStr := hex.EncodeToString(resHash)
+	if want != resStr {
+		t.Errorf("Expected %s, got %s", want, resStr)
 	}
 }
 
