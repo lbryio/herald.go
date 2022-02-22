@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -110,10 +111,16 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd3 {
-		// channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
-		var rawPrefix byte = prefixes.DBState
+		channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+		// name := util.NormalizeName("@Styxhexenhammer666")
+		var rawPrefix byte = prefixes.ClaimToTXO
+		var startRaw []byte = nil
 		prefix := []byte{rawPrefix}
 		columnFamily := string(prefix)
+		// start := prefixes.NewClaimTakeoverKey(name)
+		start := prefixes.NewClaimToTXOKey(channelHash)
+
+		startRaw = start.PackKey()
 		// start := &prefixes.ChannelCountKey{
 		// 	Prefix:      prefix,
 		// 	ChannelHash: channelHash,
@@ -123,7 +130,7 @@ func main() {
 		options := &db.IterOptions{
 			FillCache:    false,
 			Prefix:       prefix,
-			Start:        nil,
+			Start:        startRaw,
 			Stop:         nil,
 			IncludeStart: true,
 			IncludeStop:  false,

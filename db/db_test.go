@@ -10,6 +10,7 @@ import (
 
 	dbpkg "github.com/lbryio/hub/db"
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -282,7 +283,7 @@ func TestOpenFullDB(t *testing.T) {
 
 // FIXME: Needs new data format
 func TestResolve(t *testing.T) {
-	filePath := "../testdata/P_cat.csv"
+	filePath := "../testdata/P_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
@@ -414,19 +415,20 @@ func TestGetTXOToClaim(t *testing.T) {
 
 // TestPrintClaimToTXO Utility function to cat the ClaimToTXO csv.
 func TestPrintClaimToTXO(t *testing.T) {
-	filePath := "../testdata/E_2.csv"
+	filePath := "../testdata/E_resolve.csv"
 	CatCSV(filePath)
 }
 
 // TestGetClaimToTXO Tests getting a ClaimToTXO value from the db.
 func TestGetClaimToTXO(t *testing.T) {
-	claimHashStr := "00000324e40fcb63a0b517a3660645e9bd99244a"
+	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	want := uint32(0x6284e3)
 	claimHash, err := hex.DecodeString(claimHashStr)
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	filePath := "../testdata/E_2.csv"
+	filePath := "../testdata/E_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
@@ -438,29 +440,38 @@ func TestGetClaimToTXO(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	log.Println(res)
+	if res.TxNum != want {
+		t.Errorf("Expected %d, got %d", want, res.TxNum)
+	}
+	log.Printf("res: %#v\n", res)
 }
 
 // TestPrintClaimTakeover Utility function to cat the ClaimTakeover csv.
 func TestPrintClaimTakeover(t *testing.T) {
-	filePath := "../testdata/P_cat.csv"
+	filePath := "../testdata/P_resolve.csv"
 	CatCSV(filePath)
 }
 
 // TestGetControlingClaim Tests getting a controlling claim value from the db
 // based on a name.
 func TestGetControllingClaim(t *testing.T) {
-	filePath := "../testdata/P_cat.csv"
+	claimName := util.NormalizeName("@Styxhexenhammer666")
+	claimHash := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	filePath := "../testdata/P_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer toDefer()
-	res, err := dbpkg.GetControllingClaim(db, "cat")
+	res, err := dbpkg.GetControllingClaim(db, claimName)
 	if err != nil {
 		t.Error(err)
-		return
+	}
+
+	got := hex.EncodeToString(res.ClaimHash)
+	if claimHash != got {
+		t.Errorf("Expected %s, got %s", claimHash, got)
 	}
 	log.Println(res)
 }
