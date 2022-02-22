@@ -413,6 +413,48 @@ func TestGetTXOToClaim(t *testing.T) {
 	}
 }
 
+func TestGetExpirationHeight(t *testing.T) {
+	var lastUpdated uint32 = 0
+	var expHeight uint32 = 0
+
+	expHeight = dbpkg.GetExpirationHeight(lastUpdated)
+	if lastUpdated+dbpkg.NOriginalClaimExpirationTime != expHeight {
+		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.NOriginalClaimExpirationTime, expHeight)
+	}
+
+	lastUpdated = dbpkg.NExtendedClaimExpirationForkHeight + 1
+	expHeight = dbpkg.GetExpirationHeight(lastUpdated)
+	if lastUpdated+dbpkg.NExtendedClaimExpirationTime != expHeight {
+		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.NExtendedClaimExpirationTime, expHeight)
+	}
+
+	lastUpdated = 0
+	expHeight = dbpkg.GetExpirationHeightFull(lastUpdated, true)
+	if lastUpdated+dbpkg.NExtendedClaimExpirationTime != expHeight {
+		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.NExtendedClaimExpirationTime, expHeight)
+	}
+}
+
+func TestGetActivation(t *testing.T) {
+	filePath := "../testdata/R_resolve.csv"
+	txNum := uint32(0x6284e3)
+	position := uint16(0x0)
+	want := uint32(0xa6b65)
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+	activation, err := dbpkg.GetActivation(db, txNum, position)
+	if err != nil {
+		t.Error(err)
+	}
+	if activation != want {
+		t.Errorf("Expected %d, got %d", want, activation)
+	}
+	log.Printf("activation: %#v\n", activation)
+}
+
 // TestPrintClaimToTXO Utility function to cat the ClaimToTXO csv.
 func TestPrintClaimToTXO(t *testing.T) {
 	filePath := "../testdata/E_resolve.csv"

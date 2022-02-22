@@ -22,16 +22,16 @@ import (
 //
 
 const (
-	nOriginalClaimExpirationTime       = 262974
-	nExtendedClaimExpirationTime       = 2102400
-	nExtendedClaimExpirationForkHeight = 400155
-	nNormalizedNameForkHeight          = 539940 // targeting 21 March 2019
-	nMinTakeoverWorkaroundHeight       = 496850
-	nMaxTakeoverWorkaroundHeight       = 658300 // targeting 30 Oct 2019
-	nWitnessForkHeight                 = 680770 // targeting 11 Dec 2019
-	nAllClaimsInMerkleForkHeight       = 658310 // targeting 30 Oct 2019
-	proportionalDelayFactor            = 32
-	maxTakeoverDelay                   = 4032
+	NOriginalClaimExpirationTime       = 262974
+	NExtendedClaimExpirationTime       = 2102400
+	NExtendedClaimExpirationForkHeight = 400155
+	NNormalizedNameForkHeight          = 539940 // targeting 21 March 2019
+	NMinTakeoverWorkaroundHeight       = 496850
+	NMaxTakeoverWorkaroundHeight       = 658300 // targeting 30 Oct 2019
+	NWitnessForkHeight                 = 680770 // targeting 11 Dec 2019
+	NAllClaimsInMerkleForkHeight       = 658310 // targeting 30 Oct 2019
+	ProportionalDelayFactor            = 32
+	MaxTakeoverDelay                   = 4032
 )
 
 //
@@ -231,12 +231,12 @@ func GetExpirationHeight(lastUpdatedHeight uint32) uint32 {
 
 func GetExpirationHeightFull(lastUpdatedHeight uint32, extended bool) uint32 {
 	if extended {
-		return lastUpdatedHeight + nExtendedClaimExpirationTime
+		return lastUpdatedHeight + NExtendedClaimExpirationTime
 	}
-	if lastUpdatedHeight < nExtendedClaimExpirationForkHeight {
-		return lastUpdatedHeight + nOriginalClaimExpirationTime
+	if lastUpdatedHeight < NExtendedClaimExpirationForkHeight {
+		return lastUpdatedHeight + NOriginalClaimExpirationTime
 	}
-	return lastUpdatedHeight + nExtendedClaimExpirationTime
+	return lastUpdatedHeight + NExtendedClaimExpirationTime
 }
 
 //
