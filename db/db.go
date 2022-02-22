@@ -1255,6 +1255,10 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	return ch
 }
 
+//
+// GetDB functions that open and return a db
+//
+
 func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	opts := grocksdb.NewDefaultOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -1333,6 +1337,7 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	return nil
 }
 
+// InitTxCounts initializes the txCounts map
 func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	start := time.Now()
 	handle, ok := db.Handles[string([]byte{prefixes.TxCount})]
@@ -1390,6 +1395,12 @@ func GetDB(name string) (*grocksdb.DB, error) {
 	return db, nil
 }
 
+//
+// Reading utility functions
+//
+
+// ReadPrefixN Reads n entries from a rocksdb db starting at the given prefix
+// Does not use column families
 func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*prefixes.PrefixRowKV {
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(false)
@@ -1421,7 +1432,28 @@ func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*prefixes.PrefixRowKV 
 	return res
 }
 
+// ReadWriteRawNColumnFamilies reads n entries from a given column famliy of a rocksdb db
+// and writes then to a given file.
 func ReadWriteRawNColumnFamilies(db *grocksdb.DB, options *IterOptions, out string, n int) {
+	readWriteRawNCF(db, options, out, n, 1)
+}
+
+// ReadWriteRawNColumnFamilies reads n entries from a given column famliy of a rocksdb db
+// and writes then to a given file.
+func ReadWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int) {
+	readWriteRawNCF(db, options, out, n, 0)
+}
+
+// readWriteRawNCF reads n entries from a given column famliy of a rocksdb db and
+// writes them as a csv to a give file.
+func readWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int, fileVersion int) {
+	var formatStr string = ""
+	switch fileVersion {
+	case 0:
+		formatStr = "%s,\n"
+	case 1:
+		formatStr = "%s,,\n"
+	}
 
 	options.RawKey = true
 	options.RawValue = true
@@ -1437,7 +1469,7 @@ func ReadWriteRawNColumnFamilies(db *grocksdb.DB, options *IterOptions, out stri
 	var i = 0
 	log.Println(options.Prefix)
 	cf := string(options.Prefix)
-	file.Write([]byte(fmt.Sprintf("%s,,\n", options.Prefix)))
+	file.Write([]byte(fmt.Sprintf(formatStr, options.Prefix)))
 	for kv := range ch {
 		log.Println(i)
 		if i >= n {
@@ -1449,44 +1481,10 @@ func ReadWriteRawNColumnFamilies(db *grocksdb.DB, options *IterOptions, out stri
 		valueHex := hex.EncodeToString(value)
 		//log.Println(keyHex)
 		//log.Println(valueHex)
-		file.WriteString(cf)
-		file.WriteString(",")
-		file.WriteString(keyHex)
-		file.WriteString(",")
-		file.WriteString(valueHex)
-		file.WriteString("\n")
-
-		i++
-	}
-}
-
-func ReadWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int) {
-
-	options.RawKey = true
-	options.RawValue = true
-	ch := IterCF(db, options)
-
-	file, err := os.Create(out)
-	if err != nil {
-		log.Println(err)
-		return
-	}
-	defer file.Close()
-
-	var i = 0
-	log.Println(options.Prefix)
-	file.Write([]byte(fmt.Sprintf("%s,\n", options.Prefix)))
-	for kv := range ch {
-		log.Println(i)
-		if i >= n {
-			return
+		if fileVersion == 1 {
+			file.WriteString(cf)
+			file.WriteString(",")
 		}
-		key := kv.Key.([]byte)
-		value := kv.Value.([]byte)
-		keyHex := hex.EncodeToString(key)
-		valueHex := hex.EncodeToString(value)
-		//log.Println(keyHex)
-		//log.Println(valueHex)
 		file.WriteString(keyHex)
 		file.WriteString(",")
 		file.WriteString(valueHex)
@@ -1496,8 +1494,9 @@ func ReadWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int) {
 	}
 }
 
+// ReadWriteRawN reads n entries from a given rocksdb db and writes them as a
+// csv to a give file.
 func ReadWriteRawN(db *grocksdb.DB, options *IterOptions, out string, n int) {
-
 	options.RawKey = true
 	options.RawValue = true
 	ch := Iter(db, options)
@@ -1530,6 +1529,7 @@ func ReadWriteRawN(db *grocksdb.DB, options *IterOptions, out string, n int) {
 	}
 }
 
+// GenerateTestData generates a test data file for a prefix.
 func GenerateTestData(prefix byte, fileName string) {
 	dbVal, err := GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
 	if err != nil {
