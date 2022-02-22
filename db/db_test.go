@@ -413,26 +413,46 @@ func TestGetTXOToClaim(t *testing.T) {
 	}
 }
 
-// TestGetClaimToTXO Tests getting a ClaimToTXO value from the db.
-func TestGetSupportAmount(t *testing.T) {
+func TestGetEffectiveAmount(t *testing.T) {
+	filePath := "../testdata/S_resolve.csv"
+	want := uint64(586370959900)
 	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	claimHash, _ := hex.DecodeString(claimHashStr)
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+	db.Height = 1116054
+
+	amount, err := dbpkg.GetEffectiveAmount(db, claimHash, true)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if amount != want {
+		t.Errorf("Expected %d, got %d", want, amount)
+	}
+
+	log.Println(amount)
+}
+
+func TestGetSupportAmount(t *testing.T) {
 	want := uint64(8654754160700)
+	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
 	claimHash, err := hex.DecodeString(claimHashStr)
 	if err != nil {
 		t.Error(err)
-		return
 	}
 	filePath := "../testdata/a_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
-		return
 	}
 	defer toDefer()
 	res, err := dbpkg.GetSupportAmount(db, claimHash)
 	if err != nil {
 		t.Error(err)
-		return
 	}
 	if res != want {
 		t.Errorf("Expected %d, got %d", want, res)

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
@@ -110,17 +111,17 @@ func main() {
 
 		return
 	} else if args.CmdType == server.DBCmd3 {
-		// channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+		channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
 		// name := util.NormalizeName("@Styxhexenhammer666")
-		txNum := uint32(0x6284e3)
+		// txNum := uint32(0x6284e3)
 		// position := uint16(0x0)
 		// typ := uint8(prefixes.ACTIVATED_CLAIM_TXO_TYPE)
-		var rawPrefix byte = prefixes.TxHash
+		var rawPrefix byte = prefixes.ActiveAmount
 		var startRaw []byte = nil
 		prefix := []byte{rawPrefix}
 		columnFamily := string(prefix)
 		// start := prefixes.NewClaimTakeoverKey(name)
-		start := prefixes.NewTxHashKey(txNum)
+		start := prefixes.NewActiveAmountKey(channelHash, prefixes.ACTIVATED_SUPPORT_TXO_TYPE, 0)
 		startRaw = start.PackKey()
 		// start := &prefixes.ChannelCountKey{
 		// 	Prefix:      prefix,
@@ -148,7 +149,7 @@ func main() {
 
 		options.CfHandle = handles[1]
 
-		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_resolve.csv", columnFamily), 1)
+		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_resolve.csv", columnFamily), 10)
 		return
 	}
 

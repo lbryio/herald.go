@@ -220,6 +220,7 @@ func (ps *PathSegment) String() string {
 }
 
 // BisectRight returns the index of the first element in the list that is greater than or equal to the value.
+// https://stackoverflow.com/questions/29959506/is-there-a-go-analog-of-pythons-bisect-module
 func BisectRight(arr []uint32, val uint32) uint32 {
 	i := sort.Search(len(arr), func(i int) bool { return arr[i] >= val })
 	return uint32(i)
@@ -354,18 +355,9 @@ func GetChannelForClaim(db *ReadOnlyDBColumnFamily, claimHash []byte, txNum uint
 func GetActiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, txoType uint8, height uint32) (uint64, error) {
 	cfName := string(prefixes.ActiveAmount)
 	handle := db.Handles[cfName]
-	startKey := &prefixes.ActiveAmountKey{
-		Prefix:           []byte{prefixes.ActiveAmount},
-		ClaimHash:        claimHash,
-		TxoType:          txoType,
-		ActivationHeight: 0,
-	}
-	endKey := &prefixes.ActiveAmountKey{
-		Prefix:           []byte{prefixes.ActiveAmount},
-		ClaimHash:        claimHash,
-		TxoType:          txoType,
-		ActivationHeight: height,
-	}
+	startKey := prefixes.NewActiveAmountKey(claimHash, txoType, 0)
+	endKey := prefixes.NewActiveAmountKey(claimHash, txoType, height)
+
 	startKeyRaw := prefixes.ActiveAmountKeyPackPartial(startKey, 3)
 	endKeyRaw := prefixes.ActiveAmountKeyPackPartial(endKey, 3)
 	// Prefix and handle
@@ -1099,12 +1091,14 @@ func (o *IterOptions) StopIteration(key []byte) bool {
 		return false
 	}
 
-	maxLen := int(math.Min(float64(len(key)), float64(len(o.Stop))))
+	// TODO: Look at not doing floating point conversions for this
+	maxLenStop := int(math.Min(float64(len(key)), float64(len(o.Stop))))
+	maxLenStart := int(math.Min(float64(len(key)), float64(len(o.Start))))
 	if o.Stop != nil &&
-		(bytes.HasPrefix(key, o.Stop) || bytes.Compare(o.Stop, key[:maxLen]) < 0) {
+		(bytes.HasPrefix(key, o.Stop) || bytes.Compare(o.Stop, key[:maxLenStop]) < 0) {
 		return true
 	} else if o.Start != nil &&
-		bytes.Compare(o.Start, key[:len(o.Start)]) > 0 {
+		bytes.Compare(o.Start, key[:maxLenStart]) > 0 {
 		return true
 	} else if o.Prefix != nil && !bytes.HasPrefix(key, o.Prefix) {
 		return true

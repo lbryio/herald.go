@@ -2984,6 +2984,15 @@ type ActiveAmountValue struct {
 	Amount uint64 `json:"amount"`
 }
 
+func NewActiveAmountKey(claimHash []byte, txoType uint8, activationHeight uint32) *ActiveAmountKey {
+	return &ActiveAmountKey{
+		Prefix:           []byte{ActiveAmount},
+		ClaimHash:        claimHash,
+		TxoType:          txoType,
+		ActivationHeight: activationHeight,
+	}
+}
+
 func (k *ActiveAmountKey) PackKey() []byte {
 	prefixLen := 1
 	// b'>20sBLLH'
