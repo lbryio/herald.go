@@ -318,9 +318,9 @@ func GetRepostedCount(db *ReadOnlyDBColumnFamily, claimHash []byte) (int, error)
 	key := prefixes.NewRepostedKey(claimHash)
 	keyPrefix := prefixes.RepostedKeyPackPartial(key, 1)
 	// Prefix and handle
-	options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
+	options := NewIterateOptions().WithPrefix(keyPrefix).WithCfHandle(handle)
 	// Start and stop bounds
-	options = options.WithStart(keyPrefix)
+	// options = options.WithStart(keyPrefix)
 	// Don't include the key
 	options = options.WithIncludeValue(false)
 

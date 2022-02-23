@@ -294,7 +294,6 @@ func TestResolve(t *testing.T) {
 	log.Println(expandedResolveResult)
 }
 
-// TestGetDBState Tests reading the db state from rocksdb
 func TestGetDBState(t *testing.T) {
 	filePath := "../testdata/s_resolve.csv"
 	want := uint32(1072108)
@@ -313,7 +312,74 @@ func TestGetDBState(t *testing.T) {
 	}
 }
 
-// TestPrintChannelCount Utility function to cat the ClaimShortId csv
+func TestGetRepostedClaim(t *testing.T) {
+	channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+	want := 5
+	// Should be non-existent
+	channelHash2, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bf")
+	filePath := "../testdata/W_resolve.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+
+	count, err := dbpkg.GetRepostedCount(db, channelHash)
+	if err != nil {
+		t.Error(err)
+	}
+
+	log.Println(count)
+
+	if count != want {
+		t.Errorf("Expected %d, got %d", want, count)
+	}
+
+	count2, err := dbpkg.GetRepostedCount(db, channelHash2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if count2 != 0 {
+		t.Errorf("Expected 0, got %d", count2)
+	}
+}
+
+func TestPrintRepost(t *testing.T) {
+	filePath := "../testdata/V_resolve.csv"
+	CatCSV(filePath)
+}
+
+func TestGetRepost(t *testing.T) {
+	channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+	channelHash2, _ := hex.DecodeString("000009ca6e0caaaef16872b4bd4f6f1b8c2363e2")
+	filePath := "../testdata/V_resolve.csv"
+	// want := uint32(3670)
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+
+	res, err := dbpkg.GetRepost(db, channelHash)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if !bytes.Equal(res, []byte{}) {
+		t.Errorf("Expected empty, got %#v", res)
+	}
+
+	res2, err := dbpkg.GetRepost(db, channelHash2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if bytes.Equal(res2, []byte{}) {
+		t.Errorf("Expected non empty, got %#v", res2)
+	}
+}
+
 func TestPrintChannelCount(t *testing.T) {
 	filePath := "../testdata/Z_resolve.csv"
 	CatCSV(filePath)
@@ -337,7 +403,6 @@ func TestGetClaimsInChannelCount(t *testing.T) {
 	}
 }
 
-// TestPrintClaimShortId Utility function to cat the ClaimShortId csv
 func TestPrintClaimShortId(t *testing.T) {
 	filePath := "../testdata/F_cat.csv"
 	CatCSV(filePath)
@@ -413,6 +478,45 @@ func TestGetTXOToClaim(t *testing.T) {
 	}
 }
 
+func TestGetClaimToChannel(t *testing.T) {
+	streamHashStr := "9a0ed686ecdad9b6cb965c4d6681c02f0bbc66a6"
+	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	claimHash, _ := hex.DecodeString(claimHashStr)
+	streamHash, _ := hex.DecodeString(streamHashStr)
+
+	txNum := uint32(0x6284e3)
+	position := uint16(0x0)
+
+	streamTxNum := uint32(0x369e2b2)
+	streamPosition := uint16(0x0)
+
+	var val []byte = nil
+
+	filePath := "../testdata/I_resolve.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+
+	val, err = dbpkg.GetChannelForClaim(db, claimHash, txNum, position)
+	if err != nil {
+		t.Error(err)
+	}
+	if val != nil {
+		t.Errorf("Expected nil, got %s", hex.EncodeToString(val))
+	}
+
+	val, err = dbpkg.GetChannelForClaim(db, streamHash, streamTxNum, streamPosition)
+	if err != nil {
+		t.Error(err)
+	}
+	valStr := hex.EncodeToString(val)
+	if valStr != claimHashStr {
+		t.Errorf("Expected %s, got %s", claimHashStr, valStr)
+	}
+}
+
 func TestGetEffectiveAmount(t *testing.T) {
 	filePath := "../testdata/S_resolve.csv"
 	want := uint64(586370959900)
@@ -433,8 +537,6 @@ func TestGetEffectiveAmount(t *testing.T) {
 	if amount != want {
 		t.Errorf("Expected %d, got %d", want, amount)
 	}
-
-	log.Println(amount)
 }
 
 func TestGetSupportAmount(t *testing.T) {
