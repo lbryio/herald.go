@@ -279,19 +279,27 @@ func TestOpenFullDB(t *testing.T) {
 	}
 	expandedResolveResult := dbpkg.Resolve(db, url)
 	log.Printf("expandedResolveResult: %#v\n", expandedResolveResult)
+	log.Printf("expandedResolveResult: %s\n", expandedResolveResult)
 }
 
-// FIXME: Needs new data format
+// TODO: Finish the constructed data set for the stream part of this resolve.
 func TestResolve(t *testing.T) {
-	filePath := "../testdata/P_resolve.csv"
+	url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
+	filePath := "../testdata/FULL_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
 		return
 	}
 	defer toDefer()
-	expandedResolveResult := dbpkg.Resolve(db, "asdf")
-	log.Println(expandedResolveResult)
+	expandedResolveResult := dbpkg.Resolve(db, url)
+	log.Printf("%#v\n", expandedResolveResult)
+	if expandedResolveResult != nil && expandedResolveResult.Channel != nil {
+		log.Println(expandedResolveResult.Channel.GetError())
+	}
+	if expandedResolveResult != nil && expandedResolveResult.Stream != nil {
+		log.Println(expandedResolveResult.Stream.GetError())
+	}
 }
 
 func TestGetDBState(t *testing.T) {
@@ -404,19 +412,20 @@ func TestGetClaimsInChannelCount(t *testing.T) {
 }
 
 func TestPrintClaimShortId(t *testing.T) {
-	filePath := "../testdata/F_cat.csv"
+	filePath := "../testdata/F_resolve.csv"
 	CatCSV(filePath)
 }
 
 // TestGetShortClaimIdUrl tests resolving a claim to a short url.
 func TestGetShortClaimIdUrl(t *testing.T) {
-	// &{[70] cat 0 2104436 0}
-	name := "cat"
-	normalName := "cat"
-	claimHash := []byte{}
-	var rootTxNum uint32 = 2104436
+	name := "@Styxhexenhammer666"
+	normalName := util.NormalizeName(name)
+	claimHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+	// claimHash := []byte{}
+	var rootTxNum uint32 = 0x61ec7c
 	var position uint16 = 0
-	filePath := "../testdata/F_cat.csv"
+	filePath := "../testdata/F_resolve.csv"
+	log.Println(filePath)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)

@@ -82,6 +82,7 @@ type ResolveError struct {
 type OptionalResolveResultOrError interface {
 	GetResult() *ResolveResult
 	GetError() *ResolveError
+	String() string
 }
 
 type optionalResolveResultOrError struct {
@@ -97,11 +98,35 @@ func (x *optionalResolveResultOrError) GetError() *ResolveError {
 	return x.err
 }
 
+func (x *ResolveResult) String() string {
+	// return fmt.Sprintf("ResolveResult{Name: %s, NormalizedName: %s, ClaimHash: %s, TxNum: %d, Position: %d, TxHash: %s, Height: %d, Amount: %d, ShortUrl: %s, IsControlling: %v, CanonicalUrl: %s, CreationHeight: %d, ActivationHeight: %d, ExpirationHeight: %d, EffectiveAmount: %d, SupportAmount: %d, Reposted: %d, LastTakeoverHeight: %d, ClaimsInChannel: %d, ChannelHash: %s, RepostedClaimHash: %s, SignatureValid: %v}",
+	// 	x.Name, x.NormalizedName, hex.EncodeToString(x.ClaimHash), x.TxNum, x.Position, hex.EncodeToString(x.TxHash), x.Height, x.Amount, x.ShortUrl, x.IsControlling, x.CanonicalUrl, x.CreationHeight, x.ActivationHeight, x.ExpirationHeight, x.EffectiveAmount, x.SupportAmount, x.Reposted, x.LastTakeoverHeight, x.ClaimsInChannel, hex.EncodeToString(x.ChannelHash), hex.EncodeToString(x.RepostedClaimHash), x.SignatureValid)
+	return fmt.Sprintf("%#v", x)
+}
+
+func (x *ResolveError) String() string {
+	return fmt.Sprintf("ResolveError{Error: %#v}", x.Error)
+}
+
+func (x *optionalResolveResultOrError) String() string {
+	if x.res != nil {
+		return x.res.String()
+	}
+	if x.err != nil {
+		return x.err.String()
+	}
+	return fmt.Sprintf("%#v", x)
+}
+
 type ExpandedResolveResult struct {
 	Stream          OptionalResolveResultOrError
 	Channel         OptionalResolveResultOrError
 	Repost          OptionalResolveResultOrError
 	RepostedChannel OptionalResolveResultOrError
+}
+
+func (x *ExpandedResolveResult) String() string {
+	return fmt.Sprintf("ExpandedResolveResult{Stream: %s, Channel: %s, Repost: %s, RepostedChannel: %s}", x.Stream, x.Channel, x.Repost, x.RepostedChannel)
 }
 
 type IterOptions struct {
@@ -240,13 +265,26 @@ func GetExpirationHeightFull(lastUpdatedHeight uint32, extended bool) uint32 {
 	return lastUpdatedHeight + NExtendedClaimExpirationTime
 }
 
+// EnsureHandle is a helper function to ensure that the db has a handle to the given column family.
+func EnsureHandle(db *ReadOnlyDBColumnFamily, prefix byte) (*grocksdb.ColumnFamilyHandle, error) {
+	cfName := string(prefix)
+	handle := db.Handles[cfName]
+	if handle == nil {
+		return nil, fmt.Errorf("%s handle not found", cfName)
+	}
+	return handle, nil
+}
+
 //
 // DB Get functions
 //
 
 func GetClaimsInChannelCount(db *ReadOnlyDBColumnFamily, channelHash []byte) (uint32, error) {
-	prefix := []byte{prefixes.ChannelCount}
-	handle := db.Handles[string(prefix)]
+	handle, err := EnsureHandle(db, prefixes.ChannelCount)
+	if err != nil {
+		return 0, err
+	}
+
 	key := prefixes.NewChannelCountKey(channelHash)
 	rawKey := key.PackKey()
 
@@ -266,7 +304,11 @@ func GetClaimsInChannelCount(db *ReadOnlyDBColumnFamily, channelHash []byte) (ui
 
 func GetShortClaimIdUrl(db *ReadOnlyDBColumnFamily, name string, normalizedName string, claimHash []byte, rootTxNum uint32, rootPosition uint16) (string, error) {
 	prefix := []byte{prefixes.ClaimShortIdPrefix}
-	handle := db.Handles[string(prefix)]
+	handle, err := EnsureHandle(db, prefixes.ClaimShortIdPrefix)
+	if err != nil {
+		return "", err
+	}
+
 	claimId := hex.EncodeToString(claimHash)
 	claimIdLen := len(claimId)
 	for prefixLen := 0; prefixLen < 10; prefixLen++ {
@@ -276,6 +318,7 @@ func GetShortClaimIdUrl(db *ReadOnlyDBColumnFamily, name string, normalizedName 
 		}
 		partialClaimId := claimId[:j]
 		partialKey := prefixes.NewClaimShortIDKey(normalizedName, partialClaimId)
+		log.Printf("partialKey: %#v\n", partialKey)
 		keyPrefix := prefixes.ClaimShortIDKeyPackPartial(partialKey, 2)
 		// Prefix and handle
 		options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
@@ -286,6 +329,10 @@ func GetShortClaimIdUrl(db *ReadOnlyDBColumnFamily, name string, normalizedName 
 
 		ch := IterCF(db.DB, options)
 		row := <-ch
+		if row == nil {
+			continue
+		}
+
 		key := row.Key.(*prefixes.ClaimShortIDKey)
 		if key.RootTxNum == rootTxNum && key.RootPosition == rootPosition {
 			return fmt.Sprintf("%s#%s", name, key.PartialClaimId), nil
@@ -295,8 +342,11 @@ func GetShortClaimIdUrl(db *ReadOnlyDBColumnFamily, name string, normalizedName 
 }
 
 func GetRepost(db *ReadOnlyDBColumnFamily, claimHash []byte) ([]byte, error) {
-	prefix := []byte{prefixes.Repost}
-	handle := db.Handles[string(prefix)]
+	handle, err := EnsureHandle(db, prefixes.Repost)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewRepostKey(claimHash)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
@@ -313,8 +363,11 @@ func GetRepost(db *ReadOnlyDBColumnFamily, claimHash []byte) ([]byte, error) {
 }
 
 func GetRepostedCount(db *ReadOnlyDBColumnFamily, claimHash []byte) (int, error) {
-	prefix := []byte{prefixes.RepostedClaim}
-	handle := db.Handles[string(prefix)]
+	handle, err := EnsureHandle(db, prefixes.RepostedClaim)
+	if err != nil {
+		return 0, err
+	}
+
 	key := prefixes.NewRepostedKey(claimHash)
 	keyPrefix := prefixes.RepostedKeyPackPartial(key, 1)
 	// Prefix and handle
@@ -335,9 +388,12 @@ func GetRepostedCount(db *ReadOnlyDBColumnFamily, claimHash []byte) (int, error)
 }
 
 func GetChannelForClaim(db *ReadOnlyDBColumnFamily, claimHash []byte, txNum uint32, position uint16) ([]byte, error) {
+	handle, err := EnsureHandle(db, prefixes.ClaimToChannel)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewClaimToChannelKey(claimHash, txNum, position)
-	cfName := string(prefixes.ClaimToChannel)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -353,8 +409,11 @@ func GetChannelForClaim(db *ReadOnlyDBColumnFamily, claimHash []byte, txNum uint
 }
 
 func GetActiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, txoType uint8, height uint32) (uint64, error) {
-	cfName := string(prefixes.ActiveAmount)
-	handle := db.Handles[cfName]
+	handle, err := EnsureHandle(db, prefixes.ActiveAmount)
+	if err != nil {
+		return 0, err
+	}
+
 	startKey := prefixes.NewActiveAmountKey(claimHash, txoType, 0)
 	endKey := prefixes.NewActiveAmountKey(claimHash, txoType, height)
 
@@ -395,9 +454,12 @@ func GetEffectiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, supportOnl
 }
 
 func GetSupportAmount(db *ReadOnlyDBColumnFamily, claimHash []byte) (uint64, error) {
+	handle, err := EnsureHandle(db, prefixes.SupportAmount)
+	if err != nil {
+		return 0, err
+	}
+
 	key := prefixes.NewSupportAmountKey(claimHash)
-	cfName := string(prefixes.SupportAmount)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -419,9 +481,12 @@ func GetTxHash(db *ReadOnlyDBColumnFamily, txNum uint32) ([]byte, error) {
 	   return self.prefix_db.tx_hash.get(tx_num, deserialize_value=False)
 	*/
 	// TODO: caching
+	handle, err := EnsureHandle(db, prefixes.TxHash)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewTxHashKey(txNum)
-	cfName := string(prefixes.TxHash)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -442,6 +507,12 @@ func GetActivation(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint16) (
 
 func GetActivationFull(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint16, isSupport bool) (uint32, error) {
 	var typ uint8
+
+	handle, err := EnsureHandle(db, prefixes.ActivatedClaimAndSupport)
+	if err != nil {
+		return 0, err
+	}
+
 	if isSupport {
 		typ = prefixes.ACTIVATED_SUPPORT_TXO_TYPE
 	} else {
@@ -449,8 +520,6 @@ func GetActivationFull(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint1
 	}
 
 	key := prefixes.NewActivationKey(typ, txNum, postition)
-	cfName := string(prefixes.ActivatedClaimAndSupport)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -465,9 +534,12 @@ func GetActivationFull(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint1
 
 func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte) (*prefixes.ClaimToTXOValue, error) {
 	// TODO: implement cache
+	handle, err := EnsureHandle(db, prefixes.ClaimToTXO)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewClaimToTXOKey(claim)
-	cfName := string(prefixes.ClaimToTXO)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -484,9 +556,12 @@ func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte) (*prefixes.Clai
 }
 
 func GetControllingClaim(db *ReadOnlyDBColumnFamily, name string) (*prefixes.ClaimTakeoverValue, error) {
+	handle, err := EnsureHandle(db, prefixes.ClaimTakeover)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewClaimTakeoverKey(name)
-	cfName := string(prefixes.ClaimTakeover)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -528,9 +603,12 @@ func FsGetClaimByHash(db *ReadOnlyDBColumnFamily, claimHash []byte) (*ResolveRes
 }
 
 func GetDBState(db *ReadOnlyDBColumnFamily) (*prefixes.DBStateValue, error) {
-	prefix := []byte{prefixes.DBState}
+	handle, err := EnsureHandle(db, prefixes.DBState)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewDBStateKey()
-	handle := db.Handles[string(prefix)]
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
@@ -546,8 +624,10 @@ func GetDBState(db *ReadOnlyDBColumnFamily) (*prefixes.DBStateValue, error) {
 }
 
 func ClaimShortIdIter(db *ReadOnlyDBColumnFamily, normalizedName string, claimId string) <-chan *prefixes.PrefixRowKV {
-	prefix := []byte{prefixes.ClaimShortIdPrefix}
-	handle := db.Handles[string(prefix)]
+	handle, err := EnsureHandle(db, prefixes.ClaimShortIdPrefix)
+	if err != nil {
+		return nil
+	}
 	key := prefixes.NewClaimShortIDKey(normalizedName, claimId)
 	var rawKeyPrefix []byte = nil
 	if claimId != "" {
@@ -563,10 +643,14 @@ func ClaimShortIdIter(db *ReadOnlyDBColumnFamily, normalizedName string, claimId
 
 func GetCachedClaimHash(db *ReadOnlyDBColumnFamily, txNum uint32, position uint16) (*prefixes.TXOToClaimValue, error) {
 	// TODO: implement cache
+	handle, err := EnsureHandle(db, prefixes.TXOToClaim)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewTXOToClaimKey(txNum, position)
-	cfName := string(prefixes.TXOToClaim)
-	handle := db.Handles[cfName]
 	rawKey := key.PackKey()
+
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	if err != nil {
 		return nil, err
@@ -839,8 +923,11 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 }
 
 func ResolveClaimInChannel(db *ReadOnlyDBColumnFamily, channelHash []byte, normalizedName string) (*ResolveResult, error) {
-	prefix := []byte{prefixes.ChannelToClaim}
-	handle := db.Handles[string(prefix)]
+	handle, err := EnsureHandle(db, prefixes.ChannelToClaim)
+	if err != nil {
+		return nil, err
+	}
+
 	key := prefixes.NewChannelToClaimKey(channelHash, normalizedName)
 	rawKeyPrefix := prefixes.ChannelToClaimKeyPackPartial(key, 2)
 	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
@@ -959,8 +1046,10 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		if resolvedChannel != nil {
 			streamClaim, err := ResolveClaimInChannel(db, resolvedChannel.ClaimHash, stream.Normalized())
 			log.Printf("streamClaim %#v\n", streamClaim)
-			log.Printf("streamClaim.ClaimHash: %s\n", hex.EncodeToString(streamClaim.ClaimHash))
-			log.Printf("streamClaim.ChannelHash: %s\n", hex.EncodeToString(streamClaim.ChannelHash))
+			if streamClaim != nil {
+				log.Printf("streamClaim.ClaimHash: %s\n", hex.EncodeToString(streamClaim.ClaimHash))
+				log.Printf("streamClaim.ChannelHash: %s\n", hex.EncodeToString(streamClaim.ChannelHash))
+			}
 			// TODO: Confirm error case
 			if err != nil {
 				res.Stream = &optionalResolveResultOrError{
@@ -968,6 +1057,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				}
 				return res
 			}
+
 			if streamClaim != nil {
 				resolvedStream, err = FsGetClaimByHash(db, streamClaim.ClaimHash)
 				// TODO: Confirm error case

@@ -113,20 +113,20 @@ func main() {
 	} else if args.CmdType == server.DBCmd3 {
 		// streamHash, _ := hex.DecodeString("9a0ed686ecdad9b6cb965c4d6681c02f0bbc66a6")
 		channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
-		// name := util.NormalizeName("@Styxhexenhammer666")
+		name := util.NormalizeName("@Styxhexenhammer666")
 		// txNum := uint32(0x6284e3)
 		// position := uint16(0x0)
 		// For stream claim
 		// txNum := uint32(0x369e2b2)
 		// position := uint16(0x0)
 		// typ := uint8(prefixes.ACTIVATED_CLAIM_TXO_TYPE)
-		var rawPrefix byte = prefixes.RepostedClaim
+		var rawPrefix byte = prefixes.ChannelToClaim
 		var startRaw []byte = nil
 		prefix := []byte{rawPrefix}
 		columnFamily := string(prefix)
 		// start := prefixes.NewClaimTakeoverKey(name)
 		// start := prefixes.NewActiveAmountKey(channelHash, prefixes.ACTIVATED_SUPPORT_TXO_TYPE, 0)
-		start := prefixes.NewRepostedKey(channelHash)
+		start := prefixes.NewChannelToClaimKey(channelHash, name)
 		startRaw = start.PackKey()
 		// start := &prefixes.ChannelCountKey{
 		// 	Prefix:      prefix,
@@ -154,7 +154,7 @@ func main() {
 
 		options.CfHandle = handles[1]
 
-		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_resolve.csv", columnFamily), 10)
+		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_resolve.csv", columnFamily), 1)
 		return
 	}
 
