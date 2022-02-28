@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"log"
 	"os"
+	"strings"
 	"testing"
 
 	dbpkg "github.com/lbryio/hub/db"
@@ -41,7 +42,13 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 	}
 	var handleMap map[string]*grocksdb.ColumnFamilyHandle = make(map[string]*grocksdb.ColumnFamilyHandle)
 
-	for _, cfNameRune := range records[0][0] {
+	// Make sure we always create the TxCounts column family
+	var cfNameRunes string = records[0][0]
+	txCountPrefix := string(prefixes.TxCount)
+	if !strings.Contains(cfNameRunes, txCountPrefix) {
+		cfNameRunes = cfNameRunes + txCountPrefix
+	}
+	for _, cfNameRune := range cfNameRunes {
 		cfName := string(cfNameRune)
 		log.Println(cfName)
 		handle, err := db.CreateColumnFamily(opts, cfName)
@@ -75,10 +82,33 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 	}
 
 	myDB := &dbpkg.ReadOnlyDBColumnFamily{
-		DB:      db,
-		Handles: handleMap,
-		Opts:    grocksdb.NewDefaultReadOptions(),
+		DB:               db,
+		Handles:          handleMap,
+		Opts:             grocksdb.NewDefaultReadOptions(),
+		BlockedStreams:   make(map[string][]byte),
+		BlockedChannels:  make(map[string][]byte),
+		FilteredStreams:  make(map[string][]byte),
+		FilteredChannels: make(map[string][]byte),
+		TxCounts:         nil,
+		LastState:        nil,
+		Height:           0,
+		Headers:          nil,
 	}
+
+	// err = dbpkg.ReadDBState(myDB) //TODO: Figure out right place for this
+	// if err != nil {
+	// 	return nil, nil, nil, err
+	// }
+
+	err = dbpkg.InitTxCounts(myDB)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	// err = dbpkg.InitHeaders(myDB)
+	// if err != nil {
+	// 	return nil, nil, nil, err
+	// }
 
 	return myDB, records, toDefer, nil
 }

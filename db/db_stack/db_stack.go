@@ -51,6 +51,6 @@ func (s *SliceBackedStack) Size() int {
 	return len(s.slice)
 }
 
-func (s *SliceBackedStack) GetSlice() interface{} {
+func (s *SliceBackedStack) GetSlice() []interface{} {
 	return s.slice
 }

@@ -249,10 +249,17 @@ func (ps *PathSegment) String() string {
 	return ps.name
 }
 
+// // BisectRight returns the index of the first element in the list that is greater than or equal to the value.
+// // https://stackoverflow.com/questions/29959506/is-there-a-go-analog-of-pythons-bisect-module
+// func BisectRight(arr []uint32, val uint32) uint32 {
+// 	i := sort.Search(len(arr), func(i int) bool { return arr[i] >= val })
+// 	return uint32(i)
+// }
+
 // BisectRight returns the index of the first element in the list that is greater than or equal to the value.
 // https://stackoverflow.com/questions/29959506/is-there-a-go-analog-of-pythons-bisect-module
-func BisectRight(arr []uint32, val uint32) uint32 {
-	i := sort.Search(len(arr), func(i int) bool { return arr[i] >= val })
+func BisectRight(arr []interface{}, val uint32) uint32 {
+	i := sort.Search(len(arr), func(i int) bool { return arr[i].(uint32) >= val })
 	return uint32(i)
 }
 
@@ -509,16 +516,15 @@ func GetDBColumnFamlies(name string, cfNames []string) (*ReadOnlyDBColumnFamily,
 }
 
 func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
-	/*
-	   def advance(self, height: int):
-	       tx_count = self.db.prefix_db.tx_count.get(height).tx_count
-	       assert len(self.db.tx_counts) == height, f"{len(self.db.tx_counts)} != {height}"
-	       self.db.tx_counts.append(tx_count)
-	       self.db.headers.append(self.db.prefix_db.header.get(height, deserialize_value=False))
-	*/
 	// TODO: assert tx_count not in self.db.tx_counts, f'boom {tx_count} in {len(self.db.tx_counts)} tx counts'
-	if db.TxCounts.Len() >= 0 && db.TxCounts.Len() != height {
+	if db.TxCounts.Len() != height {
 		log.Println("Error: tx count len:", db.TxCounts.Len(), "height:", height)
+		return
+	}
+
+	headerObj, err := GetHeader(db, height)
+	if err != nil {
+		log.Println("Error getting header:", err)
 		return
 	}
 
@@ -529,7 +535,7 @@ func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
 	}
 	txCount := txCountObj.TxCount
 	db.TxCounts.Push(txCount)
-
+	db.Headers.Push(headerObj)
 }
 
 func Unwind(db *ReadOnlyDBColumnFamily) {
@@ -611,12 +617,13 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 			//TODO: ClearCache
 			db.LastState = state
 			//TODO: block count metric
-			// self.last_state = state ???:w
 
 			//TODO: update blocked streams
 			//TODO: update filtered streams
 		}
 	}
+
+	return nil
 	/*
 	   if self.last_state:
 	       while True:
@@ -645,8 +652,6 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	           self.db.filtering_channel_hashes
 	       )
 	*/
-
-	return nil
 }
 
 /*
