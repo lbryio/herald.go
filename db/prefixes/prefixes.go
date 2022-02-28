@@ -137,6 +137,23 @@ type DBStateValue struct {
 	EsSyncHeight   uint32
 }
 
+func NewDBStateValue() *DBStateValue {
+	return &DBStateValue{
+		Genesis:        make([]byte, 32),
+		Height:         0,
+		TxCount:        0,
+		Tip:            make([]byte, 32),
+		UtxoFlushCount: 0,
+		WallTime:       0,
+		FirstSync:      true,
+		DDVersion:      0,
+		HistFlushCount: 0,
+		CompFlushCount: -1,
+		CompCursor:     -1,
+		EsSyncHeight:   0,
+	}
+}
+
 func NewDBStateKey() *DBStateKey {
 	return &DBStateKey{
 		Prefix: []byte{DBState},
@@ -820,6 +837,13 @@ type TxCountValue struct {
 	TxCount uint32 `json:"tx_count"`
 }
 
+func NewTxCountKey(height uint32) *TxCountKey {
+	return &TxCountKey{
+		Prefix: []byte{TxCount},
+		Height: height,
+	}
+}
+
 func (k *TxCountKey) PackKey() []byte {
 	prefixLen := 1
 	// b'>L'
@@ -1221,6 +1245,17 @@ type BlockHeaderKey struct {
 
 type BlockHeaderValue struct {
 	Header []byte `json:"header"`
+}
+
+func (k *BlockHeaderValue) Equals(v *BlockHeaderValue) bool {
+	return bytes.Equal(k.Header, v.Header)
+}
+
+func NewHeaderKey(height uint32) *BlockHeaderKey {
+	return &BlockHeaderKey{
+		Prefix: []byte{Header},
+		Height: height,
+	}
 }
 
 func (k *BlockHeaderKey) PackKey() []byte {

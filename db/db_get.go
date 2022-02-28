@@ -33,9 +33,25 @@ func EnsureHandle(db *ReadOnlyDBColumnFamily, prefix byte) (*grocksdb.ColumnFami
 	return handle, nil
 }
 
-//
-// DB Get functions
-//
+func GetHeader(db *ReadOnlyDBColumnFamily, height uint32) ([]byte, error) {
+	handle, err := EnsureHandle(db, prefixes.Header)
+	if err != nil {
+		return nil, err
+	}
+
+	key := prefixes.NewHeaderKey(height)
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	if err != nil {
+		return nil, err
+	} else if slice.Size() == 0 {
+		return nil, err
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	return rawValue, nil
+}
 
 func GetClaimsInChannelCount(db *ReadOnlyDBColumnFamily, channelHash []byte) (uint32, error) {
 	handle, err := EnsureHandle(db, prefixes.ChannelCount)
@@ -358,6 +374,28 @@ func FsGetClaimByHash(db *ReadOnlyDBColumnFamily, claimHash []byte) (*ResolveRes
 		activation,
 		claim.ChannelSignatureIsValid,
 	)
+}
+
+func GetTxCount(db *ReadOnlyDBColumnFamily, height uint32) (*prefixes.TxCountValue, error) {
+	handle, err := EnsureHandle(db, prefixes.TxCount)
+	if err != nil {
+		return nil, err
+	}
+
+	key := prefixes.NewTxCountKey(height)
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	if err != nil {
+		return nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.TxCountValueUnpack(rawValue)
+	return value, nil
 }
 
 func GetDBState(db *ReadOnlyDBColumnFamily) (*prefixes.DBStateValue, error) {

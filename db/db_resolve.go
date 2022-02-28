@@ -37,8 +37,11 @@ func PrepareResolveResult(
 		return nil, err
 	}
 
-	height := BisectRight(db.TxCounts, txNum)
-	createdHeight := BisectRight(db.TxCounts, rootTxNum)
+	var txCounts []uint32
+	txCounts = db.TxCounts.GetSlice().([]uint32)
+	txCounts = txCounts[db.TxCounts.Len()-1:]
+	height := BisectRight(txCounts, txNum)
+	createdHeight := BisectRight(txCounts, rootTxNum)
 	lastTakeoverHeight := controllingClaim.Height
 
 	expirationHeight := GetExpirationHeight(height)

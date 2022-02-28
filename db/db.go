@@ -10,6 +10,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/lbryio/hub/db/db_stack"
 	"github.com/lbryio/hub/db/prefixes"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/linxGnu/grocksdb"
@@ -37,11 +38,17 @@ const (
 //
 
 type ReadOnlyDBColumnFamily struct {
-	DB               *grocksdb.DB
-	Handles          map[string]*grocksdb.ColumnFamilyHandle
-	Opts             *grocksdb.ReadOptions
-	TxCounts         []uint32
-	Height           uint32
+	DB      *grocksdb.DB
+	Handles map[string]*grocksdb.ColumnFamilyHandle
+	Opts    *grocksdb.ReadOptions
+	// TxCountIdx       int32 // TODO: slice backed stack
+	// TxCounts         []uint32
+	TxCounts  *db_stack.SliceBackedStack
+	Height    uint32
+	LastState *prefixes.DBStateValue
+	// HeaderIdx        int32 // TODO: slice backed stack
+	// Headers          []*prefixes.BlockHeaderValue
+	Headers          *db_stack.SliceBackedStack
 	BlockedStreams   map[string][]byte
 	BlockedChannels  map[string][]byte
 	FilteredStreams  map[string][]byte
@@ -476,7 +483,14 @@ func GetDBColumnFamlies(name string, cfNames []string) (*ReadOnlyDBColumnFamily,
 		FilteredStreams:  make(map[string][]byte),
 		FilteredChannels: make(map[string][]byte),
 		TxCounts:         nil,
+		LastState:        nil,
 		Height:           0,
+		Headers:          nil,
+	}
+
+	err = ReadDBState(myDB) //TODO: Figure out right place for this
+	if err != nil {
+		return nil, err
 	}
 
 	err = InitTxCounts(myDB)
@@ -484,15 +498,271 @@ func GetDBColumnFamlies(name string, cfNames []string) (*ReadOnlyDBColumnFamily,
 		return nil, err
 	}
 
+	err = InitHeaders(myDB)
+	if err != nil {
+		return nil, err
+	}
+
+	RunDetectChanges(myDB)
+
 	return myDB, nil
 }
 
-// DetectChanges keep the rocksdb db in sync
+func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
+	/*
+	   def advance(self, height: int):
+	       tx_count = self.db.prefix_db.tx_count.get(height).tx_count
+	       assert len(self.db.tx_counts) == height, f"{len(self.db.tx_counts)} != {height}"
+	       self.db.tx_counts.append(tx_count)
+	       self.db.headers.append(self.db.prefix_db.header.get(height, deserialize_value=False))
+	*/
+	// TODO: assert tx_count not in self.db.tx_counts, f'boom {tx_count} in {len(self.db.tx_counts)} tx counts'
+	if db.TxCounts.Len() >= 0 && db.TxCounts.Len() != height {
+		log.Println("Error: tx count len:", db.TxCounts.Len(), "height:", height)
+		return
+	}
+
+	txCountObj, err := GetTxCount(db, height)
+	if err != nil {
+		log.Println("Error getting tx count:", err)
+		return
+	}
+	txCount := txCountObj.TxCount
+	db.TxCounts.Push(txCount)
+
+}
+
+func Unwind(db *ReadOnlyDBColumnFamily) {
+	db.TxCounts.Pop()
+	db.Headers.Pop()
+}
+
+// RunDetectChanges Go routine the runs continuously while the hub is active
+// to keep the db readonly view up to date and handle reorgs on the
+// blockchain.
+func RunDetectChanges(db *ReadOnlyDBColumnFamily) {
+	go func() {
+		for {
+			// FIXME: Figure out best sleep interval
+			time.Sleep(time.Second)
+			err := DetectChanges(db)
+			if err != nil {
+				log.Printf("Error detecting changes: %#v\n", err)
+			}
+		}
+	}()
+}
+
+// DetectChanges keep the rocksdb db in sync and handle reorgs
 func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	err := db.DB.TryCatchUpWithPrimary()
 	if err != nil {
-		log.Printf("error trying to catch up with primary: %#v", err)
 		return err
+	}
+
+	state, err := GetDBState(db)
+	if err != nil {
+		return err
+	}
+
+	if state == nil || state.Height <= 0 {
+		return nil
+	}
+
+	if db.LastState != nil && db.LastState.Height > state.Height {
+		log.Println("reorg detected, waiting until the writer has flushed the new blocks to advance")
+		return nil
+	}
+
+	var lastHeight uint32 = 0
+	var rewound bool = false
+	if db.LastState != nil {
+		lastHeight = db.LastState.Height
+		for {
+			lastHeightHeader, err := GetHeader(db, lastHeight)
+			if err != nil {
+				return err
+			}
+			curHeader := db.Headers.GetTip().(*prefixes.BlockHeaderValue).Header
+			if bytes.Equal(curHeader, lastHeightHeader) {
+				log.Println("connects to block", lastHeight)
+				break
+			} else {
+				log.Println("disconnect block", lastHeight)
+				Unwind(db)
+				rewound = true
+				lastHeight -= 1
+			}
+		}
+	}
+	if rewound {
+		//TODO: reorg count metric
+	}
+
+	err = ReadDBState(db)
+	if err != nil {
+		return err
+	}
+
+	if db.LastState == nil || lastHeight < state.Height {
+		for height := lastHeight; height <= state.Height; height++ {
+			log.Println("advancing to", height)
+			Advance(db, height)
+			//TODO: ClearCache
+			db.LastState = state
+			//TODO: block count metric
+			// self.last_state = state ???:w
+
+			//TODO: update blocked streams
+			//TODO: update filtered streams
+		}
+	}
+	/*
+	   if self.last_state:
+	       while True:
+	           if self.db.headers[-1] == self.db.prefix_db.header.get(last_height, deserialize_value=False):
+	               self.log.debug("connects to block %i", last_height)
+	               break
+	           else:
+	               self.log.warning("disconnect block %i", last_height)
+	               self.unwind()
+	               rewound = True
+	               last_height -= 1
+	   if rewound:
+	       self.reorg_count_metric.inc()
+	   self.db.read_db_state()
+	   if not self.last_state or last_height < state.height:
+	       for height in range(last_height + 1, state.height + 1):
+	           self.log.info("advancing to %i", height)
+	           self.advance(height)
+	       self.clear_caches()
+	       self.last_state = state
+	       self.block_count_metric.set(self.last_state.height)
+	       self.db.blocked_streams, self.db.blocked_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
+	           self.db.blocking_channel_hashes
+	       )
+	       self.db.filtered_streams, self.db.filtered_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
+	           self.db.filtering_channel_hashes
+	       )
+	*/
+
+	return nil
+}
+
+/*
+   def read_db_state(self):
+       state = self.prefix_db.db_state.get()
+
+       if not state:
+           self.db_height = -1
+           self.db_tx_count = 0
+           self.db_tip = b'\0' * 32
+           self.db_version = max(self.DB_VERSIONS)
+           self.utxo_flush_count = 0
+           self.wall_time = 0
+           self.first_sync = True
+           self.hist_flush_count = 0
+           self.hist_comp_flush_count = -1
+           self.hist_comp_cursor = -1
+           self.hist_db_version = max(self.DB_VERSIONS)
+           self.es_sync_height = 0
+       else:
+           self.db_version = state.db_version
+           if self.db_version not in self.DB_VERSIONS:
+               raise DBError(f'your DB version is {self.db_version} but this '
+                                  f'software only handles versions {self.DB_VERSIONS}')
+           # backwards compat
+           genesis_hash = state.genesis
+           if genesis_hash.hex() != self.coin.GENESIS_HASH:
+               raise DBError(f'DB genesis hash {genesis_hash} does not '
+                                  f'match coin {self.coin.GENESIS_HASH}')
+           self.db_height = state.height
+           self.db_tx_count = state.tx_count
+           self.db_tip = state.tip
+           self.utxo_flush_count = state.utxo_flush_count
+           self.wall_time = state.wall_time
+           self.first_sync = state.first_sync
+           self.hist_flush_count = state.hist_flush_count
+           self.hist_comp_flush_count = state.comp_flush_count
+           self.hist_comp_cursor = state.comp_cursor
+           self.hist_db_version = state.db_version
+           self.es_sync_height = state.es_sync_height
+       return state
+*/
+func ReadDBState(db *ReadOnlyDBColumnFamily) error {
+	state, err := GetDBState(db)
+	if err != nil {
+		return err
+	}
+	if state != nil {
+		db.LastState = state
+	} else {
+		db.LastState = prefixes.NewDBStateValue()
+	}
+
+	return nil
+
+	/*
+		state := db.DBState
+		if state == nil {
+			db.DBHeight = -1
+			db.DBTxCount = 0
+			db.DBTip = make([]byte, 32)
+			db.DBVersion = max(db.DBVersions)
+			db.UTXOFlushCount = 0
+			db.WallTime = 0
+			db.FirstSync = true
+			db.HistFlushCount = 0
+			db.HistCompFlushCount = -1
+			db.HistCompCursor = -1
+			db.HistDBVersion = max(db.DBVersions)
+			db.ESSyncHeight = 0
+		} else {
+			db.DBVersion = state.DBVersion
+			if db.DBVersion != db.DBVersions[0] {
+				panic(f"DB version {db.DBVersion} not supported")
+			}
+			// backwards compat
+			genesisHash := state.Genesis
+			if !bytes.Equal(genesisHash, db.Coin.GENESIS_HASH) {
+				panic(f"DB genesis hash {genesisHash} does not match coin {db.Coin.GENESIS_HASH}")
+			}
+			db.DBHeight = state.Height
+			db.DBTxCount = state.TxCount
+			db.DBTip = state.Tip
+			db.UTXOFlushCount = state.UTXOFlushCount
+			db.WallTime = state.WallTime
+			db.FirstSync = state.FirstSync
+			db.HistFlushCount = state.HistFlushCount
+			db.HistCompFlushCount = state.HistCompFlushCount
+			db.HistCompCursor = state.HistCompCursor
+			db.HistDBVersion = state.HistDBVersion
+			db.ESSyncHeight = state.ESSyncHeight
+		}
+	*/
+}
+
+func InitHeaders(db *ReadOnlyDBColumnFamily) error {
+	handle, err := EnsureHandle(db, prefixes.Header)
+	if err != nil {
+		return err
+	}
+
+	//TODO: figure out a reasonable default and make it a constant
+	db.Headers = db_stack.NewSliceBackedStack(12000)
+
+	startKey := prefixes.NewHeaderKey(0)
+	endKey := prefixes.NewHeaderKey(db.LastState.Height)
+	startKeyRaw := startKey.PackKey()
+	endKeyRaw := endKey.PackKey()
+	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
+	options = options.WithIncludeKey(false).WithIncludeValue(true)
+	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw)
+
+	ch := IterCF(db.DB, options)
+
+	for header := range ch {
+		db.Headers.Push(header.Value)
 	}
 
 	return nil
@@ -501,13 +771,13 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 // InitTxCounts initializes the txCounts map
 func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	start := time.Now()
-	handle, ok := db.Handles[string([]byte{prefixes.TxCount})]
-	if !ok {
-		return fmt.Errorf("TxCount prefix not found")
+	handle, err := EnsureHandle(db, prefixes.TxCount)
+	if err != nil {
+		return err
 	}
 
 	//TODO: figure out a reasonable default and make it a constant
-	txCounts := make([]uint32, 0, 1200000)
+	db.TxCounts = db_stack.NewSliceBackedStack(1200000)
 
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true)
@@ -515,15 +785,15 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	ch := IterCF(db.DB, options)
 
 	for txCount := range ch {
-		txCounts = append(txCounts, txCount.Value.(*prefixes.TxCountValue).TxCount)
+		db.TxCounts.Push(txCount.Value.(*prefixes.TxCountValue).TxCount)
 	}
 
 	duration := time.Since(start)
-	log.Println("len(txCounts), cap(txCounts):", len(txCounts), cap(txCounts))
+	log.Println("len(db.TxCounts), size(db.TxCounts):", db.TxCounts.Len(), db.TxCounts.Size())
 	log.Println("Time to get txCounts:", duration)
 
-	db.TxCounts = txCounts
-	db.Height = uint32(len(txCounts))
+	db.Height = db.TxCounts.Len()
+
 	return nil
 }
 
