@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/lbryio/hub/db"
 	"github.com/lbryio/hub/internal/metrics"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -29,6 +30,7 @@ type Server struct {
 	Args             *Args
 	MultiSpaceRe     *regexp.Regexp
 	WeirdCharsRe     *regexp.Regexp
+	DB               *db.ReadOnlyDBColumnFamily
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
 	S256             *hash.Hash
@@ -184,11 +186,22 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	numSubs := new(int64)
 	*numSubs = 0
 
+	//TODO: is this the right place to load the db?
+	var myDB *db.ReadOnlyDBColumnFamily
+	if !args.DisableResolve {
+		myDB, err = db.GetProdDB(args.DBPath, "readonlytmp")
+		if err != nil {
+			// Can't load the db, fail loudly
+			log.Fatalln(err)
+		}
+	}
+
 	s := &Server{
 		GrpcServer:       grpcServer,
 		Args:             args,
 		MultiSpaceRe:     multiSpaceRe,
 		WeirdCharsRe:     weirdCharsRe,
+		DB:               myDB,
 		EsClient:         client,
 		QueryCache:       cache,
 		S256:             &s256,
@@ -205,6 +218,9 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	}
 
 	// Start up our background services
+	if !args.DisableResolve && !args.DisableRocksDBRefresh {
+		db.RunDetectChanges(myDB)
+	}
 	if !args.DisableStartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}

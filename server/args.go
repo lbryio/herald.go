@@ -22,6 +22,7 @@ type Args struct {
 	CmdType                int
 	Host                   string
 	Port                   string
+	DBPath                 string
 	EsHost                 string
 	EsPort                 string
 	PrometheusPort         string
@@ -37,11 +38,14 @@ type Args struct {
 	DisableStartUDP        bool
 	DisableWritePeers      bool
 	DisableFederation      bool
+	DisableRocksDBRefresh  bool
+	DisableResolve         bool
 }
 
 const (
 	DefaultHost                   = "0.0.0.0"
 	DefaultPort                   = "50051"
+	DefaultDBPath                 = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
 	DefaultEsHost                 = "http://localhost"
 	DefaultEsIndex                = "claims"
 	DefaultEsPort                 = "9200"
@@ -55,6 +59,8 @@ const (
 	DefaultDisableStartUDP        = false
 	DefaultDisableWritePeers      = false
 	DefaultDisableFederation      = false
+	DefaultDisableRockDBRefresh   = true
+	DefaultDisableResolve         = true
 )
 
 // GetEnvironment takes the environment variables as an array of strings
@@ -92,6 +98,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
+	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: DefaultEsHost})
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
@@ -108,6 +115,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableStartUdp := parser.Flag("", "disable-start-udp", &argparse.Options{Required: false, Help: "Disable start UDP ping server", Default: DefaultDisableStartUDP})
 	disableWritePeers := parser.Flag("", "disable-write-peers", &argparse.Options{Required: false, Help: "Disable write peer to disk as we learn about them", Default: DefaultDisableWritePeers})
 	disableFederation := parser.Flag("", "disable-federation", &argparse.Options{Required: false, Help: "Disable server federation", Default: DefaultDisableFederation})
+	disableRocksDBRefresh := parser.Flag("", "disable-rocksdb-refresh", &argparse.Options{Required: false, Help: "Disable rocksdb refreshing", Default: DefaultDisableRockDBRefresh})
+	disableResolve := parser.Flag("", "disable-resolve", &argparse.Options{Required: false, Help: "Disable resolve endpoint (and rocksdb loading)", Default: DefaultDisableRockDBRefresh})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -129,6 +138,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		CmdType:                SearchCmd,
 		Host:                   *host,
 		Port:                   *port,
+		DBPath:                 *dbPath,
 		EsHost:                 *esHost,
 		EsPort:                 *esPort,
 		PrometheusPort:         *prometheusPort,
@@ -144,6 +154,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		DisableStartUDP:        *disableStartUdp,
 		DisableWritePeers:      *disableWritePeers,
 		DisableFederation:      *disableFederation,
+		DisableRocksDBRefresh:  *disableRocksDBRefresh,
+		DisableResolve:         *disableResolve,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {

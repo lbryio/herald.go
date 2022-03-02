@@ -49,6 +49,7 @@ func makeDefaultArgs() *server.Args {
 		CmdType:                server.ServeCmd,
 		Host:                   server.DefaultHost,
 		Port:                   server.DefaultPort,
+		DBPath:                 server.DefaultDBPath,
 		EsHost:                 server.DefaultEsHost,
 		EsPort:                 server.DefaultEsPort,
 		PrometheusPort:         server.DefaultPrometheusPort,
@@ -63,6 +64,8 @@ func makeDefaultArgs() *server.Args {
 		DisableStartPrometheus: true,
 		DisableStartUDP:        true,
 		DisableWritePeers:      true,
+		DisableRocksDBRefresh:  true,
+		DisableResolve:         true,
 	}
 
 	return args

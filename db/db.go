@@ -249,13 +249,6 @@ func (ps *PathSegment) String() string {
 	return ps.name
 }
 
-// // BisectRight returns the index of the first element in the list that is greater than or equal to the value.
-// // https://stackoverflow.com/questions/29959506/is-there-a-go-analog-of-pythons-bisect-module
-// func BisectRight(arr []uint32, val uint32) uint32 {
-// 	i := sort.Search(len(arr), func(i int) bool { return arr[i] >= val })
-// 	return uint32(i)
-// }
-
 // BisectRight returns the index of the first element in the list that is greater than or equal to the value.
 // https://stackoverflow.com/questions/29959506/is-there-a-go-analog-of-pythons-bisect-module
 func BisectRight(arr []interface{}, val uint32) uint32 {
@@ -307,7 +300,7 @@ func (opts *IterOptions) ReadRow(ch chan *prefixes.PrefixRowKV, prevKey *[]byte)
 	// We need to check the current key if we're not including the stop
 	// key.
 	if !opts.IncludeStop && opts.StopIteration(keyData) {
-		log.Println("returning false")
+		log.Println("ReadRow returning false")
 		return false
 	}
 
@@ -359,12 +352,10 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(opts.FillCache)
 	it := db.NewIteratorCF(ro, opts.CfHandle)
-	// it := db.NewIterator(ro)
 	opts.It = it
 
 	it.Seek(opts.Prefix)
 	if opts.Start != nil {
-		log.Println("Seeking to start")
 		it.Seek(opts.Start)
 	}
 
@@ -374,16 +365,13 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 
 		var prevKey []byte = nil
 		if !opts.IncludeStart {
-			log.Println("Not including start")
 			it.Next()
 		}
 		if !it.Valid() && opts.IncludeStop {
-			log.Println("Not valid, but including stop")
 			opts.ReadRow(ch, &prevKey)
 		}
 		var continueIter bool = true
 		for ; continueIter && !opts.StopIteration(prevKey) && it.Valid(); it.Next() {
-			//log.Println("Main loop")
 			continueIter = opts.ReadRow(ch, &prevKey)
 		}
 	}()
@@ -457,7 +445,25 @@ func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, er
 	return db, handles, nil
 }
 
-func GetDBColumnFamlies(name string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
+// GetProdDB returns a db that is used for production.
+func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, error) {
+	prefixNames := prefixes.GetPrefixes()
+	// additional prefixes that aren't in the code explicitly
+	cfNames := []string{"default", "e", "d", "c"}
+	for _, prefix := range prefixNames {
+		cfName := string(prefix)
+		cfNames = append(cfNames, cfName)
+	}
+
+	db, err := GetDBColumnFamlies(name, secondaryPath, cfNames)
+	if err != nil {
+		return nil, err
+	}
+
+	return db, nil
+}
+
+func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
 	opts := grocksdb.NewDefaultOptions()
 	roOpts := grocksdb.NewDefaultReadOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -468,7 +474,7 @@ func GetDBColumnFamlies(name string, cfNames []string) (*ReadOnlyDBColumnFamily,
 		cfOpts[i] = cfOpt
 	}
 
-	db, handles, err := grocksdb.OpenDbAsSecondaryColumnFamilies(opts, name, "asdf", cfNames, cfOpts)
+	db, handles, err := grocksdb.OpenDbAsSecondaryColumnFamilies(opts, name, secondayPath, cfNames, cfOpts)
 	// db, handles, err := grocksdb.OpenDbColumnFamilies(opts, name, cfNames, cfOpts)
 
 	if err != nil {
@@ -706,45 +712,6 @@ func ReadDBState(db *ReadOnlyDBColumnFamily) error {
 	}
 
 	return nil
-
-	/*
-		state := db.DBState
-		if state == nil {
-			db.DBHeight = -1
-			db.DBTxCount = 0
-			db.DBTip = make([]byte, 32)
-			db.DBVersion = max(db.DBVersions)
-			db.UTXOFlushCount = 0
-			db.WallTime = 0
-			db.FirstSync = true
-			db.HistFlushCount = 0
-			db.HistCompFlushCount = -1
-			db.HistCompCursor = -1
-			db.HistDBVersion = max(db.DBVersions)
-			db.ESSyncHeight = 0
-		} else {
-			db.DBVersion = state.DBVersion
-			if db.DBVersion != db.DBVersions[0] {
-				panic(f"DB version {db.DBVersion} not supported")
-			}
-			// backwards compat
-			genesisHash := state.Genesis
-			if !bytes.Equal(genesisHash, db.Coin.GENESIS_HASH) {
-				panic(f"DB genesis hash {genesisHash} does not match coin {db.Coin.GENESIS_HASH}")
-			}
-			db.DBHeight = state.Height
-			db.DBTxCount = state.TxCount
-			db.DBTip = state.Tip
-			db.UTXOFlushCount = state.UTXOFlushCount
-			db.WallTime = state.WallTime
-			db.FirstSync = state.FirstSync
-			db.HistFlushCount = state.HistFlushCount
-			db.HistCompFlushCount = state.HistCompFlushCount
-			db.HistCompCursor = state.HistCompCursor
-			db.HistDBVersion = state.HistDBVersion
-			db.ESSyncHeight = state.ESSyncHeight
-		}
-	*/
 }
 
 func InitHeaders(db *ReadOnlyDBColumnFamily) error {

@@ -247,13 +247,8 @@ func TestCatFullDB(t *testing.T) {
 	// url := "lbry://@lbry"
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
 	dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
-	prefixNames := prefixes.GetPrefixes()
-	cfNames := []string{"default", "e", "d", "c"}
-	for _, prefix := range prefixNames {
-		cfName := string(prefix)
-		cfNames = append(cfNames, cfName)
-	}
-	db, err := dbpkg.GetDBColumnFamlies(dbPath, cfNames)
+	secondaryPath := "asdf"
+	db, err := dbpkg.GetProdDB(dbPath, secondaryPath)
 	toDefer := func() {
 		db.DB.Close()
 		err = os.RemoveAll("./asdf")
@@ -288,13 +283,8 @@ func TestOpenFullDB(t *testing.T) {
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
 	// url := "lbry://@lbry$1"
 	dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
-	prefixNames := prefixes.GetPrefixes()
-	cfNames := []string{"default", "e", "d", "c"}
-	for _, prefix := range prefixNames {
-		cfName := string(prefix)
-		cfNames = append(cfNames, cfName)
-	}
-	db, err := dbpkg.GetDBColumnFamlies(dbPath, cfNames)
+	secondaryPath := "asdf"
+	db, err := dbpkg.GetProdDB(dbPath, secondaryPath)
 	toDefer := func() {
 		db.DB.Close()
 		err = os.RemoveAll("./asdf")
