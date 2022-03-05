@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math"
 	"os"
 	"sort"
@@ -14,6 +13,8 @@ import (
 	"github.com/lbryio/hub/db/prefixes"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/linxGnu/grocksdb"
+
+	log "github.com/sirupsen/logrus"
 )
 
 //
@@ -540,6 +541,10 @@ func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
 		return
 	}
 	txCount := txCountObj.TxCount
+
+	if db.TxCounts.GetTip().(uint32) >= txCount {
+	}
+
 	db.TxCounts.Push(txCount)
 	db.Headers.Push(headerObj)
 }
@@ -581,6 +586,9 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 		return nil
 	}
 
+	// log.Printf("db.LastState %#v, state: %#v", db.LastState, state)
+	log.Debugf("db.LastState %#v, state: %#v", db.LastState, state)
+
 	if db.LastState != nil && db.LastState.Height > state.Height {
 		log.Println("reorg detected, waiting until the writer has flushed the new blocks to advance")
 		return nil
@@ -595,15 +603,18 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 			if err != nil {
 				return err
 			}
-			curHeader := db.Headers.GetTip().(*prefixes.BlockHeaderValue).Header
+			curHeader := db.Headers.GetTip().([]byte)
+			log.Debugln("lastHeightHeader: ", hex.EncodeToString(lastHeightHeader))
+			log.Debugln("curHeader: ", hex.EncodeToString(curHeader))
 			if bytes.Equal(curHeader, lastHeightHeader) {
-				log.Println("connects to block", lastHeight)
+				log.Traceln("connects to block", lastHeight)
 				break
 			} else {
-				log.Println("disconnect block", lastHeight)
+				log.Infoln("disconnect block", lastHeight)
 				Unwind(db)
 				rewound = true
 				lastHeight -= 1
+				time.Sleep(time.Second)
 			}
 		}
 	}
@@ -617,16 +628,16 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	}
 
 	if db.LastState == nil || lastHeight < state.Height {
-		for height := lastHeight; height <= state.Height; height++ {
+		for height := lastHeight + 1; height <= state.Height; height++ {
 			log.Println("advancing to", height)
 			Advance(db, height)
-			//TODO: ClearCache
-			db.LastState = state
-			//TODO: block count metric
-
-			//TODO: update blocked streams
-			//TODO: update filtered streams
 		}
+		//TODO: ClearCache
+		db.LastState = state
+		//TODO: block count metric
+
+		//TODO: update blocked streams
+		//TODO: update filtered streams
 	}
 
 	return nil
@@ -728,13 +739,13 @@ func InitHeaders(db *ReadOnlyDBColumnFamily) error {
 	startKeyRaw := startKey.PackKey()
 	endKeyRaw := endKey.PackKey()
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
-	options = options.WithIncludeKey(false).WithIncludeValue(true)
+	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
 	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw)
 
 	ch := IterCF(db.DB, options)
 
 	for header := range ch {
-		db.Headers.Push(header.Value)
+		db.Headers.Push(header.Value.(*prefixes.BlockHeaderValue).Header)
 	}
 
 	return nil
@@ -761,10 +772,16 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	}
 
 	duration := time.Since(start)
-	log.Println("len(db.TxCounts), size(db.TxCounts):", db.TxCounts.Len(), db.TxCounts.Size())
+	log.Println("len(db.TxCounts), cap(db.TxCounts):", db.TxCounts.Len(), db.TxCounts.Cap())
 	log.Println("Time to get txCounts:", duration)
 
-	db.Height = db.TxCounts.Len()
+	// This needs to be len-1 because we start loading with the zero block
+	// and the txcounts start at one.
+	if db.TxCounts.Len() > 0 {
+		db.Height = db.TxCounts.Len() - 1
+	} else {
+		log.Println("db.TxCounts.Len() == 0 ???")
+	}
 
 	return nil
 }

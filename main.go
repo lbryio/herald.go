@@ -6,9 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/lbryio/hub/db"
@@ -31,26 +28,27 @@ func main() {
 		ctxWCancel, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		interrupt := make(chan os.Signal, 1)
-		signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-		defer signal.Stop(interrupt)
+		// TODO: Figure out if / where we need signal handling
+		// interrupt := make(chan os.Signal, 1)
+		// signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
+		// defer signal.Stop(interrupt)
 
 		s := server.MakeHubServer(ctxWCancel, args)
 		s.Run()
 
-		select {
-		case <-interrupt:
-			break
-		case <-ctx.Done():
-			break
-		}
+		// select {
+		// case <-interrupt:
+		// 	break
+		// case <-ctx.Done():
+		// 	break
+		// }
 
-		log.Println("Shutting down server...")
+		// log.Println("Shutting down server...")
 
-		s.EsClient.Stop()
-		s.GrpcServer.GracefulStop()
+		// s.EsClient.Stop()
+		// s.GrpcServer.GracefulStop()
 
-		log.Println("Returning from main...")
+		// log.Println("Returning from main...")
 
 		return
 	} else if args.CmdType == server.DBCmd {

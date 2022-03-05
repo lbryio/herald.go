@@ -93,6 +93,7 @@ func (s *Server) loadPeers() error {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	// log.Println("loadPeers #### waiting for server to come up")
 retry:
 	time.Sleep(time.Second * time.Duration(math.Pow(float64(failures), 2)))
 	conn, err := grpc.DialContext(ctx,
@@ -113,10 +114,11 @@ retry:
 		log.Println(err)
 	}
 	cancel()
+	// log.Println("loadPeers #### Past checking for server to come up")
 
 	f, err := os.Open(peerFile)
 	if err != nil {
-		log.Println(err)
+		// log.Println(err)
 		return err
 	}
 	scanner := bufio.NewScanner(f)

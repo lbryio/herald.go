@@ -59,8 +59,8 @@ const (
 	DefaultDisableStartUDP        = false
 	DefaultDisableWritePeers      = false
 	DefaultDisableFederation      = false
-	DefaultDisableRockDBRefresh   = true
-	DefaultDisableResolve         = true
+	DefaultDisableRockDBRefresh   = false
+	DefaultDisableResolve         = false
 )
 
 // GetEnvironment takes the environment variables as an array of strings

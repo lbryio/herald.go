@@ -47,8 +47,8 @@ func (s *SliceBackedStack) Len() uint32 {
 	return s.len
 }
 
-func (s *SliceBackedStack) Size() int {
-	return len(s.slice)
+func (s *SliceBackedStack) Cap() int {
+	return cap(s.slice)
 }
 
 func (s *SliceBackedStack) GetSlice() []interface{} {
