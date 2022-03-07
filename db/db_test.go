@@ -276,7 +276,7 @@ func TestCatFullDB(t *testing.T) {
 
 // TestOpenFullDB Tests running a resolve on a full db.
 func TestOpenFullDB(t *testing.T) {
-	// t.Skip("Skipping full db test")
+	t.Skip("Skipping full db test")
 	// url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
 	// "lbry://@lbry", "lbry://@lbry#3", "lbry://@lbry3f", "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a", "lbry://@lbry:1", "lbry://@lbry$1"
 	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
