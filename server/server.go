@@ -44,6 +44,7 @@ type Server struct {
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
 	ExternalIP       net.IP
+	DBCleanup        func()
 	pb.UnimplementedHubServer
 }
 
@@ -188,8 +189,9 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 
 	//TODO: is this the right place to load the db?
 	var myDB *db.ReadOnlyDBColumnFamily
+	var dbCleanup = func() {}
 	if !args.DisableResolve {
-		myDB, err = db.GetProdDB(args.DBPath, "readonlytmp")
+		myDB, dbCleanup, err = db.GetProdDB(args.DBPath, "readonlytmp")
 		if err != nil {
 			// Can't load the db, fail loudly
 			log.Fatalln(err)
@@ -215,6 +217,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
+		DBCleanup:        dbCleanup,
 	}
 
 	// Start up our background services

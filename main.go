@@ -33,27 +33,24 @@ func main() {
 		defer cancel()
 
 		// TODO: Figure out if / where we need signal handling
-		// interrupt := make(chan os.Signal, 1)
-		// signal.Notify(interrupt, os.Interrupt, syscall.SIGTERM)
-		// defer signal.Stop(interrupt)
+
+		initsignals()
+		interrupt := interruptListener()
 
 		s := server.MakeHubServer(ctxWCancel, args)
-		s.Run()
+		go s.Run()
 
-		// select {
-		// case <-interrupt:
-		// 	break
-		// case <-ctx.Done():
-		// 	break
-		// }
+		defer func() {
+			log.Println("Shutting down server...")
 
-		// log.Println("Shutting down server...")
+			s.EsClient.Stop()
+			s.GrpcServer.GracefulStop()
+			s.DBCleanup()
 
-		// s.EsClient.Stop()
-		// s.GrpcServer.GracefulStop()
+			log.Println("Returning from main...")
+		}()
 
-		// log.Println("Returning from main...")
-
+		<-interrupt
 		return
 	} else if args.CmdType == server.DBCmd {
 		options := &db.IterOptions{

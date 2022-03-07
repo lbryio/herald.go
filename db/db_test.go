@@ -249,14 +249,8 @@ func TestCatFullDB(t *testing.T) {
 	dbPath := "/mnt/sda/wallet_server/_data/lbry-rocksdb/"
 	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	secondaryPath := "asdf"
-	db, err := dbpkg.GetProdDB(dbPath, secondaryPath)
-	toDefer := func() {
-		db.DB.Close()
-		err = os.RemoveAll("./asdf")
-		if err != nil {
-			log.Println(err)
-		}
-	}
+	db, toDefer, err := dbpkg.GetProdDB(dbPath, secondaryPath)
+
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -283,18 +277,11 @@ func TestOpenFullDB(t *testing.T) {
 	// url := "lbry://@lbry"
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
 	// url := "lbry://@lbry$1"
-	url := "lbry://@lothrop:2/lothrop-livestream-games-and-code:c"
+	url := "https://lbry.tv/@lothrop:2/lothrop-livestream-games-and-code:c"
 	dbPath := "/mnt/sda/wallet_server/_data/lbry-rocksdb/"
 	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	secondaryPath := "asdf"
-	db, err := dbpkg.GetProdDB(dbPath, secondaryPath)
-	toDefer := func() {
-		db.DB.Close()
-		err = os.RemoveAll("./asdf")
-		if err != nil {
-			log.Println(err)
-		}
-	}
+	db, toDefer, err := dbpkg.GetProdDB(dbPath, secondaryPath)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)

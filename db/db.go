@@ -448,7 +448,7 @@ func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, er
 }
 
 // GetProdDB returns a db that is used for production.
-func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, error) {
+func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func(), error) {
 	prefixNames := prefixes.GetPrefixes()
 	// additional prefixes that aren't in the code explicitly
 	cfNames := []string{"default", "e", "d", "c"}
@@ -458,11 +458,20 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, erro
 	}
 
 	db, err := GetDBColumnFamlies(name, secondaryPath, cfNames)
-	if err != nil {
-		return nil, err
+
+	cleanup := func() {
+		db.DB.Close()
+		err = os.RemoveAll(fmt.Sprintf("./%s", secondaryPath))
+		if err != nil {
+			log.Println(err)
+		}
 	}
 
-	return db, nil
+	if err != nil {
+		return nil, cleanup, err
+	}
+
+	return db, cleanup, nil
 }
 
 func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
@@ -632,7 +641,7 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 
 	if db.LastState == nil || lastHeight < state.Height {
 		for height := lastHeight + 1; height <= state.Height; height++ {
-			log.Info("advancing to", height)
+			log.Info("advancing to: ", height)
 			Advance(db, height)
 		}
 		//TODO: ClearCache
