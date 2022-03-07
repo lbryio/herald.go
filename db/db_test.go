@@ -246,7 +246,8 @@ func TestCatFullDB(t *testing.T) {
 	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
 	// url := "lbry://@lbry"
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
-	dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
+	dbPath := "/mnt/sda/wallet_server/_data/lbry-rocksdb/"
+	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	secondaryPath := "asdf"
 	db, err := dbpkg.GetProdDB(dbPath, secondaryPath)
 	toDefer := func() {
@@ -275,14 +276,16 @@ func TestCatFullDB(t *testing.T) {
 
 // TestOpenFullDB Tests running a resolve on a full db.
 func TestOpenFullDB(t *testing.T) {
-	t.Skip("Skipping full db test")
+	// t.Skip("Skipping full db test")
 	// url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
 	// "lbry://@lbry", "lbry://@lbry#3", "lbry://@lbry3f", "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a", "lbry://@lbry:1", "lbry://@lbry$1"
-	url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
+	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
 	// url := "lbry://@lbry"
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
 	// url := "lbry://@lbry$1"
-	dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
+	url := "lbry://@lothrop:2/lothrop-livestream-games-and-code:c"
+	dbPath := "/mnt/sda/wallet_server/_data/lbry-rocksdb/"
+	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	secondaryPath := "asdf"
 	db, err := dbpkg.GetProdDB(dbPath, secondaryPath)
 	toDefer := func() {

@@ -39,16 +39,12 @@ const (
 //
 
 type ReadOnlyDBColumnFamily struct {
-	DB      *grocksdb.DB
-	Handles map[string]*grocksdb.ColumnFamilyHandle
-	Opts    *grocksdb.ReadOptions
-	// TxCountIdx       int32 // TODO: slice backed stack
-	// TxCounts         []uint32
-	TxCounts  *db_stack.SliceBackedStack
-	Height    uint32
-	LastState *prefixes.DBStateValue
-	// HeaderIdx        int32 // TODO: slice backed stack
-	// Headers          []*prefixes.BlockHeaderValue
+	DB               *grocksdb.DB
+	Handles          map[string]*grocksdb.ColumnFamilyHandle
+	Opts             *grocksdb.ReadOptions
+	TxCounts         *db_stack.SliceBackedStack
+	Height           uint32
+	LastState        *prefixes.DBStateValue
 	Headers          *db_stack.SliceBackedStack
 	BlockedStreams   map[string][]byte
 	BlockedChannels  map[string][]byte
@@ -105,8 +101,6 @@ func (x *optionalResolveResultOrError) GetError() *ResolveError {
 }
 
 func (x *ResolveResult) String() string {
-	// return fmt.Sprintf("ResolveResult{Name: %s, NormalizedName: %s, ClaimHash: %s, TxNum: %d, Position: %d, TxHash: %s, Height: %d, Amount: %d, ShortUrl: %s, IsControlling: %v, CanonicalUrl: %s, CreationHeight: %d, ActivationHeight: %d, ExpirationHeight: %d, EffectiveAmount: %d, SupportAmount: %d, Reposted: %d, LastTakeoverHeight: %d, ClaimsInChannel: %d, ChannelHash: %s, RepostedClaimHash: %s, SignatureValid: %v}",
-	// 	x.Name, x.NormalizedName, hex.EncodeToString(x.ClaimHash), x.TxNum, x.Position, hex.EncodeToString(x.TxHash), x.Height, x.Amount, x.ShortUrl, x.IsControlling, x.CanonicalUrl, x.CreationHeight, x.ActivationHeight, x.ExpirationHeight, x.EffectiveAmount, x.SupportAmount, x.Reposted, x.LastTakeoverHeight, x.ClaimsInChannel, hex.EncodeToString(x.ChannelHash), hex.EncodeToString(x.RepostedClaimHash), x.SignatureValid)
 	return fmt.Sprintf("%#v", x)
 }
 
@@ -129,6 +123,15 @@ type ExpandedResolveResult struct {
 	Channel         OptionalResolveResultOrError
 	Repost          OptionalResolveResultOrError
 	RepostedChannel OptionalResolveResultOrError
+}
+
+func NewExpandedResolveResult() *ExpandedResolveResult {
+	return &ExpandedResolveResult{
+		Stream:          &optionalResolveResultOrError{},
+		Channel:         &optionalResolveResultOrError{},
+		Repost:          &optionalResolveResultOrError{},
+		RepostedChannel: &optionalResolveResultOrError{},
+	}
 }
 
 func (x *ExpandedResolveResult) String() string {
@@ -295,13 +298,13 @@ func (opts *IterOptions) ReadRow(ch chan *prefixes.PrefixRowKV, prevKey *[]byte)
 	var outValue interface{} = nil
 	var err error = nil
 
-	// log.Println("keyData:", keyData)
-	// log.Println("valueData:", valueData)
+	log.Trace("keyData:", keyData)
+	log.Trace("valueData:", valueData)
 
 	// We need to check the current key if we're not including the stop
 	// key.
 	if !opts.IncludeStop && opts.StopIteration(keyData) {
-		log.Println("ReadRow returning false")
+		log.Trace("ReadRow returning false")
 		return false
 	}
 
@@ -312,7 +315,7 @@ func (opts *IterOptions) ReadRow(ch chan *prefixes.PrefixRowKV, prevKey *[]byte)
 	if opts.IncludeKey && !opts.RawKey {
 		outKey, err = prefixes.UnpackGenericKey(newKeyData)
 		if err != nil {
-			log.Println(err)
+			log.Error(err)
 		}
 	} else if opts.IncludeKey {
 		outKey = newKeyData
@@ -326,7 +329,7 @@ func (opts *IterOptions) ReadRow(ch chan *prefixes.PrefixRowKV, prevKey *[]byte)
 		if !opts.RawValue {
 			outValue, err = prefixes.UnpackGenericValue(newKeyData, newValueData)
 			if err != nil {
-				log.Println(err)
+				log.Error(err)
 			}
 		} else {
 			outValue = newValueData
@@ -336,13 +339,11 @@ func (opts *IterOptions) ReadRow(ch chan *prefixes.PrefixRowKV, prevKey *[]byte)
 	key.Free()
 	value.Free()
 
-	// log.Println("sending to channel")
 	ch <- &prefixes.PrefixRowKV{
 		Key:   outKey,
 		Value: outValue,
 	}
 	*prevKey = newKeyData
-	// log.Println("*prevKey:", *prevKey)
 
 	return true
 }
@@ -525,24 +526,26 @@ func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*Re
 func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
 	// TODO: assert tx_count not in self.db.tx_counts, f'boom {tx_count} in {len(self.db.tx_counts)} tx counts'
 	if db.TxCounts.Len() != height {
-		log.Println("Error: tx count len:", db.TxCounts.Len(), "height:", height)
+		log.Error("tx count len:", db.TxCounts.Len(), "height:", height)
 		return
 	}
 
 	headerObj, err := GetHeader(db, height)
 	if err != nil {
-		log.Println("Error getting header:", err)
+		log.Error("getting header:", err)
 		return
 	}
 
 	txCountObj, err := GetTxCount(db, height)
 	if err != nil {
-		log.Println("Error getting tx count:", err)
+		log.Error("getting tx count:", err)
 		return
 	}
 	txCount := txCountObj.TxCount
 
 	if db.TxCounts.GetTip().(uint32) >= txCount {
+		log.Error("current tip should be less than new txCount",
+			"tx count tip:", db.TxCounts.GetTip(), "tx count:", txCount)
 	}
 
 	db.TxCounts.Push(txCount)
@@ -586,11 +589,10 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 		return nil
 	}
 
-	// log.Printf("db.LastState %#v, state: %#v", db.LastState, state)
 	log.Debugf("db.LastState %#v, state: %#v", db.LastState, state)
 
 	if db.LastState != nil && db.LastState.Height > state.Height {
-		log.Println("reorg detected, waiting until the writer has flushed the new blocks to advance")
+		log.Info("reorg detected, waiting until the writer has flushed the new blocks to advance")
 		return nil
 	}
 
@@ -620,6 +622,7 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	}
 	if rewound {
 		//TODO: reorg count metric
+		log.Warn("implement reorg count metric")
 	}
 
 	err = ReadDBState(db)
@@ -629,15 +632,19 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 
 	if db.LastState == nil || lastHeight < state.Height {
 		for height := lastHeight + 1; height <= state.Height; height++ {
-			log.Println("advancing to", height)
+			log.Info("advancing to", height)
 			Advance(db, height)
 		}
 		//TODO: ClearCache
+		log.Warn("implement cache clearing")
 		db.LastState = state
 		//TODO: block count metric
+		log.Warn("implement block count metric")
 
 		//TODO: update blocked streams
 		//TODO: update filtered streams
+		log.Warn("implement updating blocked streams")
+		log.Warn("implement updating filtered streams")
 	}
 
 	return nil
@@ -881,7 +888,7 @@ func readWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int, f
 
 	file, err := os.Create(out)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return
 	}
 	defer file.Close()
@@ -923,7 +930,7 @@ func ReadWriteRawN(db *grocksdb.DB, options *IterOptions, out string, n int) {
 
 	file, err := os.Create(out)
 	if err != nil {
-		log.Println(err)
+		log.Error(err)
 		return
 	}
 	defer file.Close()

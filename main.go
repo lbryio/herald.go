@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"time"
 
 	"github.com/lbryio/hub/db"
@@ -13,10 +12,15 @@ import (
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
 
 func main() {
+
+	log.SetFormatter(&log.TextFormatter{
+		FullTimestamp: true,
+	})
 
 	ctx := context.Background()
 	searchRequest := &pb.SearchRequest{}

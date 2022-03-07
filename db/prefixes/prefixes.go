@@ -201,7 +201,6 @@ func (v *DBStateValue) PackValue() []byte {
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4:], compFlushCount)
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4:], compCursor)
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4+4:], v.EsSyncHeight)
-	log.Printf("%+v\n", v)
 
 	return value
 }
@@ -250,7 +249,6 @@ func DBStateValueUnpack(value []byte) *DBStateValue {
 		CompCursor:     int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4:])),
 		EsSyncHeight:   binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4+4:]),
 	}
-	log.Printf("%+v\n", x)
 	return x
 }
 

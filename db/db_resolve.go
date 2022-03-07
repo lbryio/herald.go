@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math"
 	"sort"
 	"strings"
@@ -12,6 +11,7 @@ import (
 	"github.com/lbryio/hub/db/prefixes"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	lbryurl "github.com/lbryio/lbry.go/v2/url"
+	log "github.com/sirupsen/logrus"
 )
 
 // PrepareResolveResult prepares a ResolveResult to return
@@ -185,6 +185,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 		}
 		log.Println("nomalizedName:", normalizedName)
 		log.Println("claimId:", parsed.claimId)
+		// max short id length
 		var j int = 10
 		if len(parsed.claimId) < j {
 			j = len(parsed.claimId)
@@ -280,24 +281,20 @@ func ResolveClaimInChannel(db *ReadOnlyDBColumnFamily, channelHash []byte, norma
 }
 
 func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
-	var res = &ExpandedResolveResult{
-		Stream:          nil,
-		Channel:         nil,
-		Repost:          nil,
-		RepostedChannel: nil,
-	}
+	var res = NewExpandedResolveResult()
 
 	var channel *PathSegment = nil
 	var stream *PathSegment = nil
 	parsed, err := lbryurl.Parse(url, false)
+
+	log.Printf("parsed: %#v", parsed)
+
 	if err != nil {
 		res.Stream = &optionalResolveResultOrError{
 			err: &ResolveError{err},
 		}
 		return res
 	}
-
-	log.Printf("parsed: %#v\n", parsed)
 
 	// has stream in channel
 	if strings.Compare(parsed.StreamName, "") != 0 && strings.Compare(parsed.ClaimName, "") != 0 {
@@ -475,6 +472,6 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		res: repostedChannel,
 	}
 
-	log.Printf("parsed: %+v\n", parsed)
+	log.Printf("parsed: %#v\n", parsed)
 	return res
 }
