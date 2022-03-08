@@ -1,6 +1,8 @@
 package db_stack
 
-import "sync"
+import (
+	"sync"
+)
 
 type SliceBackedStack struct {
 	slice []interface{}
@@ -76,4 +78,19 @@ func (s *SliceBackedStack) Cap() int {
 func (s *SliceBackedStack) GetSlice() []interface{} {
 	// This is not thread safe so I won't bother with locking
 	return s.slice
+}
+
+// This function is dangerous because it assumes underlying types
+func (s *SliceBackedStack) TxCountsBisectRight(
+	txNum, rootTxNum uint32,
+	bisectFunc func([]interface{}, uint32) uint32,
+) (uint32, uint32) {
+	s.mut.RLock()
+	defer s.mut.RUnlock()
+
+	txCounts := s.slice[:s.Len()]
+	height := bisectFunc(txCounts, txNum)
+	createdHeight := bisectFunc(txCounts, rootTxNum)
+
+	return height, createdHeight
 }
