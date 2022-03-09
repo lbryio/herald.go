@@ -100,24 +100,6 @@ type PrefixRowKV struct {
 	Value interface{}
 }
 
-/*
-class DBState(typing.NamedTuple):
-    genesis: bytes
-    height: int
-    tx_count: int
-    tip: bytes
-    utxo_flush_count: int
-    wall_time: int
-    first_sync: bool
-    db_version: int
-    hist_flush_count: int
-    comp_flush_count: int
-    comp_cursor: int
-    es_sync_height: int
-
-
-*/
-
 type DBStateKey struct {
 	Prefix []byte `json:"prefix"`
 }

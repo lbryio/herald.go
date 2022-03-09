@@ -779,7 +779,7 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	db.TxCounts = db_stack.NewSliceBackedStack(1200000)
 
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
-	options = options.WithIncludeKey(false).WithIncludeValue(true)
+	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
 
 	ch := IterCF(db.DB, options)
 
@@ -791,13 +791,14 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	log.Println("len(db.TxCounts), cap(db.TxCounts):", db.TxCounts.Len(), db.TxCounts.Cap())
 	log.Println("Time to get txCounts:", duration)
 
-	// This needs to be len-1 because we start loading with the zero block
-	// and the txcounts start at one.
-	if db.TxCounts.Len() > 0 {
-		db.Height = db.TxCounts.Len() - 1
-	} else {
-		log.Println("db.TxCounts.Len() == 0 ???")
-	}
+	// whjy not needs to be len-1 because we start loading with the zero block
+	// and the txcounts start at one???
+	db.Height = db.TxCounts.Len()
+	// if db.TxCounts.Len() > 0 {
+	// 	db.Height = db.TxCounts.Len() - 1
+	// } else {
+	// 	log.Println("db.TxCounts.Len() == 0 ???")
+	// }
 
 	return nil
 }
