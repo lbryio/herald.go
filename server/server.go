@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"log"
@@ -21,6 +22,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	logrus "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -196,6 +198,28 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 			// Can't load the db, fail loudly
 			log.Fatalln(err)
 		}
+
+		blockingChannelHashes := make([][]byte, 0, 10)
+		filteringChannelHashes := make([][]byte, 0, 10)
+
+		for _, id := range args.BlockingChannelIds {
+			hash, err := hex.DecodeString(id)
+			if err != nil {
+				logrus.Warn("Invalid channel id: ", id)
+			}
+			blockingChannelHashes = append(blockingChannelHashes, hash)
+		}
+
+		for _, id := range args.FilteringChannelIds {
+			hash, err := hex.DecodeString(id)
+			if err != nil {
+				logrus.Warn("Invalid channel id: ", id)
+			}
+			filteringChannelHashes = append(filteringChannelHashes, hash)
+		}
+
+		myDB.BlockingChannelHashes = blockingChannelHashes
+		myDB.FilteringChannelHashes = filteringChannelHashes
 	}
 
 	s := &Server{

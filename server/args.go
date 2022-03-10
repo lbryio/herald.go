@@ -41,6 +41,8 @@ type Args struct {
 	DisableRocksDBRefresh       bool
 	DisableResolve              bool
 	DisableBlockingAndFiltering bool
+	BlockingChannelIds          []string
+	FilteringChannelIds         []string
 }
 
 const (
@@ -63,6 +65,11 @@ const (
 	DefaultDisableRockDBRefresh        = false
 	DefaultDisableResolve              = false
 	DefaultDisableBlockingAndFiltering = false
+)
+
+var (
+	DefaultBlockingChannelIds  = []string{}
+	DefaultFilteringChannelIds = []string{}
 )
 
 // GetEnvironment takes the environment variables as an array of strings
@@ -109,6 +116,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
 	peerFile := parser.String("", "peerfile", &argparse.Options{Required: false, Help: "Initial peer file for federation", Default: DefaultPeerFile})
 	country := parser.String("", "country", &argparse.Options{Required: false, Help: "Country this node is running in. Default US.", Default: DefaultCountry})
+	blockingChannelIds := parser.StringList("", "blocking-channel-ids", &argparse.Options{Required: false, Help: "Blocking channel ids", Default: DefaultBlockingChannelIds})
+	filteringChannelIds := parser.StringList("", "filtering-channel-ids", &argparse.Options{Required: false, Help: "Filtering channel ids", Default: DefaultFilteringChannelIds})
 
 	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 	disableEs := parser.Flag("", "disable-es", &argparse.Options{Required: false, Help: "Disable elastic search, for running/testing independently", Default: false})
@@ -160,6 +169,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		DisableRocksDBRefresh:       *disableRocksDBRefresh,
 		DisableResolve:              *disableResolve,
 		DisableBlockingAndFiltering: *disableBlockingAndFiltering,
+		BlockingChannelIds:          *blockingChannelIds,
+		FilteringChannelIds:         *filteringChannelIds,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
