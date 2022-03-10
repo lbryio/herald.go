@@ -488,9 +488,9 @@ func (s *Server) Resolve(ctx context.Context, args *pb.StringValue) (*pb.Outputs
 	return &pb.Outputs{
 		Txos:         txos,
 		ExtraTxos:    extraTxos,
-		Total:        1,
-		Offset:       0,
-		Blocked:      nil,
-		BlockedTotal: 0,
+		Total:        uint32(len(txos) + len(extraTxos)),
+		Offset:       0,   //TODO
+		Blocked:      nil, //TODO
+		BlockedTotal: 0,   //TODO
 	}, nil
 }

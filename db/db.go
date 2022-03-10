@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"os"
 	"sort"
 	"time"
@@ -23,6 +22,7 @@ import (
 //
 
 const (
+	// Blochchain height / expiration constants
 	NOriginalClaimExpirationTime       = 262974
 	NExtendedClaimExpirationTime       = 2102400
 	NExtendedClaimExpirationForkHeight = 400155
@@ -33,6 +33,8 @@ const (
 	NAllClaimsInMerkleForkHeight       = 658310 // targeting 30 Oct 2019
 	ProportionalDelayFactor            = 32
 	MaxTakeoverDelay                   = 4032
+	// Initial size constants
+	InitialTxCountSize = 1200000
 )
 
 //
@@ -265,14 +267,21 @@ func BisectRight(arr []interface{}, val uint32) uint32 {
 // Iterators / db construction functions
 //
 
+func intMin(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
 func (o *IterOptions) StopIteration(key []byte) bool {
 	if key == nil {
 		return false
 	}
 
 	// TODO: Look at not doing floating point conversions for this
-	maxLenStop := int(math.Min(float64(len(key)), float64(len(o.Stop))))
-	maxLenStart := int(math.Min(float64(len(key)), float64(len(o.Start))))
+	maxLenStop := intMin(len(key), len(o.Stop))
+	maxLenStart := intMin(len(key), len(o.Start))
 	if o.Stop != nil &&
 		(bytes.HasPrefix(key, o.Stop) || bytes.Compare(o.Stop, key[:maxLenStop]) < 0) {
 		return true
@@ -771,8 +780,7 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 		return err
 	}
 
-	//TODO: figure out a reasonable default and make it a constant
-	db.TxCounts = db_stack.NewSliceBackedStack(1200000)
+	db.TxCounts = db_stack.NewSliceBackedStack(InitialTxCountSize)
 
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
