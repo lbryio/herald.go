@@ -1866,25 +1866,6 @@ func ClaimToChannelValueUnpack(value []byte) *ClaimToChannelValue {
 	}
 }
 
-/*
-class ChannelToClaimKey(typing.NamedTuple):
-    signing_hash: bytes
-    name: str
-    tx_num: int
-    position: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(signing_hash={self.signing_hash.hex()}, name={self.name}, " \
-               f"tx_num={self.tx_num}, position={self.position})"
-
-
-class ChannelToClaimValue(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-*/
-
 type ChannelToClaimKey struct {
 	Prefix      []byte `json:"prefix"`
 	SigningHash []byte `json:"signing_hash"`
@@ -1902,6 +1883,13 @@ func NewChannelToClaimKey(channelHash []byte, normalizedName string) *ChannelToC
 		Prefix:      []byte{ChannelToClaim},
 		SigningHash: channelHash,
 		Name:        normalizedName,
+	}
+}
+
+func NewChannelToClaimKeyWHash(channelHash []byte) *ChannelToClaimKey {
+	return &ChannelToClaimKey{
+		Prefix:      []byte{ChannelToClaim},
+		SigningHash: channelHash,
 	}
 }
 

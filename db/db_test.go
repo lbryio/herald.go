@@ -665,7 +665,7 @@ func TestGetClaimToTXO(t *testing.T) {
 		return
 	}
 	defer toDefer()
-	res, err := dbpkg.GetCachedClaimTxo(db, claimHash)
+	res, err := dbpkg.GetCachedClaimTxo(db, claimHash, true)
 	if err != nil {
 		t.Error(err)
 		return

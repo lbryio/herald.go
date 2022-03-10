@@ -47,7 +47,7 @@ func PrepareResolveResult(
 		return nil, err
 	}
 
-	claimToTxo, err := GetCachedClaimTxo(db, claimHash)
+	claimToTxo, err := GetCachedClaimTxo(db, claimHash, true)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func PrepareResolveResult(
 
 	if channelHash != nil {
 		// Ignore error because we already have this set if this doesn't work
-		channelVals, _ := GetCachedClaimTxo(db, channelHash)
+		channelVals, _ := GetCachedClaimTxo(db, channelHash, true)
 		log.Printf("channelVals: %#v\n", channelVals)
 		if channelVals != nil {
 			channelShortUrl, _ := GetShortClaimIdUrl(
@@ -153,7 +153,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			}
 
 			// Maybe don't use caching version, when I actually implement the cache
-			claimTxo, err := GetCachedClaimTxo(db, claimHash)
+			claimTxo, err := GetCachedClaimTxo(db, claimHash, true)
 			if err != nil {
 				return nil, err
 			}
@@ -197,7 +197,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			return nil, err
 		}
 
-		c, err := GetCachedClaimTxo(db, fullClaimHash.ClaimHash)
+		c, err := GetCachedClaimTxo(db, fullClaimHash.ClaimHash, true)
 		if err != nil {
 			return nil, err
 		}

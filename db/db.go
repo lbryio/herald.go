@@ -42,17 +42,19 @@ const (
 //
 
 type ReadOnlyDBColumnFamily struct {
-	DB               *grocksdb.DB
-	Handles          map[string]*grocksdb.ColumnFamilyHandle
-	Opts             *grocksdb.ReadOptions
-	TxCounts         *db_stack.SliceBackedStack
-	Height           uint32
-	LastState        *prefixes.DBStateValue
-	Headers          *db_stack.SliceBackedStack
-	BlockedStreams   map[string][]byte
-	BlockedChannels  map[string][]byte
-	FilteredStreams  map[string][]byte
-	FilteredChannels map[string][]byte
+	DB                     *grocksdb.DB
+	Handles                map[string]*grocksdb.ColumnFamilyHandle
+	Opts                   *grocksdb.ReadOptions
+	TxCounts               *db_stack.SliceBackedStack
+	Height                 uint32
+	LastState              *prefixes.DBStateValue
+	Headers                *db_stack.SliceBackedStack
+	BlockingChannelHashes  [][]byte
+	FilteringChannelHashes [][]byte
+	BlockedStreams         map[string][]byte
+	BlockedChannels        map[string][]byte
+	FilteredStreams        map[string][]byte
+	FilteredChannels       map[string][]byte
 }
 
 type ResolveResult struct {
@@ -555,6 +557,11 @@ func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*Re
 		return nil, err
 	}
 
+	err = GetBlocksAndFilters(myDB)
+	if err != nil {
+		return nil, err
+	}
+
 	return myDB, nil
 }
 
@@ -803,6 +810,41 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	// } else {
 	// 	log.Println("db.TxCounts.Len() == 0 ???")
 	// }
+
+	return nil
+}
+
+// RunGetBlocksAndFiltes Go routine that runs continuously while the hub is active
+// to keep the blocked and filtered channels and streams up to date.
+func RunGetBlocksAndFiltes(db *ReadOnlyDBColumnFamily) {
+	go func() {
+		for {
+			// FIXME: Figure out best sleep interval
+			err := GetBlocksAndFilters(db)
+			if err != nil {
+				log.Printf("Error getting blocked and filtered chanels: %#v\n", err)
+			}
+			time.Sleep(time.Second * 10)
+		}
+	}()
+}
+
+func GetBlocksAndFilters(db *ReadOnlyDBColumnFamily) error {
+	blockedChannels, blockedStreams, err := GetStreamsAndChannelRepostedByChannelHashes(db, db.BlockingChannelHashes)
+	if err != nil {
+		return err
+	}
+
+	db.BlockedChannels = blockedChannels
+	db.BlockedStreams = blockedStreams
+
+	filteredChannels, filteredStreams, err := GetStreamsAndChannelRepostedByChannelHashes(db, db.FilteringChannelHashes)
+	if err != nil {
+		return err
+	}
+
+	db.FilteredChannels = filteredChannels
+	db.FilteredStreams = filteredStreams
 
 	return nil
 }

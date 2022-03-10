@@ -224,6 +224,9 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	if !args.DisableResolve && !args.DisableRocksDBRefresh {
 		db.RunDetectChanges(myDB)
 	}
+	if !args.DisableBlockingAndFiltering {
+		db.RunGetBlocksAndFiltes(myDB)
+	}
 	if !args.DisableStartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}
@@ -403,6 +406,7 @@ func ResolveResultToOutput(res *db.ResolveResult) *pb.Output {
 }
 
 func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*pb.Output, []*pb.Output, error) {
+	// FIXME: Set references in extraTxos properly
 	// FIXME: figure out the handling of rows and extra properly
 	// FIXME: want to return empty list or nil when extraTxos is empty?
 	txos := make([]*pb.Output, 0)
@@ -476,19 +480,27 @@ func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*pb.Output,
 	return nil, nil, nil
 }
 
-func (s *Server) Resolve(ctx context.Context, args *pb.StringValue) (*pb.Outputs, error) {
+func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs, error) {
 	metrics.RequestsCount.With(prometheus.Labels{"method": "resolve"}).Inc()
 
-	res := db.Resolve(s.DB, args.Value)
-	txos, extraTxos, err := ExpandedResolveResultToOutput(res)
-	if err != nil {
-		return nil, err
+	allTxos := make([]*pb.Output, 0)
+	allExtraTxos := make([]*pb.Output, 0)
+
+	for _, url := range args.Value {
+		res := db.Resolve(s.DB, url)
+		txos, extraTxos, err := ExpandedResolveResultToOutput(res)
+		if err != nil {
+			return nil, err
+		}
+		// FIXME: there may be a more efficient way to do this.
+		allTxos = append(allTxos, txos...)
+		allExtraTxos = append(allExtraTxos, extraTxos...)
 	}
 
 	return &pb.Outputs{
-		Txos:         txos,
-		ExtraTxos:    extraTxos,
-		Total:        uint32(len(txos) + len(extraTxos)),
+		Txos:         allTxos,
+		ExtraTxos:    allExtraTxos,
+		Total:        uint32(len(allTxos) + len(allExtraTxos)),
 		Offset:       0,   //TODO
 		Blocked:      nil, //TODO
 		BlockedTotal: 0,   //TODO

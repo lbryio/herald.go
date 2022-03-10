@@ -53,6 +53,74 @@ func GetHeader(db *ReadOnlyDBColumnFamily, height uint32) ([]byte, error) {
 	return rawValue, nil
 }
 
+/*
+   async def reload_blocking_filtering_streams(self):
+       def reload():
+           self.blocked_streams, self.blocked_channels = self.get_streams_and_channels_reposted_by_channel_hashes(
+               self.blocking_channel_hashes
+           )
+           self.filtered_streams, self.filtered_channels = self.get_streams_and_channels_reposted_by_channel_hashes(
+               self.filtering_channel_hashes
+           )
+       await asyncio.get_event_loop().run_in_executor(self._executor, reload)
+
+   def get_streams_and_channels_reposted_by_channel_hashes(self, reposter_channel_hashes: Set[bytes]):
+       streams, channels = {}, {}
+       for reposter_channel_hash in reposter_channel_hashes:
+           for stream in self.prefix_db.channel_to_claim.iterate((reposter_channel_hash, ), include_key=False):
+               repost = self.get_repost(stream.claim_hash)
+               if repost:
+                   txo = self.get_claim_txo(repost)
+                   if txo:
+                       if txo.normalized_name.startswith('@'):
+                           channels[repost] = reposter_channel_hash
+                       else:
+                           streams[repost] = reposter_channel_hash
+       return streams, channels
+*/
+
+func GetStreamsAndChannelRepostedByChannelHashes(db *ReadOnlyDBColumnFamily, reposterChannelHashes [][]byte) (map[string][]byte, map[string][]byte, error) {
+	handle, err := EnsureHandle(db, prefixes.ChannelToClaim)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	streams := make(map[string][]byte)
+	channels := make(map[string][]byte)
+
+	for _, reposterChannelHash := range reposterChannelHashes {
+		key := prefixes.NewChannelToClaimKeyWHash(reposterChannelHash)
+		rawKeyPrefix := prefixes.ChannelToClaimKeyPackPartial(key, 1)
+		options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+		options = options.WithIncludeKey(false).WithIncludeValue(true)
+		ch := IterCF(db.DB, options)
+		// for stream := range Iterate(db.DB, prefixes.ChannelToClaim, []byte{reposterChannelHash}, false) {
+		for stream := range ch {
+			value := stream.Value.(*prefixes.ChannelToClaimValue)
+			repost, err := GetRepost(db, value.ClaimHash)
+			if err != nil {
+				return nil, nil, err
+			}
+			if repost != nil {
+				txo, err := GetClaimTxo(db, repost)
+				if err != nil {
+					return nil, nil, err
+				}
+				if txo != nil {
+					repostStr := hex.EncodeToString(repost)
+					if normalName := txo.NormalizedName(); len(normalName) > 0 && normalName[0] == '@' {
+						channels[repostStr] = reposterChannelHash
+					} else {
+						streams[repostStr] = reposterChannelHash
+					}
+				}
+			}
+		}
+	}
+
+	return streams, channels, nil
+}
+
 func GetClaimsInChannelCount(db *ReadOnlyDBColumnFamily, channelHash []byte) (uint32, error) {
 	handle, err := EnsureHandle(db, prefixes.ChannelCount)
 	if err != nil {
@@ -306,7 +374,11 @@ func GetActivationFull(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint1
 	return value.Height, nil
 }
 
-func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte) (*prefixes.ClaimToTXOValue, error) {
+func GetClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte) (*prefixes.ClaimToTXOValue, error) {
+	return GetCachedClaimTxo(db, claim, false)
+}
+
+func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte, useCache bool) (*prefixes.ClaimToTXOValue, error) {
 	// TODO: implement cache
 	handle, err := EnsureHandle(db, prefixes.ClaimToTXO)
 	if err != nil {
@@ -352,7 +424,7 @@ func GetControllingClaim(db *ReadOnlyDBColumnFamily, name string) (*prefixes.Cla
 }
 
 func FsGetClaimByHash(db *ReadOnlyDBColumnFamily, claimHash []byte) (*ResolveResult, error) {
-	claim, err := GetCachedClaimTxo(db, claimHash)
+	claim, err := GetCachedClaimTxo(db, claimHash, true)
 	if err != nil {
 		return nil, err
 	}

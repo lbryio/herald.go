@@ -19,48 +19,50 @@ const (
 
 // Args struct contains the arguments to the hub server.
 type Args struct {
-	CmdType                int
-	Host                   string
-	Port                   string
-	DBPath                 string
-	EsHost                 string
-	EsPort                 string
-	PrometheusPort         string
-	EsIndex                string
-	RefreshDelta           int
-	CacheTTL               int
-	PeerFile               string
-	Country                string
-	DisableEs              bool
-	Debug                  bool
-	DisableLoadPeers       bool
-	DisableStartPrometheus bool
-	DisableStartUDP        bool
-	DisableWritePeers      bool
-	DisableFederation      bool
-	DisableRocksDBRefresh  bool
-	DisableResolve         bool
+	CmdType                     int
+	Host                        string
+	Port                        string
+	DBPath                      string
+	EsHost                      string
+	EsPort                      string
+	PrometheusPort              string
+	EsIndex                     string
+	RefreshDelta                int
+	CacheTTL                    int
+	PeerFile                    string
+	Country                     string
+	DisableEs                   bool
+	Debug                       bool
+	DisableLoadPeers            bool
+	DisableStartPrometheus      bool
+	DisableStartUDP             bool
+	DisableWritePeers           bool
+	DisableFederation           bool
+	DisableRocksDBRefresh       bool
+	DisableResolve              bool
+	DisableBlockingAndFiltering bool
 }
 
 const (
-	DefaultHost                   = "0.0.0.0"
-	DefaultPort                   = "50051"
-	DefaultDBPath                 = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
-	DefaultEsHost                 = "http://localhost"
-	DefaultEsIndex                = "claims"
-	DefaultEsPort                 = "9200"
-	DefaultPrometheusPort         = "2112"
-	DefaultRefreshDelta           = 5
-	DefaultCacheTTL               = 5
-	DefaultPeerFile               = "peers.txt"
-	DefaultCountry                = "US"
-	DefaultDisableLoadPeers       = false
-	DefaultDisableStartPrometheus = false
-	DefaultDisableStartUDP        = false
-	DefaultDisableWritePeers      = false
-	DefaultDisableFederation      = false
-	DefaultDisableRockDBRefresh   = false
-	DefaultDisableResolve         = false
+	DefaultHost                        = "0.0.0.0"
+	DefaultPort                        = "50051"
+	DefaultDBPath                      = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
+	DefaultEsHost                      = "http://localhost"
+	DefaultEsIndex                     = "claims"
+	DefaultEsPort                      = "9200"
+	DefaultPrometheusPort              = "2112"
+	DefaultRefreshDelta                = 5
+	DefaultCacheTTL                    = 5
+	DefaultPeerFile                    = "peers.txt"
+	DefaultCountry                     = "US"
+	DefaultDisableLoadPeers            = false
+	DefaultDisableStartPrometheus      = false
+	DefaultDisableStartUDP             = false
+	DefaultDisableWritePeers           = false
+	DefaultDisableFederation           = false
+	DefaultDisableRockDBRefresh        = false
+	DefaultDisableResolve              = false
+	DefaultDisableBlockingAndFiltering = false
 )
 
 // GetEnvironment takes the environment variables as an array of strings
@@ -117,6 +119,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableFederation := parser.Flag("", "disable-federation", &argparse.Options{Required: false, Help: "Disable server federation", Default: DefaultDisableFederation})
 	disableRocksDBRefresh := parser.Flag("", "disable-rocksdb-refresh", &argparse.Options{Required: false, Help: "Disable rocksdb refreshing", Default: DefaultDisableRockDBRefresh})
 	disableResolve := parser.Flag("", "disable-resolve", &argparse.Options{Required: false, Help: "Disable resolve endpoint (and rocksdb loading)", Default: DefaultDisableRockDBRefresh})
+	disableBlockingAndFiltering := parser.Flag("", "disable-blocking-and-filtering", &argparse.Options{Required: false, Help: "Disable blocking and filtering of channels and streams", Default: DefaultDisableBlockingAndFiltering})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -135,27 +138,28 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	}
 
 	args := &Args{
-		CmdType:                SearchCmd,
-		Host:                   *host,
-		Port:                   *port,
-		DBPath:                 *dbPath,
-		EsHost:                 *esHost,
-		EsPort:                 *esPort,
-		PrometheusPort:         *prometheusPort,
-		EsIndex:                *esIndex,
-		RefreshDelta:           *refreshDelta,
-		CacheTTL:               *cacheTTL,
-		PeerFile:               *peerFile,
-		Country:                *country,
-		DisableEs:              *disableEs,
-		Debug:                  *debug,
-		DisableLoadPeers:       *disableLoadPeers,
-		DisableStartPrometheus: *disableStartPrometheus,
-		DisableStartUDP:        *disableStartUdp,
-		DisableWritePeers:      *disableWritePeers,
-		DisableFederation:      *disableFederation,
-		DisableRocksDBRefresh:  *disableRocksDBRefresh,
-		DisableResolve:         *disableResolve,
+		CmdType:                     SearchCmd,
+		Host:                        *host,
+		Port:                        *port,
+		DBPath:                      *dbPath,
+		EsHost:                      *esHost,
+		EsPort:                      *esPort,
+		PrometheusPort:              *prometheusPort,
+		EsIndex:                     *esIndex,
+		RefreshDelta:                *refreshDelta,
+		CacheTTL:                    *cacheTTL,
+		PeerFile:                    *peerFile,
+		Country:                     *country,
+		DisableEs:                   *disableEs,
+		Debug:                       *debug,
+		DisableLoadPeers:            *disableLoadPeers,
+		DisableStartPrometheus:      *disableStartPrometheus,
+		DisableStartUDP:             *disableStartUdp,
+		DisableWritePeers:           *disableWritePeers,
+		DisableFederation:           *disableFederation,
+		DisableRocksDBRefresh:       *disableRocksDBRefresh,
+		DisableResolve:              *disableResolve,
+		DisableBlockingAndFiltering: *disableBlockingAndFiltering,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {

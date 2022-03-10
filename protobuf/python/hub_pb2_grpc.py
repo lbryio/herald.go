@@ -57,7 +57,7 @@ class HubStub(object):
                 )
         self.Resolve = channel.unary_unary(
                 '/pb.Hub/Resolve',
-                request_serializer=hub__pb2.StringValue.SerializeToString,
+                request_serializer=hub__pb2.StringArray.SerializeToString,
                 response_deserializer=result__pb2.Outputs.FromString,
                 )
 
@@ -164,7 +164,7 @@ def add_HubServicer_to_server(servicer, server):
             ),
             'Resolve': grpc.unary_unary_rpc_method_handler(
                     servicer.Resolve,
-                    request_deserializer=hub__pb2.StringValue.FromString,
+                    request_deserializer=hub__pb2.StringArray.FromString,
                     response_serializer=result__pb2.Outputs.SerializeToString,
             ),
     }
@@ -325,7 +325,7 @@ class Hub(object):
             timeout=None,
             metadata=None):
         return grpc.experimental.unary_unary(request, target, '/pb.Hub/Resolve',
-            hub__pb2.StringValue.SerializeToString,
+            hub__pb2.StringArray.SerializeToString,
             result__pb2.Outputs.FromString,
             options, channel_credentials,
             insecure, call_credentials, compression, wait_for_ready, timeout, metadata)
