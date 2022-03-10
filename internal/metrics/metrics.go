@@ -30,4 +30,12 @@ var (
 		Name: "peers_subbed",
 		Help: "Number of peers that are subscribed to us.",
 	})
+	BlockCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "block_count",
+		Help: "Number of blocks we have processed.",
+	})
+	ReorgCount = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "reorg_count",
+		Help: "Number of blockchain reorgs we have done.",
+	})
 )

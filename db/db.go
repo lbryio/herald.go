@@ -11,6 +11,7 @@ import (
 
 	"github.com/lbryio/hub/db/db_stack"
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/hub/internal/metrics"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/linxGnu/grocksdb"
 
@@ -646,8 +647,7 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 		}
 	}
 	if rewound {
-		//TODO: reorg count metric
-		log.Warn("implement reorg count metric")
+		metrics.ReorgCount.Inc()
 	}
 
 	err = ReadDBState(db)
@@ -662,9 +662,9 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 		}
 		//TODO: ClearCache
 		log.Warn("implement cache clearing")
+
 		db.LastState = state
-		//TODO: block count metric
-		log.Warn("implement block count metric")
+		metrics.BlockCount.Inc()
 
 		//TODO: update blocked streams
 		//TODO: update filtered streams
@@ -674,32 +674,12 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 
 	return nil
 	/*
-	   if self.last_state:
-	       while True:
-	           if self.db.headers[-1] == self.db.prefix_db.header.get(last_height, deserialize_value=False):
-	               self.log.debug("connects to block %i", last_height)
-	               break
-	           else:
-	               self.log.warning("disconnect block %i", last_height)
-	               self.unwind()
-	               rewound = True
-	               last_height -= 1
-	   if rewound:
-	       self.reorg_count_metric.inc()
-	   self.db.read_db_state()
-	   if not self.last_state or last_height < state.height:
-	       for height in range(last_height + 1, state.height + 1):
-	           self.log.info("advancing to %i", height)
-	           self.advance(height)
-	       self.clear_caches()
-	       self.last_state = state
-	       self.block_count_metric.set(self.last_state.height)
-	       self.db.blocked_streams, self.db.blocked_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
-	           self.db.blocking_channel_hashes
-	       )
-	       self.db.filtered_streams, self.db.filtered_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
-	           self.db.filtering_channel_hashes
-	       )
+	   self.db.blocked_streams, self.db.blocked_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
+	       self.db.blocking_channel_hashes
+	   )
+	   self.db.filtered_streams, self.db.filtered_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
+	       self.db.filtering_channel_hashes
+	   )
 	*/
 }
 
