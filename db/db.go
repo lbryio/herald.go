@@ -55,6 +55,9 @@ type ReadOnlyDBColumnFamily struct {
 	BlockedChannels        map[string][]byte
 	FilteredStreams        map[string][]byte
 	FilteredChannels       map[string][]byte
+	ShutdownChan           chan struct{}
+	DoneChan               chan struct{}
+	Cleanup                func()
 }
 
 type ResolveResult struct {
@@ -80,10 +83,17 @@ type ResolveResult struct {
 	ChannelHash        []byte
 	RepostedClaimHash  []byte
 	SignatureValid     bool
+	RepostTxHash       []byte
+	RepostTxPostition  uint16
+	RepostHeight       uint32
+	ChannelTxHash      []byte
+	ChannelTxPostition uint16
+	ChannelHeight      uint32
 }
 
 type ResolveError struct {
-	Error error
+	Error     error
+	ErrorType uint8
 }
 
 type OptionalResolveResultOrError interface {
@@ -496,6 +506,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 			log.Println(err)
 		}
 	}
+	db.Cleanup = cleanup
 
 	if err != nil {
 		return nil, cleanup, err
@@ -540,6 +551,8 @@ func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*Re
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
+		ShutdownChan:     make(chan struct{}),
+		DoneChan:         make(chan struct{}),
 	}
 
 	err = ReadDBState(myDB) //TODO: Figure out right place for this
@@ -599,6 +612,12 @@ func Unwind(db *ReadOnlyDBColumnFamily) {
 	db.Headers.Pop()
 }
 
+func Shutdown(db *ReadOnlyDBColumnFamily) {
+	db.ShutdownChan <- struct{}{}
+	<-db.DoneChan
+	db.Cleanup()
+}
+
 // RunDetectChanges Go routine the runs continuously while the hub is active
 // to keep the db readonly view up to date and handle reorgs on the
 // blockchain.
@@ -610,7 +629,12 @@ func RunDetectChanges(db *ReadOnlyDBColumnFamily) {
 			if err != nil {
 				log.Printf("Error detecting changes: %#v\n", err)
 			}
-			time.Sleep(time.Second)
+			select {
+			case <-db.ShutdownChan:
+				db.DoneChan <- struct{}{}
+				return
+			case <-time.After(time.Millisecond * 10):
+			}
 		}
 	}()
 }

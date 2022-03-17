@@ -3129,6 +3129,13 @@ type EffectiveAmountValue struct {
 	ClaimHash []byte `json:"claim_hash"`
 }
 
+func NewEffectiveAmountKey(normalizedName string) *EffectiveAmountKey {
+	return &EffectiveAmountKey{
+		Prefix:         []byte{EffectiveAmount},
+		NormalizedName: normalizedName,
+	}
+}
+
 func (k *EffectiveAmountKey) PackKey() []byte {
 	prefixLen := 1
 	// 2 byte length field, plus number of bytes in name

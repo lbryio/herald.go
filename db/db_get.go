@@ -401,15 +401,35 @@ func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte, useCache bool) 
 	return value, nil
 }
 
+func ControllingClaimIter(db *ReadOnlyDBColumnFamily) <-chan *prefixes.PrefixRowKV {
+	handle, err := EnsureHandle(db, prefixes.ClaimTakeover)
+	if err != nil {
+		return nil
+	}
+
+	key := prefixes.NewClaimTakeoverKey("")
+	var rawKeyPrefix []byte = nil
+	rawKeyPrefix = prefixes.ClaimTakeoverKeyPackPartial(key, 0)
+	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
+	ch := IterCF(db.DB, options)
+	return ch
+}
+
 func GetControllingClaim(db *ReadOnlyDBColumnFamily, name string) (*prefixes.ClaimTakeoverValue, error) {
 	handle, err := EnsureHandle(db, prefixes.ClaimTakeover)
 	if err != nil {
 		return nil, err
 	}
 
+	log.Println(name)
 	key := prefixes.NewClaimTakeoverKey(name)
 	rawKey := key.PackKey()
+	log.Println(hex.EncodeToString(rawKey))
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	log.Printf("slice: %#v", slice)
+	log.Printf("err: %#v", err)
+
 	if err != nil {
 		return nil, err
 	}
@@ -489,6 +509,21 @@ func GetDBState(db *ReadOnlyDBColumnFamily) (*prefixes.DBStateValue, error) {
 	copy(rawValue, slice.Data())
 	value := prefixes.DBStateValueUnpack(rawValue)
 	return value, nil
+}
+
+func EffectiveAmountNameIter(db *ReadOnlyDBColumnFamily, normalizedName string) <-chan *prefixes.PrefixRowKV {
+	handle, err := EnsureHandle(db, prefixes.EffectiveAmount)
+	if err != nil {
+		return nil
+	}
+
+	key := prefixes.NewEffectiveAmountKey(normalizedName)
+	var rawKeyPrefix []byte = nil
+	rawKeyPrefix = prefixes.EffectiveAmountKeyPackPartial(key, 1)
+	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
+	ch := IterCF(db.DB, options)
+	return ch
 }
 
 func ClaimShortIdIter(db *ReadOnlyDBColumnFamily, normalizedName string, claimId string) <-chan *prefixes.PrefixRowKV {

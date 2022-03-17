@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/lbryio/hub/db/prefixes"
+	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
 	lbryurl "github.com/lbryio/lbry.go/v2/url"
 	log "github.com/sirupsen/logrus"
@@ -68,6 +69,25 @@ func PrepareResolveResult(
 		return nil, err
 	}
 
+	var repostTxHash []byte
+	var repostTxPostition uint16
+	var repostHeight uint32
+
+	if repostedClaimHash != nil {
+		repostTxo, err := GetCachedClaimTxo(db, repostedClaimHash, true)
+		if err != nil {
+			return nil, err
+		}
+		if repostTxo != nil {
+			repostTxHash, err = GetTxHash(db, repostTxo.TxNum)
+			if err != nil {
+				return nil, err
+			}
+			repostTxPostition = repostTxo.Position
+			repostHeight, _ = db.TxCounts.TxCountsBisectRight(repostTxo.TxNum, rootTxNum, BisectRight)
+		}
+	}
+
 	shortUrl, err := GetShortClaimIdUrl(db, name, normalizedName, claimHash, txNum, rootPosition)
 	if err != nil {
 		return nil, err
@@ -78,6 +98,10 @@ func PrepareResolveResult(
 	if err != nil {
 		return nil, err
 	}
+
+	var channelTxHash []byte
+	var channelTxPostition uint16
+	var channelHeight uint32
 
 	if channelHash != nil {
 		// Ignore error because we already have this set if this doesn't work
@@ -92,6 +116,12 @@ func PrepareResolveResult(
 				channelVals.RootPosition,
 			)
 			canonicalUrl = fmt.Sprintf("%s/%s", channelShortUrl, shortUrl)
+			channelTxHash, err = GetTxHash(db, channelVals.TxNum)
+			if err != nil {
+				return nil, err
+			}
+			channelTxPostition = channelVals.Position
+			channelHeight, _ = db.TxCounts.TxCountsBisectRight(channelVals.TxNum, rootTxNum, BisectRight)
 		}
 	}
 
@@ -125,13 +155,29 @@ func PrepareResolveResult(
 		ChannelHash:        channelHash,
 		RepostedClaimHash:  repostedClaimHash,
 		SignatureValid:     signatureValid,
+		RepostTxHash:       repostTxHash,
+		RepostTxPostition:  repostTxPostition,
+		RepostHeight:       repostHeight,
+		ChannelTxHash:      channelTxHash,
+		ChannelTxPostition: channelTxPostition,
+		ChannelHeight:      channelHeight,
 	}, nil
 }
 
 func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*ResolveResult, error) {
 	normalizedName := util.NormalizeName(parsed.name)
 	if (parsed.amountOrder == -1 && parsed.claimId == "") || parsed.amountOrder == 1 {
+		log.Warn("Resolving claim by name")
+		ch := ControllingClaimIter(db)
+		for kv := range ch {
+			key := kv.Key.(*prefixes.ClaimTakeoverKey)
+			val := kv.Value.(*prefixes.ClaimTakeoverValue)
+			log.Warnf("ClaimTakeoverKey: %#v", key)
+			log.Warnf("ClaimTakeoverValue: %#v", val)
+		}
 		controlling, err := GetControllingClaim(db, normalizedName)
+		log.Warnf("controlling: %#v", controlling)
+		log.Warnf("err: %#v", err)
 		if err != nil {
 			return nil, err
 		}
@@ -145,6 +191,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 
 	log.Println("amountOrder:", amountOrder)
 
+	// Resolve by claimId
 	if parsed.claimId != "" {
 		if len(parsed.claimId) == 40 {
 			claimHash, err := hex.DecodeString(parsed.claimId)
@@ -166,6 +213,8 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			if err != nil {
 				return nil, err
 			}
+
+			log.Warn("claimTxo.ChannelSignatureIsValid:", claimTxo.ChannelSignatureIsValid)
 
 			return PrepareResolveResult(
 				db,
@@ -189,6 +238,10 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 
 		ch := ClaimShortIdIter(db, normalizedName, parsed.claimId[:j])
 		row := <-ch
+		if row == nil {
+			return nil, nil
+		}
+
 		key := row.Key.(*prefixes.ClaimShortIDKey)
 		claimTxo := row.Value.(*prefixes.ClaimShortIDValue)
 
@@ -210,6 +263,8 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			return nil, err
 		}
 
+		log.Warn("signatureIsValid:", signatureIsValid)
+
 		return PrepareResolveResult(
 			db,
 			claimTxo.TxNum,
@@ -220,6 +275,51 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			key.RootPosition,
 			activation,
 			signatureIsValid,
+		)
+	}
+
+	// Resolve by amount ordering
+	/*
+	   for idx, (key, claim_val) in enumerate(self.prefix_db.effective_amount.iterate(prefix=(normalized_name,))):
+	       if amount_order > idx + 1:
+	           continue
+	       claim_txo = self.get_cached_claim_txo(claim_val.claim_hash)
+	       activation = self.get_activation(key.tx_num, key.position)
+	       return self._prepare_resolve_result(
+	           key.tx_num, key.position, claim_val.claim_hash, key.normalized_name, claim_txo.root_tx_num,
+	           claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
+	       )
+	*/
+	log.Warn("resolving by amount ordering")
+	ch := EffectiveAmountNameIter(db, normalizedName)
+	var i = 0
+	for kv := range ch {
+		if i+1 < amountOrder {
+			i++
+			continue
+		}
+		key := kv.Key.(*prefixes.EffectiveAmountKey)
+		claimVal := kv.Value.(*prefixes.EffectiveAmountValue)
+		claimTxo, err := GetCachedClaimTxo(db, claimVal.ClaimHash, true)
+		if err != nil {
+			return nil, err
+		}
+
+		activation, err := GetActivation(db, key.TxNum, key.Position)
+		if err != nil {
+			return nil, err
+		}
+
+		return PrepareResolveResult(
+			db,
+			key.TxNum,
+			key.Position,
+			claimVal.ClaimHash,
+			key.NormalizedName,
+			claimTxo.RootTxNum,
+			claimTxo.RootPosition,
+			activation,
+			claimTxo.ChannelSignatureIsValid,
 		)
 	}
 
@@ -283,17 +383,18 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 	var stream *PathSegment = nil
 	parsed, err := lbryurl.Parse(url, false)
 
-	log.Printf("parsed: %#v", parsed)
+	log.Warnf("parsed: %#v", parsed)
 
 	if err != nil {
+		log.Warn("lbryurl.Parse:", err)
 		res.Stream = &optionalResolveResultOrError{
-			err: &ResolveError{err},
+			err: &ResolveError{Error: err},
 		}
 		return res
 	}
 
 	// has stream in channel
-	if strings.Compare(parsed.StreamName, "") != 0 && strings.Compare(parsed.ClaimName, "") != 0 {
+	if strings.Compare(parsed.StreamName, "") != 0 && strings.Compare(parsed.ChannelName, "") != 0 {
 		channel = &PathSegment{
 			name:        parsed.ClaimName,
 			claimId:     parsed.ChannelClaimId,
@@ -304,7 +405,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			claimId:     parsed.StreamClaimId,
 			amountOrder: parsed.SecondaryBidPosition,
 		}
-	} else if strings.Compare(parsed.ClaimName, "") != 0 {
+	} else if parsed.IsChannelUrl() {
 		channel = &PathSegment{
 			name:        parsed.ClaimName,
 			claimId:     parsed.ChannelClaimId,
@@ -314,7 +415,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		stream = &PathSegment{
 			name:        parsed.StreamName,
 			claimId:     parsed.StreamClaimId,
-			amountOrder: parsed.SecondaryBidPosition,
+			amountOrder: parsed.PrimaryBidPosition,
 		}
 	}
 
@@ -327,21 +428,25 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		resolvedChannel, err = ResolveParsedUrl(db, channel)
 		if err != nil {
 			res.Channel = &optionalResolveResultOrError{
-				err: &ResolveError{err},
+				err: &ResolveError{Error: err},
 			}
 			return res
 		} else if resolvedChannel == nil {
 			res.Channel = &optionalResolveResultOrError{
-				err: &ResolveError{fmt.Errorf("could not find channel in \"%s\"", url)},
+				err: &ResolveError{
+					Error:     fmt.Errorf("Could not find claim at \"%s\".", url),
+					ErrorType: uint8(pb.Error_NOT_FOUND),
+				},
 			}
 			return res
 		}
 	}
-	log.Printf("resolvedChannel: %#v\n", resolvedChannel)
-	log.Printf("resolvedChannel.TxHash: %s\n", hex.EncodeToString(resolvedChannel.TxHash))
-	log.Printf("resolvedChannel.ClaimHash: %s\n", hex.EncodeToString(resolvedChannel.ClaimHash))
-	log.Printf("resolvedChannel.ChannelHash: %s\n", hex.EncodeToString(resolvedChannel.ChannelHash))
-	log.Printf("stream %#v\n", stream)
+	if resolvedChannel != nil {
+		log.Printf("resolvedChannel: %#v\n", resolvedChannel)
+		log.Printf("resolvedChannel.TxHash: %s\n", hex.EncodeToString(resolvedChannel.TxHash))
+		log.Printf("resolvedChannel.ClaimHash: %s\n", hex.EncodeToString(resolvedChannel.ClaimHash))
+		log.Printf("resolvedChannel.ChannelHash: %s\n", hex.EncodeToString(resolvedChannel.ChannelHash))
+	}
 	if stream != nil {
 		if resolvedChannel != nil {
 			streamClaim, err := ResolveClaimInChannel(db, resolvedChannel.ClaimHash, stream.Normalized())
@@ -353,7 +458,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			// TODO: Confirm error case
 			if err != nil {
 				res.Stream = &optionalResolveResultOrError{
-					err: &ResolveError{err},
+					err: &ResolveError{Error: err},
 				}
 				return res
 			}
@@ -363,7 +468,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				// TODO: Confirm error case
 				if err != nil {
 					res.Stream = &optionalResolveResultOrError{
-						err: &ResolveError{err},
+						err: &ResolveError{Error: err},
 					}
 					return res
 				}
@@ -373,7 +478,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			// TODO: Confirm error case
 			if err != nil {
 				res.Stream = &optionalResolveResultOrError{
-					err: &ResolveError{err},
+					err: &ResolveError{Error: err},
 				}
 				return res
 			}
@@ -382,7 +487,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				// TODO: Confirm error case
 				if err != nil {
 					res.Channel = &optionalResolveResultOrError{
-						err: &ResolveError{err},
+						err: &ResolveError{Error: err},
 					}
 					return res
 				}
@@ -390,7 +495,10 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		}
 		if resolvedStream == nil {
 			res.Stream = &optionalResolveResultOrError{
-				err: &ResolveError{fmt.Errorf("could not find stream in \"%s\"", url)},
+				err: &ResolveError{
+					Error:     fmt.Errorf("Could not find claim at \"%s\".", url),
+					ErrorType: uint8(pb.Error_NOT_FOUND),
+				},
 			}
 			return res
 		}
@@ -399,7 +507,9 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 	// Getting blockers and filters
 	var repost *ResolveResult = nil
 	var repostedChannel *ResolveResult = nil
-	log.Printf("about to get blockers and filters: %#v, %#v\n", resolvedChannel, resolvedStream)
+	if resolvedChannel != nil && resolvedStream != nil {
+		log.Printf("about to get blockers and filters: %#v, %#v\n", resolvedChannel, resolvedStream)
+	}
 
 	if resolvedStream != nil || resolvedChannel != nil {
 		var claim *ResolveResult = nil
@@ -418,7 +528,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		log.Printf("blockerHash: %s\n", hex.EncodeToString(blockerHash))
 		if err != nil {
 			res.Channel = &optionalResolveResultOrError{
-				err: &ResolveError{err},
+				err: &ResolveError{Error: err},
 			}
 			return res
 		}
@@ -426,12 +536,12 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			reasonRow, err := FsGetClaimByHash(db, blockerHash)
 			if err != nil {
 				res.Channel = &optionalResolveResultOrError{
-					err: &ResolveError{err},
+					err: &ResolveError{Error: err},
 				}
 				return res
 			}
 			res.Channel = &optionalResolveResultOrError{
-				err: &ResolveError{fmt.Errorf("%s, %v, %v", url, blockerHash, reasonRow)},
+				err: &ResolveError{Error: fmt.Errorf("%s, %v, %v", url, blockerHash, reasonRow)},
 			}
 			return res
 		}
@@ -439,7 +549,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			repost, err = FsGetClaimByHash(db, claim.RepostedClaimHash)
 			if err != nil {
 				res.Channel = &optionalResolveResultOrError{
-					err: &ResolveError{err},
+					err: &ResolveError{Error: err},
 				}
 				return res
 			}
@@ -447,7 +557,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				repostedChannel, err = FsGetClaimByHash(db, repost.ChannelHash)
 				if err != nil {
 					res.Channel = &optionalResolveResultOrError{
-						err: &ResolveError{err},
+						err: &ResolveError{Error: err},
 					}
 					return res
 				}
@@ -468,6 +578,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 		res: repostedChannel,
 	}
 
-	log.Printf("parsed: %#v\n", parsed)
+	log.Warnf("leaving Resolve, parsed: %#v\n", parsed)
+	log.Warnf("leaving Resolve, res: %s\n", res)
 	return res
 }

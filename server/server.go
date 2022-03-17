@@ -46,7 +46,6 @@ type Server struct {
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
 	ExternalIP       net.IP
-	DBCleanup        func()
 	pb.UnimplementedHubServer
 }
 
@@ -191,9 +190,14 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 
 	//TODO: is this the right place to load the db?
 	var myDB *db.ReadOnlyDBColumnFamily
-	var dbCleanup = func() {}
+	// var dbShutdown = func() {}
 	if !args.DisableResolve {
-		myDB, dbCleanup, err = db.GetProdDB(args.DBPath, "readonlytmp")
+		tmpName := fmt.Sprintf("/tmp/%d", time.Now().Nanosecond())
+		logrus.Warn("tmpName", tmpName)
+		myDB, _, err = db.GetProdDB(args.DBPath, tmpName)
+		// dbShutdown = func() {
+		// 	db.Shutdown(myDB)
+		// }
 		if err != nil {
 			// Can't load the db, fail loudly
 			log.Fatalln(err)
@@ -241,7 +245,6 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
-		DBCleanup:        dbCleanup,
 	}
 
 	// Start up our background services
@@ -404,13 +407,48 @@ func (s *Server) Version(ctx context.Context, args *pb.EmptyMessage) (*pb.String
            self.session_manager.resolved_url_count_metric.inc(len(sorted_urls))
 */
 
+// type OutputWType struct {
+// 	Output     *pb.Output
+// 	OutputType byte
+// }
+
+// const (
+// 	OutputChannelType = iota
+// 	OutputRepostType  = iota
+// 	OutputErrorType   = iota
+// )
+
 func ResolveResultToOutput(res *db.ResolveResult) *pb.Output {
+	// func ResolveResultToOutput(res *db.ResolveResult, outputType byte) *OutputWType {
+	// res.ClaimHash
+	var channelOutput *pb.Output
+	var repostOutput *pb.Output
+
+	if res.ChannelTxHash != nil {
+		channelOutput = &pb.Output{
+			TxHash: res.ChannelTxHash,
+			Nout:   uint32(res.ChannelTxPostition),
+			Height: res.ChannelHeight,
+		}
+	}
+
+	if res.RepostTxHash != nil {
+		repostOutput = &pb.Output{
+			TxHash: res.RepostTxHash,
+			Nout:   uint32(res.RepostTxPostition),
+			Height: res.RepostHeight,
+		}
+	}
+
 	claimMeta := &pb.ClaimMeta{
+		Channel:          channelOutput,
+		Repost:           repostOutput,
 		ShortUrl:         res.ShortUrl,
 		Reposted:         uint32(res.Reposted),
 		IsControlling:    res.IsControlling,
 		CreationHeight:   res.CreationHeight,
 		ExpirationHeight: res.ExpirationHeight,
+		ClaimsInChannel:  res.ClaimsInChannel,
 		EffectiveAmount:  res.EffectiveAmount,
 		SupportAmount:    res.SupportAmount,
 	}
@@ -426,34 +464,52 @@ func ResolveResultToOutput(res *db.ResolveResult) *pb.Output {
 		Meta:   claim,
 	}
 
+	// outputWType := &OutputWType{
+	// 	Output:     output,
+	// 	OutputType: outputType,
+	// }
+
 	return output
 }
 
 func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*pb.Output, []*pb.Output, error) {
+	// func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*OutputWType, []*OutputWType, error) {
 	// FIXME: Set references in extraTxos properly
 	// FIXME: figure out the handling of rows and extra properly
 	// FIXME: want to return empty list or nil when extraTxos is empty?
 	txos := make([]*pb.Output, 0)
 	extraTxos := make([]*pb.Output, 0)
+	// txos := make([]*OutputWType, 0)
+	// extraTxos := make([]*OutputWType, 0)
 	// Errors
 	if x := res.Channel.GetError(); x != nil {
+		logrus.Warn("Channel error: ", x)
 		outputErr := &pb.Output_Error{
 			Error: &pb.Error{
 				Text: x.Error.Error(),
-				Code: 0, //FIXME
+				Code: pb.Error_Code(x.ErrorType), //FIXME
 			},
 		}
+		// res := &OutputWType{
+		// 	Output:     &pb.Output{Meta: outputErr},
+		// 	OutputType: OutputErrorType,
+		// }
 		res := &pb.Output{Meta: outputErr}
 		txos = append(txos, res)
 		return txos, nil, nil
 	}
 	if x := res.Stream.GetError(); x != nil {
+		logrus.Warn("Stream error: ", x)
 		outputErr := &pb.Output_Error{
 			Error: &pb.Error{
 				Text: x.Error.Error(),
-				Code: 0, //FIXME
+				Code: pb.Error_Code(x.ErrorType), //FIXME
 			},
 		}
+		// res := &OutputWType{
+		// 	Output:     &pb.Output{Meta: outputErr},
+		// 	OutputType: OutputErrorType,
+		// }
 		res := &pb.Output{Meta: outputErr}
 		txos = append(txos, res)
 		return txos, nil, nil
@@ -483,10 +539,10 @@ func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*pb.Output,
 
 		return txos, extraTxos, nil
 	} else if stream != nil {
-		output := ResolveResultToOutput(channel)
+		output := ResolveResultToOutput(stream)
 		txos = append(txos, output)
 		if channel != nil {
-			output := ResolveResultToOutput(stream)
+			output := ResolveResultToOutput(channel)
 			extraTxos = append(extraTxos, output)
 		}
 		if repost != nil {
@@ -521,12 +577,25 @@ func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs
 		allExtraTxos = append(allExtraTxos, extraTxos...)
 	}
 
-	return &pb.Outputs{
+	// for _, row := range allExtraTxos {
+	// 	for _, txo := range allExtraTxos {
+	// 		if txo.TxHash == row.TxHash && txo.Nout == row.Nout {
+	// 			txo.Extra = row.Extra
+	// 			break
+	// 		}
+	// 	}
+	// }
+
+	res := &pb.Outputs{
 		Txos:         allTxos,
 		ExtraTxos:    allExtraTxos,
 		Total:        uint32(len(allTxos) + len(allExtraTxos)),
 		Offset:       0,   //TODO
 		Blocked:      nil, //TODO
 		BlockedTotal: 0,   //TODO
-	}, nil
+	}
+
+	logrus.Warn(res)
+
+	return res, nil
 }
