@@ -11,7 +11,7 @@ import (
 	"github.com/lbryio/hub/db/prefixes"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/lbry.go/v2/extras/util"
-	lbryurl "github.com/lbryio/lbry.go/v2/url"
+	lbryurl "github.com/lbryio/lbry.go/v3/url"
 	log "github.com/sirupsen/logrus"
 )
 
