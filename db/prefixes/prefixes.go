@@ -10,8 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lbryio/lbry.go/v2/extras/errors"
-	"github.com/lbryio/lbry.go/v2/extras/util"
+	"github.com/lbryio/hub/internal"
 )
 
 const (
@@ -1367,7 +1366,7 @@ func NewClaimToTXOKey(claimHash []byte) *ClaimToTXOKey {
 
 func (v *ClaimToTXOValue) NormalizedName() string {
 	//TODO implement? Might not need to do anything.
-	return util.NormalizeName(v.Name)
+	return internal.NormalizeName(v.Name)
 }
 
 func (k *ClaimToTXOKey) PackKey() []byte {
@@ -4084,29 +4083,29 @@ func generic(voidstar interface{}, firstByte byte, function byte, functionName s
 		return BlockTxsKeyPackPartialKey(voidstar.(*BlockTxsKey)), nil
 
 	}
-	return nil, errors.Base("%s function for %v not implemented", functionName, firstByte)
+	return nil, fmt.Errorf("%s function for %v not implemented", functionName, firstByte)
 }
 
 func UnpackGenericKey(key []byte) (interface{}, error) {
 	if len(key) == 0 {
-		return nil, errors.Base("key length zero")
+		return nil, fmt.Errorf("key length zero")
 	}
 	return generic(key, key[0], 0, "unpack key")
 }
 
 func UnpackGenericValue(key, value []byte) (interface{}, error) {
 	if len(key) == 0 {
-		return nil, errors.Base("key length zero")
+		return nil, fmt.Errorf("key length zero")
 	}
 	if len(value) == 0 {
-		return nil, errors.Base("value length zero")
+		return nil, fmt.Errorf("value length zero")
 	}
 	return generic(value, key[0], 1, "unpack value")
 }
 
 func PackPartialGenericKey(prefix byte, key interface{}, nFields int) ([]byte, error) {
 	if key == nil {
-		return nil, errors.Base("key length zero")
+		return nil, fmt.Errorf("key length zero")
 	}
 	genericRes, err := generic(key, prefix, 4, "pack partial key")
 	res := genericRes.(func(int) []byte)(nFields)
@@ -4115,7 +4114,7 @@ func PackPartialGenericKey(prefix byte, key interface{}, nFields int) ([]byte, e
 
 func PackGenericKey(prefix byte, key interface{}) ([]byte, error) {
 	if key == nil {
-		return nil, errors.Base("key length zero")
+		return nil, fmt.Errorf("key length zero")
 	}
 	genericRes, err := generic(key, prefix, 2, "pack key")
 	return genericRes.([]byte), err
@@ -4123,7 +4122,7 @@ func PackGenericKey(prefix byte, key interface{}) ([]byte, error) {
 
 func PackGenericValue(prefix byte, value interface{}) ([]byte, error) {
 	if value == nil {
-		return nil, errors.Base("value length zero")
+		return nil, fmt.Errorf("value length zero")
 	}
 	genericRes, err := generic(value, prefix, 3, "pack value")
 	return genericRes.([]byte), err

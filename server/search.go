@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lbryio/hub/internal"
 	"github.com/lbryio/hub/internal/metrics"
 	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/text/cases"
@@ -475,7 +475,7 @@ func (s *Server) checkQuery(in *pb.SearchRequest) error {
 	}
 	for name, failed := range checks {
 		if failed {
-			time.Sleep(2) // throttle
+			time.Sleep(time.Second * 2) // throttle
 			return fmt.Errorf("%s cant have more than %d items.", name, limit)
 		}
 	}
@@ -555,7 +555,7 @@ func (s *Server) setupEsQuery(
 	}
 
 	if len(in.ClaimName) > 0 {
-		in.NormalizedName = util.NormalizeName(in.ClaimName)
+		in.NormalizedName = internal.NormalizeName(in.ClaimName)
 	}
 
 	if len(in.OrderBy) > 0 {
@@ -872,7 +872,7 @@ func searchAhead(searchHits []*record, pageSize int, perChannelPerPage int) []*r
 // struct.
 func (r *record) recordToOutput() *pb.Output {
 	return &pb.Output{
-		TxHash: util.TxIdToTxHash(r.Txid),
+		TxHash: internal.TxIdToTxHash(r.Txid),
 		Nout:   r.Nout,
 		Height: r.Height,
 		Meta: &pb.Output_Claim{

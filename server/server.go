@@ -363,60 +363,14 @@ func (s *Server) Version(ctx context.Context, args *pb.EmptyMessage) (*pb.String
 	return &pb.StringValue{Value: getVersion()}, nil
 }
 
-/*
-   async def claimtrie_resolve(self, *urls) -> str:
-       sorted_urls = tuple(sorted(urls))
-       self.session_manager.urls_to_resolve_count_metric.inc(len(sorted_urls))
-       try:
-           if sorted_urls in self.session_manager.resolve_outputs_cache:
-               return self.session_manager.resolve_outputs_cache[sorted_urls]
-           rows, extra = [], []
-           for url in urls:
-               if url not in self.session_manager.resolve_cache:
-                   self.session_manager.resolve_cache[url] = await self._cached_resolve_url(url)
-               stream, channel, repost, reposted_channel = self.session_manager.resolve_cache[url]
-               if isinstance(channel, ResolveCensoredError):
-                   rows.append(channel)
-                   extra.append(channel.censor_row)
-               elif isinstance(stream, ResolveCensoredError):
-                   rows.append(stream)
-                   extra.append(stream.censor_row)
-               elif channel and not stream:
-                   rows.append(channel)
-                   # print("resolved channel", channel.name.decode())
-                   if repost:
-                       extra.append(repost)
-                   if reposted_channel:
-                       extra.append(reposted_channel)
-               elif stream:
-                   # print("resolved stream", stream.name.decode())
-                   rows.append(stream)
-                   if channel:
-                       # print("and channel", channel.name.decode())
-                       extra.append(channel)
-                   if repost:
-                       extra.append(repost)
-                   if reposted_channel:
-                       extra.append(reposted_channel)
-               await asyncio.sleep(0)
-           self.session_manager.resolve_outputs_cache[sorted_urls] = result = await self.loop.run_in_executor(
-               None, Outputs.to_base64, rows, extra, 0, None, None
-           )
-           return result
-       finally:
-           self.session_manager.resolved_url_count_metric.inc(len(sorted_urls))
-*/
-
-// type OutputWType struct {
-// 	Output     *pb.Output
-// 	OutputType byte
-// }
-
-// const (
-// 	OutputChannelType = iota
-// 	OutputRepostType  = iota
-// 	OutputErrorType   = iota
-// )
+func (s *Server) Height(ctx context.Context, args *pb.EmptyMessage) (*pb.UInt32Value, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "height"}).Inc()
+	if s.DB != nil {
+		return &pb.UInt32Value{Value: s.DB.LastState.Height}, nil
+	} else {
+		return &pb.UInt32Value{Value: 0}, nil
+	}
+}
 
 func ResolveResultToOutput(res *db.ResolveResult) *pb.Output {
 	// func ResolveResultToOutput(res *db.ResolveResult, outputType byte) *OutputWType {

@@ -10,8 +10,8 @@ import (
 
 	"github.com/lbryio/hub/db/db_stack"
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/hub/internal"
 	"github.com/lbryio/hub/internal/metrics"
-	"github.com/lbryio/lbry.go/v2/extras/util"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"
@@ -248,7 +248,7 @@ type PathSegment struct {
 }
 
 func (ps *PathSegment) Normalized() string {
-	return util.NormalizeName(ps.name)
+	return internal.NormalizeName(ps.name)
 }
 
 func (ps *PathSegment) IsShortId() bool {

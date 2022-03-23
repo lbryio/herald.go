@@ -11,7 +11,7 @@ import (
 
 	dbpkg "github.com/lbryio/hub/db"
 	"github.com/lbryio/hub/db/prefixes"
-	"github.com/lbryio/lbry.go/v2/extras/util"
+	"github.com/lbryio/hub/internal"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -429,7 +429,7 @@ func TestPrintClaimShortId(t *testing.T) {
 // TestGetShortClaimIdUrl tests resolving a claim to a short url.
 func TestGetShortClaimIdUrl(t *testing.T) {
 	name := "@Styxhexenhammer666"
-	normalName := util.NormalizeName(name)
+	normalName := internal.NormalizeName(name)
 	claimHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
 	// claimHash := []byte{}
 	var rootTxNum uint32 = 0x61ec7c
@@ -685,7 +685,7 @@ func TestPrintClaimTakeover(t *testing.T) {
 // TestGetControlingClaim Tests getting a controlling claim value from the db
 // based on a name.
 func TestGetControllingClaim(t *testing.T) {
-	claimName := util.NormalizeName("@Styxhexenhammer666")
+	claimName := internal.NormalizeName("@Styxhexenhammer666")
 	claimHash := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
 	filePath := "../testdata/P_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)

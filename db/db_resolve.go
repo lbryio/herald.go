@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/hub/internal"
 	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/lbryio/lbry.go/v2/extras/util"
 	lbryurl "github.com/lbryio/lbry.go/v3/url"
 	log "github.com/sirupsen/logrus"
 )
@@ -27,7 +27,7 @@ func PrepareResolveResult(
 	activationHeight uint32,
 	signatureValid bool) (*ResolveResult, error) {
 
-	normalizedName := util.NormalizeName(name)
+	normalizedName := internal.NormalizeName(name)
 	controllingClaim, err := GetControllingClaim(db, normalizedName)
 	if err != nil {
 		return nil, err
@@ -165,7 +165,7 @@ func PrepareResolveResult(
 }
 
 func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*ResolveResult, error) {
-	normalizedName := util.NormalizeName(parsed.name)
+	normalizedName := internal.NormalizeName(parsed.name)
 	if (parsed.amountOrder == -1 && parsed.claimId == "") || parsed.amountOrder == 1 {
 		log.Warn("Resolving claim by name")
 		ch := ControllingClaimIter(db)

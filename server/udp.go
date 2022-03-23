@@ -2,13 +2,13 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/lbryio/lbry.go/v2/extras/errors"
 )
 
 const maxBufferSize = 1024
@@ -210,7 +210,7 @@ func UDPPing(ip, port string) (*SPVPong, error) {
 	pong := decodeSPVPong(buffer[:n])
 
 	if pong == nil {
-		return nil, errors.Base("Pong decoding failed")
+		return nil, fmt.Errorf("Pong decoding failed")
 	}
 
 	return pong, nil

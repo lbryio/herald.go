@@ -26,6 +26,7 @@ type HubClient interface {
 	Version(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
 	Features(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*StringValue, error)
 	Broadcast(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*UInt32Value, error)
+	Height(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*UInt32Value, error)
 	Resolve(ctx context.Context, in *StringArray, opts ...grpc.CallOption) (*Outputs, error)
 }
 
@@ -109,6 +110,15 @@ func (c *hubClient) Broadcast(ctx context.Context, in *EmptyMessage, opts ...grp
 	return out, nil
 }
 
+func (c *hubClient) Height(ctx context.Context, in *EmptyMessage, opts ...grpc.CallOption) (*UInt32Value, error) {
+	out := new(UInt32Value)
+	err := c.cc.Invoke(ctx, "/pb.Hub/Height", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *hubClient) Resolve(ctx context.Context, in *StringArray, opts ...grpc.CallOption) (*Outputs, error) {
 	out := new(Outputs)
 	err := c.cc.Invoke(ctx, "/pb.Hub/Resolve", in, out, opts...)
@@ -130,6 +140,7 @@ type HubServer interface {
 	Version(context.Context, *EmptyMessage) (*StringValue, error)
 	Features(context.Context, *EmptyMessage) (*StringValue, error)
 	Broadcast(context.Context, *EmptyMessage) (*UInt32Value, error)
+	Height(context.Context, *EmptyMessage) (*UInt32Value, error)
 	Resolve(context.Context, *StringArray) (*Outputs, error)
 	mustEmbedUnimplementedHubServer()
 }
@@ -161,6 +172,9 @@ func (UnimplementedHubServer) Features(context.Context, *EmptyMessage) (*StringV
 }
 func (UnimplementedHubServer) Broadcast(context.Context, *EmptyMessage) (*UInt32Value, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Broadcast not implemented")
+}
+func (UnimplementedHubServer) Height(context.Context, *EmptyMessage) (*UInt32Value, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Height not implemented")
 }
 func (UnimplementedHubServer) Resolve(context.Context, *StringArray) (*Outputs, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Resolve not implemented")
@@ -322,6 +336,24 @@ func _Hub_Broadcast_Handler(srv interface{}, ctx context.Context, dec func(inter
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Hub_Height_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(EmptyMessage)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(HubServer).Height(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/pb.Hub/Height",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(HubServer).Height(ctx, req.(*EmptyMessage))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Hub_Resolve_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StringArray)
 	if err := dec(in); err != nil {
@@ -378,6 +410,10 @@ var Hub_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Broadcast",
 			Handler:    _Hub_Broadcast_Handler,
+		},
+		{
+			MethodName: "Height",
+			Handler:    _Hub_Height_Handler,
 		},
 		{
 			MethodName: "Resolve",
