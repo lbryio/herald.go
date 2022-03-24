@@ -59,6 +59,14 @@ pip install grpcio grpcio-tools github3.py
 
 Lastly the hub needs protobuf version 3.17.1, it may work with newer version but this is what it's built with, on ubuntu systems you'll have to install this from source see the GitHub actions in `.github/workflows` for an example of this.
 
+Install rocksdb and setup your CGO flags, on ubuntu
+
+```
+sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev libzstd-dev liblz4-dev
+export CGO_CFLAGS="-I/path/to/rocksdb/include"
+export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd -lbz2"
+```
+
 ```
 https://github.com/protocolbuffers/protobuf/releases/download/v3.17.1/protobuf-all-3.17.1.tar.gz
 ```

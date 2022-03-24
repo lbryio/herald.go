@@ -9,6 +9,7 @@ import (
 
 	"github.com/lbryio/hub/db"
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/hub/internal"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"
@@ -112,7 +113,7 @@ func main() {
 	} else if args.CmdType == server.DBCmd3 {
 		// streamHash, _ := hex.DecodeString("9a0ed686ecdad9b6cb965c4d6681c02f0bbc66a6")
 		channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
-		name := util.NormalizeName("@Styxhexenhammer666")
+		name := internal.NormalizeName("@Styxhexenhammer666")
 		// txNum := uint32(0x6284e3)
 		// position := uint16(0x0)
 		// For stream claim

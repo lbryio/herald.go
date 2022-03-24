@@ -1,5 +1,12 @@
 package prefixes
 
+// The prefixes package contains the key/value structures for the rocksdb prefix
+// store and related functions.
+// Each key/value prefix pair has a pack and unpack function for serializing / deserializing
+// it into bytes for storage in rocksdb. They also have a pack partial function which allows
+// for serialization of a set number of fields, this is used i.e. for keys with a hash, tx_num
+// and height where there multiple be multiple with the same hash but different tx_num and height.
+
 import (
 	"bytes"
 	"encoding/binary"
@@ -59,6 +66,7 @@ const (
 	OnesCompTwiddle32 uint32 = 0xffffffff
 )
 
+// GetPrefixes returns an array of all the byte prefix constants.
 func GetPrefixes() [][]byte {
 	return [][]byte{
 		{ClaimToSupport},
@@ -94,6 +102,7 @@ func GetPrefixes() [][]byte {
 	}
 }
 
+// PrefixRowKV is a generic key/value pair for a prefix.
 type PrefixRowKV struct {
 	Key   interface{}
 	Value interface{}
@@ -459,19 +468,6 @@ func HashXUTXOValueUnpack(value []byte) *HashXUTXOValue {
 	}
 }
 
-/*
-class HashXHistoryKey(NamedTuple):
-    hashX: bytes
-    height: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(hashX={self.hashX.hex()}, height={self.height})"
-
-
-class HashXHistoryValue(NamedTuple):
-    hashXes: typing.List[int]
-*/
-
 type HashXHistoryKey struct {
 	Prefix []byte `json:"prefix"`
 	HashX  []byte `json:"hashx"`
@@ -586,18 +582,6 @@ func HashXHistoryValueUnpack(value []byte) *HashXHistoryValue {
 	}
 }
 
-/*
-class BlockHashKey(NamedTuple):
-    height: int
-
-
-class BlockHashValue(NamedTuple):
-    block_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(block_hash={self.block_hash.hex()})"
-*/
-
 type BlockHashKey struct {
 	Prefix []byte `json:"prefix"`
 	Height uint32 `json:"height"`
@@ -688,15 +672,6 @@ func BlockHashValueUnpack(value []byte) *BlockHashValue {
 		BlockHash: value[:32],
 	}
 }
-
-/*
-class BlockTxsKey(NamedTuple):
-    height: int
-
-
-class BlockTxsValue(NamedTuple):
-    tx_hashes: typing.List[bytes]
-*/
 
 type BlockTxsKey struct {
 	Prefix []byte `json:"prefix"`
@@ -798,15 +773,6 @@ func BlockTxsValueUnpack(value []byte) *BlockTxsValue {
 	}
 }
 
-/*
-class TxCountKey(NamedTuple):
-    height: int
-
-
-class TxCountValue(NamedTuple):
-    tx_count: int
-*/
-
 type TxCountKey struct {
 	Prefix []byte `json:"prefix"`
 	Height uint32 `json:"height"`
@@ -899,18 +865,6 @@ func TxCountValueUnpack(value []byte) *TxCountValue {
 		TxCount: binary.BigEndian.Uint32(value),
 	}
 }
-
-/*
-class TxHashKey(NamedTuple):
-    tx_num: int
-
-
-class TxHashValue(NamedTuple):
-    tx_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
-*/
 
 type TxHashKey struct {
 	Prefix []byte `json:"prefix"`
@@ -1006,18 +960,6 @@ func TxHashValueUnpack(value []byte) *TxHashValue {
 	}
 }
 
-/*
-class TxNumKey(NamedTuple):
-    tx_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
-
-
-class TxNumValue(NamedTuple):
-    tx_num: int
-*/
-
 type TxNumKey struct {
 	Prefix []byte `json:"prefix"`
 	TxHash []byte `json:"tx_hash"`
@@ -1104,21 +1046,6 @@ func TxNumValueUnpack(value []byte) *TxNumValue {
 	}
 }
 
-/*
-class TxKey(NamedTuple):
-    tx_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(tx_hash={self.tx_hash.hex()})"
-
-
-class TxValue(NamedTuple):
-    raw_tx: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(raw_tx={base64.b64encode(self.raw_tx)})"
-*/
-
 type TxKey struct {
 	Prefix []byte `json:"prefix"`
 	TxHash []byte `json:"tx_hash"`
@@ -1204,18 +1131,6 @@ func TxValueUnpack(value []byte) *TxValue {
 		RawTx: value,
 	}
 }
-
-/*
-class BlockHeaderKey(NamedTuple):
-    height: int
-
-
-class BlockHeaderValue(NamedTuple):
-    header: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(header={base64.b64encode(self.header)})"
-*/
 
 type BlockHeaderKey struct {
 	Prefix []byte `json:"prefix"`
@@ -1314,33 +1229,6 @@ func BlockHeaderValueUnpack(value []byte) *BlockHeaderValue {
 		Header: value[:112],
 	}
 }
-
-/*
-
-class ClaimToTXOKey(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-
-
-class ClaimToTXOValue(typing.NamedTuple):
-    tx_num: int
-    position: int
-    root_tx_num: int
-    root_position: int
-    amount: int
-    # activation: int
-    channel_signature_is_valid: bool
-    name: str
-
-    @property
-    def normalized_name(self) -> str:
-        try:
-            return normalize_name(self.name)
-        except UnicodeDecodeError:
-            return self.name
-*/
 
 type ClaimToTXOKey struct {
 	Prefix    []byte `json:"prefix"`
@@ -1467,20 +1355,6 @@ func ClaimToTXOValueUnpack(value []byte) *ClaimToTXOValue {
 	}
 }
 
-/*
-class TXOToClaimKey(typing.NamedTuple):
-    tx_num: int
-    position: int
-
-
-class TXOToClaimValue(typing.NamedTuple):
-    claim_hash: bytes
-    name: str
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, name={self.name})"
-*/
-
 type TXOToClaimKey struct {
 	Prefix   []byte `json:"prefix"`
 	TxNum    uint32 `json:"tx_num"`
@@ -1588,24 +1462,6 @@ func TXOToClaimValueUnpack(value []byte) *TXOToClaimValue {
 		Name:      string(value[22 : 22+nameLen]),
 	}
 }
-
-/*
-class ClaimShortIDKey(typing.NamedTuple):
-    normalized_name: str
-    partial_claim_id: str
-    root_tx_num: int
-    root_position: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(normalized_name={self.normalized_name}, " \
-               f"partial_claim_id={self.partial_claim_id}, " \
-               f"root_tx_num={self.root_tx_num}, root_position={self.root_position})"
-
-
-class ClaimShortIDValue(typing.NamedTuple):
-    tx_num: int
-    position: int
-*/
 
 type ClaimShortIDKey struct {
 	Prefix         []byte `json:"prefix"`
@@ -1736,24 +1592,6 @@ func ClaimShortIDValueUnpack(value []byte) *ClaimShortIDValue {
 		Position: binary.BigEndian.Uint16(value[4:]),
 	}
 }
-
-/*
-class ClaimToChannelKey(typing.NamedTuple):
-    claim_hash: bytes
-    tx_num: int
-    position: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, " \
-               f"tx_num={self.tx_num}, position={self.position})"
-
-
-class ClaimToChannelValue(typing.NamedTuple):
-    signing_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(signing_hash={self.signing_hash.hex()})"
-*/
 
 type ClaimToChannelKey struct {
 	Prefix    []byte `json:"prefix"`
@@ -1991,19 +1829,6 @@ func ChannelToClaimValueUnpack(value []byte) *ChannelToClaimValue {
 	}
 }
 
-/*
-
-class ChannelCountKey(typing.NamedTuple):
-    channel_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(channel_hash={self.channel_hash.hex()})"
-
-
-class ChannelCountValue(typing.NamedTuple):
-    count: int
-*/
-
 type ChannelCountKey struct {
 	Prefix      []byte `json:"prefix"`
 	ChannelHash []byte `json:"channel_hash"`
@@ -2097,18 +1922,6 @@ func ChannelCountValueUnpack(value []byte) *ChannelCountValue {
 	}
 }
 
-/*
-class SupportAmountKey(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-
-
-class SupportAmountValue(typing.NamedTuple):
-    amount: int
-*/
-
 type SupportAmountKey struct {
 	Prefix    []byte `json:"prefix"`
 	ClaimHash []byte `json:"claim_hash"`
@@ -2201,22 +2014,6 @@ func SupportAmountValueUnpack(value []byte) *SupportAmountValue {
 		Amount: binary.BigEndian.Uint64(value),
 	}
 }
-
-/*
-
-class ClaimToSupportKey(typing.NamedTuple):
-    claim_hash: bytes
-    tx_num: int
-    position: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, tx_num={self.tx_num}, " \
-               f"position={self.position})"
-
-
-class ClaimToSupportValue(typing.NamedTuple):
-    amount: int
-*/
 
 type ClaimToSupportKey struct {
 	Prefix    []byte `json:"prefix"`
@@ -2319,19 +2116,6 @@ func ClaimToSupportValueUnpack(value []byte) *ClaimToSupportValue {
 	}
 }
 
-/*
-class SupportToClaimKey(typing.NamedTuple):
-    tx_num: int
-    position: int
-
-
-class SupportToClaimValue(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-*/
-
 type SupportToClaimKey struct {
 	Prefix   []byte `json:"prefix"`
 	TxNum    uint32 `json:"tx_num"`
@@ -2424,21 +2208,6 @@ func SupportToClaimValueUnpack(value []byte) *SupportToClaimValue {
 		ClaimHash: value[:20],
 	}
 }
-
-/*
-class ClaimExpirationKey(typing.NamedTuple):
-    expiration: int
-    tx_num: int
-    position: int
-
-
-class ClaimExpirationValue(typing.NamedTuple):
-    claim_hash: bytes
-    normalized_name: str
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, normalized_name={self.normalized_name})"
-*/
 
 type ClaimExpirationKey struct {
 	Prefix     []byte `json:"prefix"`
@@ -2547,19 +2316,6 @@ func ClaimExpirationValueUnpack(value []byte) *ClaimExpirationValue {
 		NormalizedName: string(value[22 : 22+nameLen]),
 	}
 }
-
-/*
-class ClaimTakeoverKey(typing.NamedTuple):
-    normalized_name: str
-
-
-class ClaimTakeoverValue(typing.NamedTuple):
-    claim_hash: bytes
-    height: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, height={self.height})"
-*/
 
 type ClaimTakeoverKey struct {
 	Prefix         []byte `json:"prefix"`
@@ -2670,31 +2426,6 @@ func ClaimTakeoverValueUnpack(value []byte) *ClaimTakeoverValue {
 		Height:    binary.BigEndian.Uint32(value[20:]),
 	}
 }
-
-/*
-
-class PendingActivationKey(typing.NamedTuple):
-    height: int
-    txo_type: int
-    tx_num: int
-    position: int
-
-    @property
-    def is_support(self) -> bool:
-        return self.txo_type == ACTIVATED_SUPPORT_TXO_TYPE
-
-    @property
-    def is_claim(self) -> bool:
-        return self.txo_type == ACTIVATED_CLAIM_TXO_TYPE
-
-
-class PendingActivationValue(typing.NamedTuple):
-    claim_hash: bytes
-    normalized_name: str
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, normalized_name={self.normalized_name})"
-*/
 
 type PendingActivationKey struct {
 	Prefix   []byte `json:"prefix"`
@@ -2819,23 +2550,6 @@ func PendingActivationValueUnpack(value []byte) *PendingActivationValue {
 	}
 }
 
-/*
-class ActivationKey(typing.NamedTuple):
-    txo_type: int
-    tx_num: int
-    position: int
-
-
-class ActivationValue(typing.NamedTuple):
-    height: int
-    claim_hash: bytes
-    normalized_name: str
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(height={self.height}, claim_hash={self.claim_hash.hex()}, " \
-               f"normalized_name={self.normalized_name})"
-*/
-
 type ActivationKey struct {
 	Prefix   []byte `json:"prefix"`
 	TxoType  uint8  `json:"txo_type"`
@@ -2954,24 +2668,6 @@ func ActivationValueUnpack(value []byte) *ActivationValue {
 		NormalizedName: string(value[26 : 26+nameLen]),
 	}
 }
-
-/*
-
-class ActiveAmountKey(typing.NamedTuple):
-    claim_hash: bytes
-    txo_type: int
-    activation_height: int
-    tx_num: int
-    position: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()}, txo_type={self.txo_type}, " \
-               f"activation_height={self.activation_height}, tx_num={self.tx_num}, position={self.position})"
-
-
-class ActiveAmountValue(typing.NamedTuple):
-    amount: int
-*/
 
 type ActiveAmountKey struct {
 	Prefix           []byte `json:"prefix"`
@@ -3097,25 +2793,6 @@ func ActiveAmountValueUnpack(value []byte) *ActiveAmountValue {
 	}
 }
 
-//
-// EffectiveAmountKey / EffectiveAmountValue
-//
-/*
-
-class EffectiveAmountKey(typing.NamedTuple):
-    normalized_name: str
-    effective_amount: int
-    tx_num: int
-    position: int
-
-
-class EffectiveAmountValue(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-*/
-
 type EffectiveAmountKey struct {
 	Prefix          []byte `json:"prefix"`
 	NormalizedName  string `json:"normalized_name"`
@@ -3240,22 +2917,6 @@ func EffectiveAmountValueUnpack(value []byte) *EffectiveAmountValue {
 	}
 }
 
-/*
-
-class RepostKey(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-
-
-class RepostValue(typing.NamedTuple):
-    reposted_claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(reposted_claim_hash={self.reposted_claim_hash.hex()})"
-*/
-
 type RepostKey struct {
 	Prefix    []byte `json:"prefix"`
 	ClaimHash []byte `json:"claim_hash"`
@@ -3350,25 +3011,6 @@ func RepostValueUnpack(value []byte) *RepostValue {
 		RepostedClaimHash: value[:],
 	}
 }
-
-/*
-
-class RepostedKey(typing.NamedTuple):
-    reposted_claim_hash: bytes
-    tx_num: int
-    position: int
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(reposted_claim_hash={self.reposted_claim_hash.hex()}, " \
-               f"tx_num={self.tx_num}, position={self.position})"
-
-
-class RepostedValue(typing.NamedTuple):
-    claim_hash: bytes
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(claim_hash={self.claim_hash.hex()})"
-*/
 
 type RepostedKey struct {
 	Prefix            []byte `json:"prefix"`
@@ -3477,27 +3119,6 @@ func RepostedValueUnpack(value []byte) *RepostedValue {
 		ClaimHash: value[:20],
 	}
 }
-
-//
-// TouchedOrDeletedClaimKey / TouchedOrDeletedClaimValue
-//
-
-/*
-class TouchedOrDeletedClaimKey(typing.NamedTuple):
-    height: int
-
-
-class TouchedOrDeletedClaimValue(typing.NamedTuple):
-    touched_claims: typing.Set[bytes]
-    deleted_claims: typing.Set[bytes]
-
-    def __str__(self):
-        return f"{self.__class__.__name__}(" \
-               f"touched_claims={','.join(map(lambda x: x.hex(), self.touched_claims))}," \
-               f"deleted_claims={','.join(map(lambda x: x.hex(), self.deleted_claims))})"
-
-
-*/
 
 type TouchedOrDeletedClaimKey struct {
 	Prefix []byte `json:"prefix"`
@@ -3661,10 +3282,6 @@ func TouchedOrDeletedClaimValueUnpack(value []byte) *TouchedOrDeletedClaimValue 
 	}
 }
 
-//
-// UTXOKey / UTXOValue
-//
-
 func (k *UTXOKey) String() string {
 	return fmt.Sprintf(
 		"%s(hashX=%s, tx_num=%d, nout=%d)",
@@ -3767,6 +3384,7 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 	}
 }
 
+// generic simulates a generic key packing / unpacking function for the prefixes
 func generic(voidstar interface{}, firstByte byte, function byte, functionName string) (interface{}, error) {
 	var data []byte
 	if function < 2 {
