@@ -28,12 +28,12 @@ func PrepareResolveResult(
 	signatureValid bool) (*ResolveResult, error) {
 
 	normalizedName := internal.NormalizeName(name)
-	controllingClaim, err := GetControllingClaim(db, normalizedName)
+	controllingClaim, err := db.GetControllingClaim(normalizedName)
 	if err != nil {
 		return nil, err
 	}
 
-	txHash, err := GetTxHash(db, txNum)
+	txHash, err := db.GetTxHash(txNum)
 	if err != nil {
 		return nil, err
 	}
@@ -43,28 +43,28 @@ func PrepareResolveResult(
 
 	expirationHeight := GetExpirationHeight(height)
 
-	supportAmount, err := GetSupportAmount(db, claimHash)
+	supportAmount, err := db.GetSupportAmount(claimHash)
 	if err != nil {
 		return nil, err
 	}
 
-	claimToTxo, err := GetCachedClaimTxo(db, claimHash, true)
+	claimToTxo, err := db.GetCachedClaimTxo(claimHash, true)
 	if err != nil {
 		return nil, err
 	}
 	claimAmount := claimToTxo.Amount
 
-	effectiveAmount, err := GetEffectiveAmount(db, claimHash, false)
+	effectiveAmount, err := db.GetEffectiveAmount(claimHash, false)
 	if err != nil {
 		return nil, err
 	}
 
-	channelHash, err := GetChannelForClaim(db, claimHash, txNum, position)
+	channelHash, err := db.GetChannelForClaim(claimHash, txNum, position)
 	if err != nil {
 		return nil, err
 	}
 
-	repostedClaimHash, err := GetRepost(db, claimHash)
+	repostedClaimHash, err := db.GetRepost(claimHash)
 	if err != nil {
 		return nil, err
 	}
@@ -74,12 +74,12 @@ func PrepareResolveResult(
 	var repostHeight uint32
 
 	if repostedClaimHash != nil {
-		repostTxo, err := GetCachedClaimTxo(db, repostedClaimHash, true)
+		repostTxo, err := db.GetCachedClaimTxo(repostedClaimHash, true)
 		if err != nil {
 			return nil, err
 		}
 		if repostTxo != nil {
-			repostTxHash, err = GetTxHash(db, repostTxo.TxNum)
+			repostTxHash, err = db.GetTxHash(repostTxo.TxNum)
 			if err != nil {
 				return nil, err
 			}
@@ -88,13 +88,13 @@ func PrepareResolveResult(
 		}
 	}
 
-	shortUrl, err := GetShortClaimIdUrl(db, name, normalizedName, claimHash, txNum, rootPosition)
+	shortUrl, err := db.GetShortClaimIdUrl(name, normalizedName, claimHash, txNum, rootPosition)
 	if err != nil {
 		return nil, err
 	}
 
 	var canonicalUrl string = shortUrl
-	claimsInChannel, err := GetClaimsInChannelCount(db, claimHash)
+	claimsInChannel, err := db.GetClaimsInChannelCount(claimHash)
 	if err != nil {
 		return nil, err
 	}
@@ -105,18 +105,17 @@ func PrepareResolveResult(
 
 	if channelHash != nil {
 		// Ignore error because we already have this set if this doesn't work
-		channelVals, _ := GetCachedClaimTxo(db, channelHash, true)
+		channelVals, _ := db.GetCachedClaimTxo(channelHash, true)
 		log.Printf("channelVals: %#v\n", channelVals)
 		if channelVals != nil {
-			channelShortUrl, _ := GetShortClaimIdUrl(
-				db,
+			channelShortUrl, _ := db.GetShortClaimIdUrl(
 				channelVals.Name,
 				channelVals.NormalizedName(),
 				channelHash, channelVals.RootTxNum,
 				channelVals.RootPosition,
 			)
 			canonicalUrl = fmt.Sprintf("%s/%s", channelShortUrl, shortUrl)
-			channelTxHash, err = GetTxHash(db, channelVals.TxNum)
+			channelTxHash, err = db.GetTxHash(channelVals.TxNum)
 			if err != nil {
 				return nil, err
 			}
@@ -125,7 +124,7 @@ func PrepareResolveResult(
 		}
 	}
 
-	reposted, err := GetRepostedCount(db, claimHash)
+	reposted, err := db.GetRepostedCount(claimHash)
 	if err != nil {
 		return nil, err
 	}
@@ -164,18 +163,18 @@ func PrepareResolveResult(
 	}, nil
 }
 
-func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*ResolveResult, error) {
+func (db *ReadOnlyDBColumnFamily) ResolveParsedUrl(parsed *PathSegment) (*ResolveResult, error) {
 	normalizedName := internal.NormalizeName(parsed.name)
 	if (parsed.amountOrder == -1 && parsed.claimId == "") || parsed.amountOrder == 1 {
 		log.Warn("Resolving claim by name")
-		ch := ControllingClaimIter(db)
+		ch := db.ControllingClaimIter()
 		for kv := range ch {
 			key := kv.Key.(*prefixes.ClaimTakeoverKey)
 			val := kv.Value.(*prefixes.ClaimTakeoverValue)
 			log.Warnf("ClaimTakeoverKey: %#v", key)
 			log.Warnf("ClaimTakeoverValue: %#v", val)
 		}
-		controlling, err := GetControllingClaim(db, normalizedName)
+		controlling, err := db.GetControllingClaim(normalizedName)
 		log.Warnf("controlling: %#v", controlling)
 		log.Warnf("err: %#v", err)
 		if err != nil {
@@ -184,7 +183,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 		if controlling == nil {
 			return nil, nil
 		}
-		return FsGetClaimByHash(db, controlling.ClaimHash)
+		return db.FsGetClaimByHash(controlling.ClaimHash)
 	}
 
 	var amountOrder int = int(math.Max(float64(parsed.amountOrder), 1))
@@ -200,7 +199,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			}
 
 			// Maybe don't use caching version, when I actually implement the cache
-			claimTxo, err := GetCachedClaimTxo(db, claimHash, true)
+			claimTxo, err := db.GetCachedClaimTxo(claimHash, true)
 			if err != nil {
 				return nil, err
 			}
@@ -209,7 +208,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 				return nil, nil
 			}
 
-			activation, err := GetActivation(db, claimTxo.TxNum, claimTxo.Position)
+			activation, err := db.GetActivation(claimTxo.TxNum, claimTxo.Position)
 			if err != nil {
 				return nil, err
 			}
@@ -236,7 +235,7 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 			j = len(parsed.claimId)
 		}
 
-		ch := ClaimShortIdIter(db, normalizedName, parsed.claimId[:j])
+		ch := db.ClaimShortIdIter(normalizedName, parsed.claimId[:j])
 		row := <-ch
 		if row == nil {
 			return nil, nil
@@ -245,19 +244,19 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 		key := row.Key.(*prefixes.ClaimShortIDKey)
 		claimTxo := row.Value.(*prefixes.ClaimShortIDValue)
 
-		fullClaimHash, err := GetCachedClaimHash(db, claimTxo.TxNum, claimTxo.Position)
+		fullClaimHash, err := db.GetCachedClaimHash(claimTxo.TxNum, claimTxo.Position)
 		if err != nil {
 			return nil, err
 		}
 
-		c, err := GetCachedClaimTxo(db, fullClaimHash.ClaimHash, true)
+		c, err := db.GetCachedClaimTxo(fullClaimHash.ClaimHash, true)
 		if err != nil {
 			return nil, err
 		}
 
 		nonNormalizedName := c.Name
 		signatureIsValid := c.ChannelSignatureIsValid
-		activation, err := GetActivation(db, claimTxo.TxNum, claimTxo.Position)
+		activation, err := db.GetActivation(claimTxo.TxNum, claimTxo.Position)
 
 		if err != nil {
 			return nil, err
@@ -279,19 +278,8 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 	}
 
 	// Resolve by amount ordering
-	/*
-	   for idx, (key, claim_val) in enumerate(self.prefix_db.effective_amount.iterate(prefix=(normalized_name,))):
-	       if amount_order > idx + 1:
-	           continue
-	       claim_txo = self.get_cached_claim_txo(claim_val.claim_hash)
-	       activation = self.get_activation(key.tx_num, key.position)
-	       return self._prepare_resolve_result(
-	           key.tx_num, key.position, claim_val.claim_hash, key.normalized_name, claim_txo.root_tx_num,
-	           claim_txo.root_position, activation, claim_txo.channel_signature_is_valid
-	       )
-	*/
 	log.Warn("resolving by amount ordering")
-	ch := EffectiveAmountNameIter(db, normalizedName)
+	ch := db.EffectiveAmountNameIter(normalizedName)
 	var i = 0
 	for kv := range ch {
 		if i+1 < amountOrder {
@@ -300,12 +288,12 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 		}
 		key := kv.Key.(*prefixes.EffectiveAmountKey)
 		claimVal := kv.Value.(*prefixes.EffectiveAmountValue)
-		claimTxo, err := GetCachedClaimTxo(db, claimVal.ClaimHash, true)
+		claimTxo, err := db.GetCachedClaimTxo(claimVal.ClaimHash, true)
 		if err != nil {
 			return nil, err
 		}
 
-		activation, err := GetActivation(db, key.TxNum, key.Position)
+		activation, err := db.GetActivation(key.TxNum, key.Position)
 		if err != nil {
 			return nil, err
 		}
@@ -326,8 +314,8 @@ func ResolveParsedUrl(db *ReadOnlyDBColumnFamily, parsed *PathSegment) (*Resolve
 	return nil, nil
 }
 
-func ResolveClaimInChannel(db *ReadOnlyDBColumnFamily, channelHash []byte, normalizedName string) (*ResolveResult, error) {
-	handle, err := EnsureHandle(db, prefixes.ChannelToClaim)
+func (db *ReadOnlyDBColumnFamily) ResolveClaimInChannel(channelHash []byte, normalizedName string) (*ResolveResult, error) {
+	handle, err := db.EnsureHandle(prefixes.ChannelToClaim)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +331,7 @@ func ResolveClaimInChannel(db *ReadOnlyDBColumnFamily, channelHash []byte, norma
 	for row := range ch {
 		key := row.Key.(*prefixes.ChannelToClaimKey)
 		stream := row.Value.(*prefixes.ChannelToClaimValue)
-		effectiveAmount, err := GetEffectiveAmount(db, stream.ClaimHash, false)
+		effectiveAmount, err := db.GetEffectiveAmount(stream.ClaimHash, false)
 		if err != nil {
 			return nil, err
 		}
@@ -376,7 +364,7 @@ func ResolveClaimInChannel(db *ReadOnlyDBColumnFamily, channelHash []byte, norma
 	}
 }
 
-func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
+func (db *ReadOnlyDBColumnFamily) Resolve(url string) *ExpandedResolveResult {
 	var res = NewExpandedResolveResult()
 
 	var channel *PathSegment = nil
@@ -425,7 +413,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 	var resolvedChannel *ResolveResult = nil
 	var resolvedStream *ResolveResult = nil
 	if channel != nil {
-		resolvedChannel, err = ResolveParsedUrl(db, channel)
+		resolvedChannel, err = db.ResolveParsedUrl(channel)
 		if err != nil {
 			res.Channel = &optionalResolveResultOrError{
 				err: &ResolveError{Error: err},
@@ -449,7 +437,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 	}
 	if stream != nil {
 		if resolvedChannel != nil {
-			streamClaim, err := ResolveClaimInChannel(db, resolvedChannel.ClaimHash, stream.Normalized())
+			streamClaim, err := db.ResolveClaimInChannel(resolvedChannel.ClaimHash, stream.Normalized())
 			log.Printf("streamClaim %#v\n", streamClaim)
 			if streamClaim != nil {
 				log.Printf("streamClaim.ClaimHash: %s\n", hex.EncodeToString(streamClaim.ClaimHash))
@@ -464,7 +452,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			}
 
 			if streamClaim != nil {
-				resolvedStream, err = FsGetClaimByHash(db, streamClaim.ClaimHash)
+				resolvedStream, err = db.FsGetClaimByHash(streamClaim.ClaimHash)
 				// TODO: Confirm error case
 				if err != nil {
 					res.Stream = &optionalResolveResultOrError{
@@ -474,7 +462,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				}
 			}
 		} else {
-			resolvedStream, err = ResolveParsedUrl(db, stream)
+			resolvedStream, err = db.ResolveParsedUrl(stream)
 			// TODO: Confirm error case
 			if err != nil {
 				res.Stream = &optionalResolveResultOrError{
@@ -483,7 +471,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				return res
 			}
 			if channel == nil && resolvedChannel == nil && resolvedStream != nil && len(resolvedStream.ChannelHash) > 0 {
-				resolvedChannel, err = FsGetClaimByHash(db, resolvedStream.ChannelHash)
+				resolvedChannel, err = db.FsGetClaimByHash(resolvedStream.ChannelHash)
 				// TODO: Confirm error case
 				if err != nil {
 					res.Channel = &optionalResolveResultOrError{
@@ -524,7 +512,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			claim = resolvedChannel
 			claimHash = resolvedChannel.ClaimHash
 		}
-		blockerHash, _, err = GetBlockerHash(db, claimHash, respostedClaimHash, claim.ChannelHash)
+		blockerHash, _, err = db.GetBlockerHash(claimHash, respostedClaimHash, claim.ChannelHash)
 		log.Printf("blockerHash: %s\n", hex.EncodeToString(blockerHash))
 		if err != nil {
 			res.Channel = &optionalResolveResultOrError{
@@ -533,7 +521,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			return res
 		}
 		if blockerHash != nil {
-			reasonRow, err := FsGetClaimByHash(db, blockerHash)
+			reasonRow, err := db.FsGetClaimByHash(blockerHash)
 			if err != nil {
 				res.Channel = &optionalResolveResultOrError{
 					err: &ResolveError{Error: err},
@@ -546,7 +534,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 			return res
 		}
 		if claim.RepostedClaimHash != nil {
-			repost, err = FsGetClaimByHash(db, claim.RepostedClaimHash)
+			repost, err = db.FsGetClaimByHash(claim.RepostedClaimHash)
 			if err != nil {
 				res.Channel = &optionalResolveResultOrError{
 					err: &ResolveError{Error: err},
@@ -554,7 +542,7 @@ func Resolve(db *ReadOnlyDBColumnFamily, url string) *ExpandedResolveResult {
 				return res
 			}
 			if repost != nil && repost.ChannelHash != nil && repost.SignatureValid {
-				repostedChannel, err = FsGetClaimByHash(db, repost.ChannelHash)
+				repostedChannel, err = db.FsGetClaimByHash(repost.ChannelHash)
 				if err != nil {
 					res.Channel = &optionalResolveResultOrError{
 						err: &ResolveError{Error: err},

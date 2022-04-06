@@ -591,6 +591,13 @@ type BlockHashValue struct {
 	BlockHash []byte `json:"block_hash"`
 }
 
+func NewBlockHashKey(height uint32) *BlockHashKey {
+	return &BlockHashKey{
+		Prefix: []byte{BlockHash},
+		Height: height,
+	}
+}
+
 func (k *BlockHashKey) PackKey() []byte {
 	prefixLen := 1
 	// b'>L'

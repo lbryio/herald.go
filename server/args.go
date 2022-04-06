@@ -26,13 +26,16 @@ type Args struct {
 	EsHost                      string
 	EsPort                      string
 	PrometheusPort              string
+	NotifierPort                string
 	EsIndex                     string
 	RefreshDelta                int
 	CacheTTL                    int
 	PeerFile                    string
 	Country                     string
-	DisableEs                   bool
+	BlockingChannelIds          []string
+	FilteringChannelIds         []string
 	Debug                       bool
+	DisableEs                   bool
 	DisableLoadPeers            bool
 	DisableStartPrometheus      bool
 	DisableStartUDP             bool
@@ -41,8 +44,7 @@ type Args struct {
 	DisableRocksDBRefresh       bool
 	DisableResolve              bool
 	DisableBlockingAndFiltering bool
-	BlockingChannelIds          []string
-	FilteringChannelIds         []string
+	DisableStartNotifier        bool
 }
 
 const (
@@ -53,6 +55,7 @@ const (
 	DefaultEsIndex                     = "claims"
 	DefaultEsPort                      = "9200"
 	DefaultPrometheusPort              = "2112"
+	DefaultNotifierPort                = "18080"
 	DefaultRefreshDelta                = 5
 	DefaultCacheTTL                    = 5
 	DefaultPeerFile                    = "peers.txt"
@@ -65,6 +68,7 @@ const (
 	DefaultDisableRockDBRefresh        = false
 	DefaultDisableResolve              = false
 	DefaultDisableBlockingAndFiltering = false
+	DisableStartNotifier               = false
 )
 
 var (
@@ -111,6 +115,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: DefaultEsHost})
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
+	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
@@ -129,6 +134,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableRocksDBRefresh := parser.Flag("", "disable-rocksdb-refresh", &argparse.Options{Required: false, Help: "Disable rocksdb refreshing", Default: DefaultDisableRockDBRefresh})
 	disableResolve := parser.Flag("", "disable-resolve", &argparse.Options{Required: false, Help: "Disable resolve endpoint (and rocksdb loading)", Default: DefaultDisableRockDBRefresh})
 	disableBlockingAndFiltering := parser.Flag("", "disable-blocking-and-filtering", &argparse.Options{Required: false, Help: "Disable blocking and filtering of channels and streams", Default: DefaultDisableBlockingAndFiltering})
+	disableStartNotifier := parser.Flag("", "disable-start-notifier", &argparse.Options{Required: false, Help: "Disable start notifier", Default: DisableStartNotifier})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -154,13 +160,16 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		EsHost:                      *esHost,
 		EsPort:                      *esPort,
 		PrometheusPort:              *prometheusPort,
+		NotifierPort:                *notifierPort,
 		EsIndex:                     *esIndex,
 		RefreshDelta:                *refreshDelta,
 		CacheTTL:                    *cacheTTL,
 		PeerFile:                    *peerFile,
 		Country:                     *country,
-		DisableEs:                   *disableEs,
+		BlockingChannelIds:          *blockingChannelIds,
+		FilteringChannelIds:         *filteringChannelIds,
 		Debug:                       *debug,
+		DisableEs:                   *disableEs,
 		DisableLoadPeers:            *disableLoadPeers,
 		DisableStartPrometheus:      *disableStartPrometheus,
 		DisableStartUDP:             *disableStartUdp,
@@ -169,8 +178,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		DisableRocksDBRefresh:       *disableRocksDBRefresh,
 		DisableResolve:              *disableResolve,
 		DisableBlockingAndFiltering: *disableBlockingAndFiltering,
-		BlockingChannelIds:          *blockingChannelIds,
-		FilteringChannelIds:         *filteringChannelIds,
+		DisableStartNotifier:        *disableStartNotifier,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {

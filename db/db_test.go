@@ -100,7 +100,7 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 	// 	return nil, nil, nil, err
 	// }
 
-	err = dbpkg.InitTxCounts(myDB)
+	err = myDB.InitTxCounts()
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -256,7 +256,7 @@ func TestCatFullDB(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	ch := dbpkg.ClaimShortIdIter(db, "@lbry", "")
+	ch := db.ClaimShortIdIter("@lbry", "")
 	for row := range ch {
 		key := row.Key.(*prefixes.ClaimShortIDKey)
 		val := row.Value.(*prefixes.ClaimShortIDValue)
@@ -287,7 +287,7 @@ func TestOpenFullDB(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	expandedResolveResult := dbpkg.Resolve(db, url)
+	expandedResolveResult := db.Resolve(url)
 	log.Printf("expandedResolveResult: %#v\n", expandedResolveResult)
 	log.Printf("expandedResolveResult: %s\n", expandedResolveResult)
 }
@@ -302,7 +302,7 @@ func TestResolve(t *testing.T) {
 		return
 	}
 	defer toDefer()
-	expandedResolveResult := dbpkg.Resolve(db, url)
+	expandedResolveResult := db.Resolve(url)
 	log.Printf("%#v\n", expandedResolveResult)
 	if expandedResolveResult != nil && expandedResolveResult.Channel != nil {
 		log.Println(expandedResolveResult.Channel.GetError())
@@ -320,7 +320,7 @@ func TestGetDBState(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	state, err := dbpkg.GetDBState(db)
+	state, err := db.GetDBState()
 	if err != nil {
 		t.Error(err)
 	}
@@ -342,7 +342,7 @@ func TestGetRepostedClaim(t *testing.T) {
 	}
 	defer toDefer()
 
-	count, err := dbpkg.GetRepostedCount(db, channelHash)
+	count, err := db.GetRepostedCount(channelHash)
 	if err != nil {
 		t.Error(err)
 	}
@@ -353,7 +353,7 @@ func TestGetRepostedClaim(t *testing.T) {
 		t.Errorf("Expected %d, got %d", want, count)
 	}
 
-	count2, err := dbpkg.GetRepostedCount(db, channelHash2)
+	count2, err := db.GetRepostedCount(channelHash2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -379,7 +379,7 @@ func TestGetRepost(t *testing.T) {
 	}
 	defer toDefer()
 
-	res, err := dbpkg.GetRepost(db, channelHash)
+	res, err := db.GetRepost(channelHash)
 	if err != nil {
 		t.Error(err)
 	}
@@ -388,7 +388,7 @@ func TestGetRepost(t *testing.T) {
 		t.Errorf("Expected empty, got %#v", res)
 	}
 
-	res2, err := dbpkg.GetRepost(db, channelHash2)
+	res2, err := db.GetRepost(channelHash2)
 	if err != nil {
 		t.Error(err)
 	}
@@ -412,7 +412,7 @@ func TestGetClaimsInChannelCount(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	count, err := dbpkg.GetClaimsInChannelCount(db, channelHash)
+	count, err := db.GetClaimsInChannelCount(channelHash)
 	if err != nil {
 		t.Error(err)
 	}
@@ -441,7 +441,7 @@ func TestGetShortClaimIdUrl(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	shortUrl, err := dbpkg.GetShortClaimIdUrl(db, name, normalName, claimHash, rootTxNum, position)
+	shortUrl, err := db.GetShortClaimIdUrl(name, normalName, claimHash, rootTxNum, position)
 	if err != nil {
 		t.Error(err)
 	}
@@ -460,7 +460,7 @@ func TestClaimShortIdIter(t *testing.T) {
 	}
 	defer toDefer()
 
-	ch := dbpkg.ClaimShortIdIter(db, normalName, claimId)
+	ch := db.ClaimShortIdIter(normalName, claimId)
 
 	for row := range ch {
 		key := row.Key.(*prefixes.ClaimShortIDKey)
@@ -489,7 +489,7 @@ func TestGetTXOToClaim(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	val, err := dbpkg.GetCachedClaimHash(db, txNum, position)
+	val, err := db.GetCachedClaimHash(txNum, position)
 	if err != nil {
 		t.Error(err)
 	} else if val.Name != "one" {
@@ -518,7 +518,7 @@ func TestGetClaimToChannel(t *testing.T) {
 	}
 	defer toDefer()
 
-	val, err = dbpkg.GetChannelForClaim(db, claimHash, txNum, position)
+	val, err = db.GetChannelForClaim(claimHash, txNum, position)
 	if err != nil {
 		t.Error(err)
 	}
@@ -526,7 +526,7 @@ func TestGetClaimToChannel(t *testing.T) {
 		t.Errorf("Expected nil, got %s", hex.EncodeToString(val))
 	}
 
-	val, err = dbpkg.GetChannelForClaim(db, streamHash, streamTxNum, streamPosition)
+	val, err = db.GetChannelForClaim(streamHash, streamTxNum, streamPosition)
 	if err != nil {
 		t.Error(err)
 	}
@@ -548,7 +548,7 @@ func TestGetEffectiveAmount(t *testing.T) {
 	defer toDefer()
 	db.Height = 1116054
 
-	amount, err := dbpkg.GetEffectiveAmount(db, claimHash, true)
+	amount, err := db.GetEffectiveAmount(claimHash, true)
 	if err != nil {
 		t.Error(err)
 	}
@@ -571,7 +571,7 @@ func TestGetSupportAmount(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	res, err := dbpkg.GetSupportAmount(db, claimHash)
+	res, err := db.GetSupportAmount(claimHash)
 	if err != nil {
 		t.Error(err)
 	}
@@ -591,7 +591,7 @@ func TestGetTxHash(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	resHash, err := dbpkg.GetTxHash(db, txNum)
+	resHash, err := db.GetTxHash(txNum)
 	if err != nil {
 		t.Error(err)
 	}
@@ -633,7 +633,7 @@ func TestGetActivation(t *testing.T) {
 		t.Error(err)
 	}
 	defer toDefer()
-	activation, err := dbpkg.GetActivation(db, txNum, position)
+	activation, err := db.GetActivation(txNum, position)
 	if err != nil {
 		t.Error(err)
 	}
@@ -665,7 +665,7 @@ func TestGetClaimToTXO(t *testing.T) {
 		return
 	}
 	defer toDefer()
-	res, err := dbpkg.GetCachedClaimTxo(db, claimHash, true)
+	res, err := db.GetCachedClaimTxo(claimHash, true)
 	if err != nil {
 		t.Error(err)
 		return
@@ -694,7 +694,7 @@ func TestGetControllingClaim(t *testing.T) {
 		return
 	}
 	defer toDefer()
-	res, err := dbpkg.GetControllingClaim(db, claimName)
+	res, err := db.GetControllingClaim(claimName)
 	if err != nil {
 		t.Error(err)
 	}

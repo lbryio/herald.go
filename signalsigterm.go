@@ -12,6 +12,7 @@ import (
 	"syscall"
 )
 
+// initsignals sets the signals to be caught by the signal handler
 func initsignals() {
 	interruptSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 }

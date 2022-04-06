@@ -12,6 +12,7 @@ import (
 	"github.com/lbryio/hub/db/prefixes"
 	"github.com/lbryio/hub/internal"
 	"github.com/lbryio/hub/internal/metrics"
+	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"
@@ -153,92 +154,128 @@ func (x *ExpandedResolveResult) String() string {
 	return fmt.Sprintf("ExpandedResolveResult{Stream: %s, Channel: %s, Repost: %s, RepostedChannel: %s}", x.Stream, x.Channel, x.Repost, x.RepostedChannel)
 }
 
-type IterOptions struct {
-	FillCache    bool
-	Prefix       []byte
-	Start        []byte //interface{}
-	Stop         []byte //interface{}
-	IncludeStart bool
-	IncludeStop  bool
-	IncludeKey   bool
-	IncludeValue bool
-	RawKey       bool
-	RawValue     bool
-	CfHandle     *grocksdb.ColumnFamilyHandle
-	It           *grocksdb.Iterator
-}
-
-// NewIterateOptions creates a defualt options structure for a db iterator.
-func NewIterateOptions() *IterOptions {
-	return &IterOptions{
-		FillCache:    false,
-		Prefix:       []byte{},
-		Start:        nil,
-		Stop:         nil,
-		IncludeStart: true,
-		IncludeStop:  false,
-		IncludeKey:   true,
-		IncludeValue: false,
-		RawKey:       false,
-		RawValue:     false,
-		CfHandle:     nil,
-		It:           nil,
+func (res *ExpandedResolveResult) ToOutputs() ([]*pb.Output, []*pb.Output, error) {
+	txos := make([]*pb.Output, 0)
+	extraTxos := make([]*pb.Output, 0)
+	// Errors
+	if x := res.Channel.GetError(); x != nil {
+		log.Warn("Channel error: ", x)
+		outputErr := &pb.Output_Error{
+			Error: &pb.Error{
+				Text: x.Error.Error(),
+				Code: pb.Error_Code(x.ErrorType),
+			},
+		}
+		res := &pb.Output{Meta: outputErr}
+		txos = append(txos, res)
+		return txos, nil, nil
 	}
+	if x := res.Stream.GetError(); x != nil {
+		log.Warn("Stream error: ", x)
+		outputErr := &pb.Output_Error{
+			Error: &pb.Error{
+				Text: x.Error.Error(),
+				Code: pb.Error_Code(x.ErrorType),
+			},
+		}
+		res := &pb.Output{Meta: outputErr}
+		txos = append(txos, res)
+		return txos, nil, nil
+	}
+
+	// Not errors
+	var channel, stream, repost, repostedChannel *ResolveResult
+
+	channel = res.Channel.GetResult()
+	stream = res.Stream.GetResult()
+	repost = res.Repost.GetResult()
+	repostedChannel = res.RepostedChannel.GetResult()
+
+	if channel != nil && stream == nil {
+		// Channel
+		output := channel.ToOutput()
+		txos = append(txos, output)
+
+		if repost != nil {
+			output := repost.ToOutput()
+			extraTxos = append(extraTxos, output)
+		}
+		if repostedChannel != nil {
+			output := repostedChannel.ToOutput()
+			extraTxos = append(extraTxos, output)
+		}
+
+		return txos, extraTxos, nil
+	} else if stream != nil {
+		output := stream.ToOutput()
+		txos = append(txos, output)
+		if channel != nil {
+			output := channel.ToOutput()
+			extraTxos = append(extraTxos, output)
+		}
+		if repost != nil {
+			output := repost.ToOutput()
+			extraTxos = append(extraTxos, output)
+		}
+		if repostedChannel != nil {
+			output := repostedChannel.ToOutput()
+			extraTxos = append(extraTxos, output)
+		}
+
+		return txos, extraTxos, nil
+	}
+
+	return nil, nil, nil
 }
 
-func (o *IterOptions) WithCfHandle(cfHandle *grocksdb.ColumnFamilyHandle) *IterOptions {
-	o.CfHandle = cfHandle
-	return o
-}
+// ToOutput
+func (res *ResolveResult) ToOutput() *pb.Output {
+	// func ResolveResultToOutput(res *db.ResolveResult, outputType byte) *OutputWType {
+	// res.ClaimHash
+	var channelOutput *pb.Output
+	var repostOutput *pb.Output
 
-func (o *IterOptions) WithFillCache(fillCache bool) *IterOptions {
-	o.FillCache = fillCache
-	return o
-}
+	if res.ChannelTxHash != nil {
+		channelOutput = &pb.Output{
+			TxHash: res.ChannelTxHash,
+			Nout:   uint32(res.ChannelTxPostition),
+			Height: res.ChannelHeight,
+		}
+	}
 
-func (o *IterOptions) WithPrefix(prefix []byte) *IterOptions {
-	o.Prefix = prefix
-	return o
-}
+	if res.RepostTxHash != nil {
+		repostOutput = &pb.Output{
+			TxHash: res.RepostTxHash,
+			Nout:   uint32(res.RepostTxPostition),
+			Height: res.RepostHeight,
+		}
+	}
 
-func (o *IterOptions) WithStart(start []byte) *IterOptions {
-	o.Start = start
-	return o
-}
+	claimMeta := &pb.ClaimMeta{
+		Channel:          channelOutput,
+		Repost:           repostOutput,
+		ShortUrl:         res.ShortUrl,
+		Reposted:         uint32(res.Reposted),
+		IsControlling:    res.IsControlling,
+		CreationHeight:   res.CreationHeight,
+		ExpirationHeight: res.ExpirationHeight,
+		ClaimsInChannel:  res.ClaimsInChannel,
+		EffectiveAmount:  res.EffectiveAmount,
+		SupportAmount:    res.SupportAmount,
+	}
 
-func (o *IterOptions) WithStop(stop []byte) *IterOptions {
-	o.Stop = stop
-	return o
-}
+	claim := &pb.Output_Claim{
+		Claim: claimMeta,
+	}
 
-func (o *IterOptions) WithIncludeStart(includeStart bool) *IterOptions {
-	o.IncludeStart = includeStart
-	return o
-}
+	output := &pb.Output{
+		TxHash: res.TxHash,
+		Nout:   uint32(res.Position),
+		Height: res.Height,
+		Meta:   claim,
+	}
 
-func (o *IterOptions) WithIncludeStop(includeStop bool) *IterOptions {
-	o.IncludeStop = includeStop
-	return o
-}
-
-func (o *IterOptions) WithIncludeKey(includeKey bool) *IterOptions {
-	o.IncludeKey = includeKey
-	return o
-}
-
-func (o *IterOptions) WithIncludeValue(includeValue bool) *IterOptions {
-	o.IncludeValue = includeValue
-	return o
-}
-
-func (o *IterOptions) WithRawKey(rawKey bool) *IterOptions {
-	o.RawKey = rawKey
-	return o
-}
-
-func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
-	o.RawValue = rawValue
-	return o
+	return output
 }
 
 type PathSegment struct {
@@ -284,95 +321,6 @@ func intMin(a, b int) int {
 		return a
 	}
 	return b
-}
-
-func (o *IterOptions) StopIteration(key []byte) bool {
-	if key == nil {
-		return false
-	}
-
-	// TODO: Look at not doing floating point conversions for this
-	maxLenStop := intMin(len(key), len(o.Stop))
-	maxLenStart := intMin(len(key), len(o.Start))
-	if o.Stop != nil &&
-		(bytes.HasPrefix(key, o.Stop) || bytes.Compare(o.Stop, key[:maxLenStop]) < 0) {
-		return true
-	} else if o.Start != nil &&
-		bytes.Compare(o.Start, key[:maxLenStart]) > 0 {
-		return true
-	} else if o.Prefix != nil && !bytes.HasPrefix(key, o.Prefix) {
-		return true
-	}
-
-	return false
-}
-
-func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
-	it := opts.It
-	if !it.Valid() {
-		log.Trace("ReadRow iterator not valid returning nil")
-		return nil
-	}
-
-	key := it.Key()
-	keyData := key.Data()
-	keyLen := len(keyData)
-	value := it.Value()
-	valueData := value.Data()
-	valueLen := len(valueData)
-
-	var outKey interface{} = nil
-	var outValue interface{} = nil
-	var err error = nil
-
-	log.Trace("keyData:", keyData)
-	log.Trace("valueData:", valueData)
-
-	// We need to check the current key if we're not including the stop
-	// key.
-	if !opts.IncludeStop && opts.StopIteration(keyData) {
-		log.Trace("ReadRow returning nil")
-		return nil
-	}
-
-	// We have to copy the key no matter what because we need to check
-	// it on the next iterations to see if we're going to stop.
-	newKeyData := make([]byte, keyLen)
-	copy(newKeyData, keyData)
-	if opts.IncludeKey && !opts.RawKey {
-		outKey, err = prefixes.UnpackGenericKey(newKeyData)
-		if err != nil {
-			log.Error(err)
-		}
-	} else if opts.IncludeKey {
-		outKey = newKeyData
-	}
-
-	// Value could be quite large, so this setting could be important
-	// for performance in some cases.
-	if opts.IncludeValue {
-		newValueData := make([]byte, valueLen)
-		copy(newValueData, valueData)
-		if !opts.RawValue {
-			outValue, err = prefixes.UnpackGenericValue(newKeyData, newValueData)
-			if err != nil {
-				log.Error(err)
-			}
-		} else {
-			outValue = newValueData
-		}
-	}
-
-	key.Free()
-	value.Free()
-
-	kv := &prefixes.PrefixRowKV{
-		Key:   outKey,
-		Value: outValue,
-	}
-	*prevKey = newKeyData
-
-	return kv
 }
 
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
@@ -501,7 +449,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 
 	cleanup := func() {
 		db.DB.Close()
-		err = os.RemoveAll(fmt.Sprintf("./%s", secondaryPath))
+		err = os.RemoveAll(secondaryPath)
 		if err != nil {
 			log.Println(err)
 		}
@@ -511,6 +459,17 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	if err != nil {
 		return nil, cleanup, err
 	}
+
+	// Wait for the height to be greater than zero
+	// for {
+	// 	ReadDBState(db)
+	// 	if db.LastState.Height > 0 {
+	// 		logrus.Infof("db height is > 0: %+v\n", db.LastState)
+	// 		break
+	// 	}
+	// 	time.Sleep(time.Millisecond * 100)
+	// 	logrus.Infof("Waiting for db height to be > 0: %+v\n", db.LastState)
+	// }
 
 	return db, cleanup, nil
 }
@@ -555,22 +514,22 @@ func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*Re
 		DoneChan:         make(chan struct{}),
 	}
 
-	err = ReadDBState(myDB) //TODO: Figure out right place for this
+	err = myDB.ReadDBState() //TODO: Figure out right place for this
 	if err != nil {
 		return nil, err
 	}
 
-	err = InitTxCounts(myDB)
+	err = myDB.InitTxCounts()
 	if err != nil {
 		return nil, err
 	}
 
-	err = InitHeaders(myDB)
+	err = myDB.InitHeaders()
 	if err != nil {
 		return nil, err
 	}
 
-	err = GetBlocksAndFilters(myDB)
+	err = myDB.GetBlocksAndFilters()
 	if err != nil {
 		return nil, err
 	}
@@ -578,20 +537,21 @@ func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*Re
 	return myDB, nil
 }
 
-func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
+// Advance advance the db to the given height.
+func (db *ReadOnlyDBColumnFamily) Advance(height uint32) {
 	// TODO: assert tx_count not in self.db.tx_counts, f'boom {tx_count} in {len(self.db.tx_counts)} tx counts'
 	if db.TxCounts.Len() != height {
 		log.Error("tx count len:", db.TxCounts.Len(), "height:", height)
 		return
 	}
 
-	headerObj, err := GetHeader(db, height)
+	headerObj, err := db.GetHeader(height)
 	if err != nil {
 		log.Error("getting header:", err)
 		return
 	}
 
-	txCountObj, err := GetTxCount(db, height)
+	txCountObj, err := db.GetTxCount(height)
 	if err != nil {
 		log.Error("getting tx count:", err)
 		return
@@ -607,12 +567,13 @@ func Advance(db *ReadOnlyDBColumnFamily, height uint32) {
 	db.Headers.Push(headerObj)
 }
 
-func Unwind(db *ReadOnlyDBColumnFamily) {
+// Unwind unwinds the db one block height
+func (db *ReadOnlyDBColumnFamily) Unwind() {
 	db.TxCounts.Pop()
 	db.Headers.Pop()
 }
 
-func Shutdown(db *ReadOnlyDBColumnFamily) {
+func (db *ReadOnlyDBColumnFamily) Shutdown() {
 	db.ShutdownChan <- struct{}{}
 	<-db.DoneChan
 	db.Cleanup()
@@ -621,13 +582,18 @@ func Shutdown(db *ReadOnlyDBColumnFamily) {
 // RunDetectChanges Go routine the runs continuously while the hub is active
 // to keep the db readonly view up to date and handle reorgs on the
 // blockchain.
-func RunDetectChanges(db *ReadOnlyDBColumnFamily) {
+func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan *internal.HeightHash) {
 	go func() {
+		lastPrint := time.Now()
 		for {
 			// FIXME: Figure out best sleep interval
-			err := DetectChanges(db)
+			if time.Since(lastPrint) > time.Second {
+				log.Debug("DetectChanges:", db.LastState)
+				lastPrint = time.Now()
+			}
+			err := db.DetectChanges(notifCh)
 			if err != nil {
-				log.Printf("Error detecting changes: %#v\n", err)
+				log.Infof("Error detecting changes: %#v", err)
 			}
 			select {
 			case <-db.ShutdownChan:
@@ -640,13 +606,13 @@ func RunDetectChanges(db *ReadOnlyDBColumnFamily) {
 }
 
 // DetectChanges keep the rocksdb db in sync and handle reorgs
-func DetectChanges(db *ReadOnlyDBColumnFamily) error {
+func (db *ReadOnlyDBColumnFamily) DetectChanges(notifCh chan *internal.HeightHash) error {
 	err := db.DB.TryCatchUpWithPrimary()
 	if err != nil {
 		return err
 	}
 
-	state, err := GetDBState(db)
+	state, err := db.GetDBState()
 	if err != nil {
 		return err
 	}
@@ -667,11 +633,15 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	if db.LastState != nil {
 		lastHeight = db.LastState.Height
 		for {
-			lastHeightHeader, err := GetHeader(db, lastHeight)
+			lastHeightHeader, err := db.GetHeader(lastHeight)
 			if err != nil {
 				return err
 			}
-			curHeader := db.Headers.GetTip().([]byte)
+			curHeaderObj := db.Headers.GetTip()
+			if curHeaderObj == nil {
+				break
+			}
+			curHeader := curHeaderObj.([]byte)
 			log.Debugln("lastHeightHeader: ", hex.EncodeToString(lastHeightHeader))
 			log.Debugln("curHeader: ", hex.EncodeToString(curHeader))
 			if bytes.Equal(curHeader, lastHeightHeader) {
@@ -679,7 +649,7 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 				break
 			} else {
 				log.Infoln("disconnect block", lastHeight)
-				Unwind(db)
+				db.Unwind()
 				rewound = true
 				lastHeight -= 1
 				time.Sleep(time.Second)
@@ -688,9 +658,14 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	}
 	if rewound {
 		metrics.ReorgCount.Inc()
+		hash, err := db.GetBlockHash(lastHeight)
+		if err != nil {
+			return err
+		}
+		notifCh <- &internal.HeightHash{Height: uint64(lastHeight), BlockHash: hash}
 	}
 
-	err = ReadDBState(db)
+	err = db.ReadDBState()
 	if err != nil {
 		return err
 	}
@@ -698,7 +673,13 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	if db.LastState == nil || lastHeight < state.Height {
 		for height := lastHeight + 1; height <= state.Height; height++ {
 			log.Info("advancing to: ", height)
-			Advance(db, height)
+			db.Advance(height)
+			hash, err := db.GetBlockHash(height)
+			if err != nil {
+				log.Info("error getting block hash: ", err)
+				return err
+			}
+			notifCh <- &internal.HeightHash{Height: uint64(height), BlockHash: hash}
 		}
 		//TODO: ClearCache
 		log.Warn("implement cache clearing")
@@ -713,58 +694,10 @@ func DetectChanges(db *ReadOnlyDBColumnFamily) error {
 	}
 
 	return nil
-	/*
-	   self.db.blocked_streams, self.db.blocked_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
-	       self.db.blocking_channel_hashes
-	   )
-	   self.db.filtered_streams, self.db.filtered_channels = self.db.get_streams_and_channels_reposted_by_channel_hashes(
-	       self.db.filtering_channel_hashes
-	   )
-	*/
 }
 
-/*
-   def read_db_state(self):
-       state = self.prefix_db.db_state.get()
-
-       if not state:
-           self.db_height = -1
-           self.db_tx_count = 0
-           self.db_tip = b'\0' * 32
-           self.db_version = max(self.DB_VERSIONS)
-           self.utxo_flush_count = 0
-           self.wall_time = 0
-           self.first_sync = True
-           self.hist_flush_count = 0
-           self.hist_comp_flush_count = -1
-           self.hist_comp_cursor = -1
-           self.hist_db_version = max(self.DB_VERSIONS)
-           self.es_sync_height = 0
-       else:
-           self.db_version = state.db_version
-           if self.db_version not in self.DB_VERSIONS:
-               raise DBError(f'your DB version is {self.db_version} but this '
-                                  f'software only handles versions {self.DB_VERSIONS}')
-           # backwards compat
-           genesis_hash = state.genesis
-           if genesis_hash.hex() != self.coin.GENESIS_HASH:
-               raise DBError(f'DB genesis hash {genesis_hash} does not '
-                                  f'match coin {self.coin.GENESIS_HASH}')
-           self.db_height = state.height
-           self.db_tx_count = state.tx_count
-           self.db_tip = state.tip
-           self.utxo_flush_count = state.utxo_flush_count
-           self.wall_time = state.wall_time
-           self.first_sync = state.first_sync
-           self.hist_flush_count = state.hist_flush_count
-           self.hist_comp_flush_count = state.comp_flush_count
-           self.hist_comp_cursor = state.comp_cursor
-           self.hist_db_version = state.db_version
-           self.es_sync_height = state.es_sync_height
-       return state
-*/
-func ReadDBState(db *ReadOnlyDBColumnFamily) error {
-	state, err := GetDBState(db)
+func (db *ReadOnlyDBColumnFamily) ReadDBState() error {
+	state, err := db.GetDBState()
 	if err != nil {
 		return err
 	}
@@ -777,8 +710,8 @@ func ReadDBState(db *ReadOnlyDBColumnFamily) error {
 	return nil
 }
 
-func InitHeaders(db *ReadOnlyDBColumnFamily) error {
-	handle, err := EnsureHandle(db, prefixes.Header)
+func (db *ReadOnlyDBColumnFamily) InitHeaders() error {
+	handle, err := db.EnsureHandle(prefixes.Header)
 	if err != nil {
 		return err
 	}
@@ -787,12 +720,12 @@ func InitHeaders(db *ReadOnlyDBColumnFamily) error {
 	db.Headers = db_stack.NewSliceBackedStack(12000)
 
 	startKey := prefixes.NewHeaderKey(0)
-	endKey := prefixes.NewHeaderKey(db.LastState.Height)
+	// endKey := prefixes.NewHeaderKey(db.LastState.Height)
 	startKeyRaw := startKey.PackKey()
-	endKeyRaw := endKey.PackKey()
+	// endKeyRaw := endKey.PackKey()
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
-	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
-	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw)
+	options = options.WithIncludeKey(false).WithIncludeValue(true) //.WithIncludeStop(true)
+	options = options.WithStart(startKeyRaw)                       //.WithStop(endKeyRaw)
 
 	ch := IterCF(db.DB, options)
 
@@ -804,9 +737,9 @@ func InitHeaders(db *ReadOnlyDBColumnFamily) error {
 }
 
 // InitTxCounts initializes the txCounts map
-func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
+func (db *ReadOnlyDBColumnFamily) InitTxCounts() error {
 	start := time.Now()
-	handle, err := EnsureHandle(db, prefixes.TxCount)
+	handle, err := db.EnsureHandle(prefixes.TxCount)
 	if err != nil {
 		return err
 	}
@@ -838,13 +771,13 @@ func InitTxCounts(db *ReadOnlyDBColumnFamily) error {
 	return nil
 }
 
-// RunGetBlocksAndFiltes Go routine that runs continuously while the hub is active
+// RunGetBlocksAndFilters Go routine that runs continuously while the hub is active
 // to keep the blocked and filtered channels and streams up to date.
-func RunGetBlocksAndFiltes(db *ReadOnlyDBColumnFamily) {
+func (db *ReadOnlyDBColumnFamily) RunGetBlocksAndFilters() {
 	go func() {
 		for {
 			// FIXME: Figure out best sleep interval
-			err := GetBlocksAndFilters(db)
+			err := db.GetBlocksAndFilters()
 			if err != nil {
 				log.Printf("Error getting blocked and filtered chanels: %#v\n", err)
 			}
@@ -853,8 +786,8 @@ func RunGetBlocksAndFiltes(db *ReadOnlyDBColumnFamily) {
 	}()
 }
 
-func GetBlocksAndFilters(db *ReadOnlyDBColumnFamily) error {
-	blockedChannels, blockedStreams, err := GetStreamsAndChannelRepostedByChannelHashes(db, db.BlockingChannelHashes)
+func (db *ReadOnlyDBColumnFamily) GetBlocksAndFilters() error {
+	blockedChannels, blockedStreams, err := db.GetStreamsAndChannelRepostedByChannelHashes(db.BlockingChannelHashes)
 	if err != nil {
 		return err
 	}
@@ -862,7 +795,7 @@ func GetBlocksAndFilters(db *ReadOnlyDBColumnFamily) error {
 	db.BlockedChannels = blockedChannels
 	db.BlockedStreams = blockedStreams
 
-	filteredChannels, filteredStreams, err := GetStreamsAndChannelRepostedByChannelHashes(db, db.FilteringChannelHashes)
+	filteredChannels, filteredStreams, err := db.GetStreamsAndChannelRepostedByChannelHashes(db.FilteringChannelHashes)
 	if err != nil {
 		return err
 	}

@@ -44,6 +44,7 @@ func removeFile(fileName string) {
 	}
 }
 
+// makeDefaultArgs creates a default set of arguments for testing the server.
 func makeDefaultArgs() *server.Args {
 	args := &server.Args{
 		CmdType:                     server.ServeCmd,
@@ -53,6 +54,7 @@ func makeDefaultArgs() *server.Args {
 		EsHost:                      server.DefaultEsHost,
 		EsPort:                      server.DefaultEsPort,
 		PrometheusPort:              server.DefaultPrometheusPort,
+		NotifierPort:                server.DefaultNotifierPort,
 		EsIndex:                     server.DefaultEsIndex,
 		RefreshDelta:                server.DefaultRefreshDelta,
 		CacheTTL:                    server.DefaultCacheTTL,
@@ -67,6 +69,7 @@ func makeDefaultArgs() *server.Args {
 		DisableRocksDBRefresh:       true,
 		DisableResolve:              true,
 		DisableBlockingAndFiltering: true,
+		DisableStartNotifier:        true,
 	}
 
 	return args

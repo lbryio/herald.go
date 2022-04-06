@@ -15,6 +15,7 @@ service Hub {
   rpc Features(EmptyMessage) returns (StringValue) {}
   rpc Broadcast(EmptyMessage) returns (UInt32Value) {}
   rpc Height(EmptyMessage) returns (UInt32Value) {}
+  rpc HeightSubscribe(UInt32Value) returns (stream UInt32Value) {}
   rpc Resolve(StringArray) returns (Outputs) {}
 }
 

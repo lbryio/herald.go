@@ -24,7 +24,7 @@ func GetExpirationHeightFull(lastUpdatedHeight uint32, extended bool) uint32 {
 }
 
 // EnsureHandle is a helper function to ensure that the db has a handle to the given column family.
-func EnsureHandle(db *ReadOnlyDBColumnFamily, prefix byte) (*grocksdb.ColumnFamilyHandle, error) {
+func (db *ReadOnlyDBColumnFamily) EnsureHandle(prefix byte) (*grocksdb.ColumnFamilyHandle, error) {
 	cfName := string(prefix)
 	handle := db.Handles[cfName]
 	if handle == nil {
@@ -33,8 +33,28 @@ func EnsureHandle(db *ReadOnlyDBColumnFamily, prefix byte) (*grocksdb.ColumnFami
 	return handle, nil
 }
 
-func GetHeader(db *ReadOnlyDBColumnFamily, height uint32) ([]byte, error) {
-	handle, err := EnsureHandle(db, prefixes.Header)
+func (db *ReadOnlyDBColumnFamily) GetBlockHash(height uint32) ([]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.BlockHash)
+	if err != nil {
+		return nil, err
+	}
+
+	key := prefixes.NewBlockHashKey(height)
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	if err != nil {
+		return nil, err
+	} else if slice.Size() == 0 {
+		return nil, err
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	return rawValue, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.Header)
 	if err != nil {
 		return nil, err
 	}
@@ -53,34 +73,8 @@ func GetHeader(db *ReadOnlyDBColumnFamily, height uint32) ([]byte, error) {
 	return rawValue, nil
 }
 
-/*
-   async def reload_blocking_filtering_streams(self):
-       def reload():
-           self.blocked_streams, self.blocked_channels = self.get_streams_and_channels_reposted_by_channel_hashes(
-               self.blocking_channel_hashes
-           )
-           self.filtered_streams, self.filtered_channels = self.get_streams_and_channels_reposted_by_channel_hashes(
-               self.filtering_channel_hashes
-           )
-       await asyncio.get_event_loop().run_in_executor(self._executor, reload)
-
-   def get_streams_and_channels_reposted_by_channel_hashes(self, reposter_channel_hashes: Set[bytes]):
-       streams, channels = {}, {}
-       for reposter_channel_hash in reposter_channel_hashes:
-           for stream in self.prefix_db.channel_to_claim.iterate((reposter_channel_hash, ), include_key=False):
-               repost = self.get_repost(stream.claim_hash)
-               if repost:
-                   txo = self.get_claim_txo(repost)
-                   if txo:
-                       if txo.normalized_name.startswith('@'):
-                           channels[repost] = reposter_channel_hash
-                       else:
-                           streams[repost] = reposter_channel_hash
-       return streams, channels
-*/
-
-func GetStreamsAndChannelRepostedByChannelHashes(db *ReadOnlyDBColumnFamily, reposterChannelHashes [][]byte) (map[string][]byte, map[string][]byte, error) {
-	handle, err := EnsureHandle(db, prefixes.ChannelToClaim)
+func (db *ReadOnlyDBColumnFamily) GetStreamsAndChannelRepostedByChannelHashes(reposterChannelHashes [][]byte) (map[string][]byte, map[string][]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.ChannelToClaim)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -97,12 +91,12 @@ func GetStreamsAndChannelRepostedByChannelHashes(db *ReadOnlyDBColumnFamily, rep
 		// for stream := range Iterate(db.DB, prefixes.ChannelToClaim, []byte{reposterChannelHash}, false) {
 		for stream := range ch {
 			value := stream.Value.(*prefixes.ChannelToClaimValue)
-			repost, err := GetRepost(db, value.ClaimHash)
+			repost, err := db.GetRepost(value.ClaimHash)
 			if err != nil {
 				return nil, nil, err
 			}
 			if repost != nil {
-				txo, err := GetClaimTxo(db, repost)
+				txo, err := db.GetClaimTxo(repost)
 				if err != nil {
 					return nil, nil, err
 				}
@@ -121,8 +115,8 @@ func GetStreamsAndChannelRepostedByChannelHashes(db *ReadOnlyDBColumnFamily, rep
 	return streams, channels, nil
 }
 
-func GetClaimsInChannelCount(db *ReadOnlyDBColumnFamily, channelHash []byte) (uint32, error) {
-	handle, err := EnsureHandle(db, prefixes.ChannelCount)
+func (db *ReadOnlyDBColumnFamily) GetClaimsInChannelCount(channelHash []byte) (uint32, error) {
+	handle, err := db.EnsureHandle(prefixes.ChannelCount)
 	if err != nil {
 		return 0, err
 	}
@@ -144,9 +138,9 @@ func GetClaimsInChannelCount(db *ReadOnlyDBColumnFamily, channelHash []byte) (ui
 	return value.Count, nil
 }
 
-func GetShortClaimIdUrl(db *ReadOnlyDBColumnFamily, name string, normalizedName string, claimHash []byte, rootTxNum uint32, rootPosition uint16) (string, error) {
+func (db *ReadOnlyDBColumnFamily) GetShortClaimIdUrl(name string, normalizedName string, claimHash []byte, rootTxNum uint32, rootPosition uint16) (string, error) {
 	prefix := []byte{prefixes.ClaimShortIdPrefix}
-	handle, err := EnsureHandle(db, prefixes.ClaimShortIdPrefix)
+	handle, err := db.EnsureHandle(prefixes.ClaimShortIdPrefix)
 	if err != nil {
 		return "", err
 	}
@@ -183,8 +177,8 @@ func GetShortClaimIdUrl(db *ReadOnlyDBColumnFamily, name string, normalizedName 
 	return "", nil
 }
 
-func GetRepost(db *ReadOnlyDBColumnFamily, claimHash []byte) ([]byte, error) {
-	handle, err := EnsureHandle(db, prefixes.Repost)
+func (db *ReadOnlyDBColumnFamily) GetRepost(claimHash []byte) ([]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.Repost)
 	if err != nil {
 		return nil, err
 	}
@@ -204,8 +198,8 @@ func GetRepost(db *ReadOnlyDBColumnFamily, claimHash []byte) ([]byte, error) {
 	return value.RepostedClaimHash, nil
 }
 
-func GetRepostedCount(db *ReadOnlyDBColumnFamily, claimHash []byte) (int, error) {
-	handle, err := EnsureHandle(db, prefixes.RepostedClaim)
+func (db *ReadOnlyDBColumnFamily) GetRepostedCount(claimHash []byte) (int, error) {
+	handle, err := db.EnsureHandle(prefixes.RepostedClaim)
 	if err != nil {
 		return 0, err
 	}
@@ -229,8 +223,8 @@ func GetRepostedCount(db *ReadOnlyDBColumnFamily, claimHash []byte) (int, error)
 	return i, nil
 }
 
-func GetChannelForClaim(db *ReadOnlyDBColumnFamily, claimHash []byte, txNum uint32, position uint16) ([]byte, error) {
-	handle, err := EnsureHandle(db, prefixes.ClaimToChannel)
+func (db *ReadOnlyDBColumnFamily) GetChannelForClaim(claimHash []byte, txNum uint32, position uint16) ([]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.ClaimToChannel)
 	if err != nil {
 		return nil, err
 	}
@@ -250,8 +244,8 @@ func GetChannelForClaim(db *ReadOnlyDBColumnFamily, claimHash []byte, txNum uint
 	return value.SigningHash, nil
 }
 
-func GetActiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, txoType uint8, height uint32) (uint64, error) {
-	handle, err := EnsureHandle(db, prefixes.ActiveAmount)
+func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint8, height uint32) (uint64, error) {
+	handle, err := db.EnsureHandle(prefixes.ActiveAmount)
 	if err != nil {
 		return 0, err
 	}
@@ -277,8 +271,8 @@ func GetActiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, txoType uint8
 	return sum, nil
 }
 
-func GetEffectiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, supportOnly bool) (uint64, error) {
-	supportAmount, err := GetActiveAmount(db, claimHash, prefixes.ACTIVATED_SUPPORT_TXO_TYPE, db.Height+1)
+func (db *ReadOnlyDBColumnFamily) GetEffectiveAmount(claimHash []byte, supportOnly bool) (uint64, error) {
+	supportAmount, err := db.GetActiveAmount(claimHash, prefixes.ACTIVATED_SUPPORT_TXO_TYPE, db.Height+1)
 	if err != nil {
 		return 0, err
 	}
@@ -287,7 +281,7 @@ func GetEffectiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, supportOnl
 		return supportAmount, nil
 	}
 
-	activationAmount, err := GetActiveAmount(db, claimHash, prefixes.ACTIVATED_CLAIM_TXO_TYPE, db.Height+1)
+	activationAmount, err := db.GetActiveAmount(claimHash, prefixes.ACTIVATED_CLAIM_TXO_TYPE, db.Height+1)
 	if err != nil {
 		return 0, err
 	}
@@ -295,8 +289,8 @@ func GetEffectiveAmount(db *ReadOnlyDBColumnFamily, claimHash []byte, supportOnl
 	return activationAmount + supportAmount, nil
 }
 
-func GetSupportAmount(db *ReadOnlyDBColumnFamily, claimHash []byte) (uint64, error) {
-	handle, err := EnsureHandle(db, prefixes.SupportAmount)
+func (db *ReadOnlyDBColumnFamily) GetSupportAmount(claimHash []byte) (uint64, error) {
+	handle, err := db.EnsureHandle(prefixes.SupportAmount)
 	if err != nil {
 		return 0, err
 	}
@@ -316,14 +310,14 @@ func GetSupportAmount(db *ReadOnlyDBColumnFamily, claimHash []byte) (uint64, err
 	return value.Amount, nil
 }
 
-func GetTxHash(db *ReadOnlyDBColumnFamily, txNum uint32) ([]byte, error) {
+func (db *ReadOnlyDBColumnFamily) GetTxHash(txNum uint32) ([]byte, error) {
 	/*
 	   if self._cache_all_tx_hashes:
 	       return self.total_transactions[tx_num]
 	   return self.prefix_db.tx_hash.get(tx_num, deserialize_value=False)
 	*/
 	// TODO: caching
-	handle, err := EnsureHandle(db, prefixes.TxHash)
+	handle, err := db.EnsureHandle(prefixes.TxHash)
 	if err != nil {
 		return nil, err
 	}
@@ -343,14 +337,14 @@ func GetTxHash(db *ReadOnlyDBColumnFamily, txNum uint32) ([]byte, error) {
 	return rawValue, nil
 }
 
-func GetActivation(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint16) (uint32, error) {
-	return GetActivationFull(db, txNum, postition, false)
+func (db *ReadOnlyDBColumnFamily) GetActivation(txNum uint32, postition uint16) (uint32, error) {
+	return db.GetActivationFull(txNum, postition, false)
 }
 
-func GetActivationFull(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint16, isSupport bool) (uint32, error) {
+func (db *ReadOnlyDBColumnFamily) GetActivationFull(txNum uint32, postition uint16, isSupport bool) (uint32, error) {
 	var typ uint8
 
-	handle, err := EnsureHandle(db, prefixes.ActivatedClaimAndSupport)
+	handle, err := db.EnsureHandle(prefixes.ActivatedClaimAndSupport)
 	if err != nil {
 		return 0, err
 	}
@@ -374,13 +368,13 @@ func GetActivationFull(db *ReadOnlyDBColumnFamily, txNum uint32, postition uint1
 	return value.Height, nil
 }
 
-func GetClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte) (*prefixes.ClaimToTXOValue, error) {
-	return GetCachedClaimTxo(db, claim, false)
+func (db *ReadOnlyDBColumnFamily) GetClaimTxo(claim []byte) (*prefixes.ClaimToTXOValue, error) {
+	return db.GetCachedClaimTxo(claim, false)
 }
 
-func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte, useCache bool) (*prefixes.ClaimToTXOValue, error) {
+func (db *ReadOnlyDBColumnFamily) GetCachedClaimTxo(claim []byte, useCache bool) (*prefixes.ClaimToTXOValue, error) {
 	// TODO: implement cache
-	handle, err := EnsureHandle(db, prefixes.ClaimToTXO)
+	handle, err := db.EnsureHandle(prefixes.ClaimToTXO)
 	if err != nil {
 		return nil, err
 	}
@@ -401,8 +395,8 @@ func GetCachedClaimTxo(db *ReadOnlyDBColumnFamily, claim []byte, useCache bool) 
 	return value, nil
 }
 
-func ControllingClaimIter(db *ReadOnlyDBColumnFamily) <-chan *prefixes.PrefixRowKV {
-	handle, err := EnsureHandle(db, prefixes.ClaimTakeover)
+func (db *ReadOnlyDBColumnFamily) ControllingClaimIter() <-chan *prefixes.PrefixRowKV {
+	handle, err := db.EnsureHandle(prefixes.ClaimTakeover)
 	if err != nil {
 		return nil
 	}
@@ -416,8 +410,8 @@ func ControllingClaimIter(db *ReadOnlyDBColumnFamily) <-chan *prefixes.PrefixRow
 	return ch
 }
 
-func GetControllingClaim(db *ReadOnlyDBColumnFamily, name string) (*prefixes.ClaimTakeoverValue, error) {
-	handle, err := EnsureHandle(db, prefixes.ClaimTakeover)
+func (db *ReadOnlyDBColumnFamily) GetControllingClaim(name string) (*prefixes.ClaimTakeoverValue, error) {
+	handle, err := db.EnsureHandle(prefixes.ClaimTakeover)
 	if err != nil {
 		return nil, err
 	}
@@ -443,13 +437,13 @@ func GetControllingClaim(db *ReadOnlyDBColumnFamily, name string) (*prefixes.Cla
 	return value, nil
 }
 
-func FsGetClaimByHash(db *ReadOnlyDBColumnFamily, claimHash []byte) (*ResolveResult, error) {
-	claim, err := GetCachedClaimTxo(db, claimHash, true)
+func (db *ReadOnlyDBColumnFamily) FsGetClaimByHash(claimHash []byte) (*ResolveResult, error) {
+	claim, err := db.GetCachedClaimTxo(claimHash, true)
 	if err != nil {
 		return nil, err
 	}
 
-	activation, err := GetActivation(db, claim.TxNum, claim.Position)
+	activation, err := db.GetActivation(claim.TxNum, claim.Position)
 	if err != nil {
 		return nil, err
 	}
@@ -468,8 +462,8 @@ func FsGetClaimByHash(db *ReadOnlyDBColumnFamily, claimHash []byte) (*ResolveRes
 	)
 }
 
-func GetTxCount(db *ReadOnlyDBColumnFamily, height uint32) (*prefixes.TxCountValue, error) {
-	handle, err := EnsureHandle(db, prefixes.TxCount)
+func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountValue, error) {
+	handle, err := db.EnsureHandle(prefixes.TxCount)
 	if err != nil {
 		return nil, err
 	}
@@ -490,8 +484,8 @@ func GetTxCount(db *ReadOnlyDBColumnFamily, height uint32) (*prefixes.TxCountVal
 	return value, nil
 }
 
-func GetDBState(db *ReadOnlyDBColumnFamily) (*prefixes.DBStateValue, error) {
-	handle, err := EnsureHandle(db, prefixes.DBState)
+func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {
+	handle, err := db.EnsureHandle(prefixes.DBState)
 	if err != nil {
 		return nil, err
 	}
@@ -511,8 +505,8 @@ func GetDBState(db *ReadOnlyDBColumnFamily) (*prefixes.DBStateValue, error) {
 	return value, nil
 }
 
-func EffectiveAmountNameIter(db *ReadOnlyDBColumnFamily, normalizedName string) <-chan *prefixes.PrefixRowKV {
-	handle, err := EnsureHandle(db, prefixes.EffectiveAmount)
+func (db *ReadOnlyDBColumnFamily) EffectiveAmountNameIter(normalizedName string) <-chan *prefixes.PrefixRowKV {
+	handle, err := db.EnsureHandle(prefixes.EffectiveAmount)
 	if err != nil {
 		return nil
 	}
@@ -526,8 +520,8 @@ func EffectiveAmountNameIter(db *ReadOnlyDBColumnFamily, normalizedName string) 
 	return ch
 }
 
-func ClaimShortIdIter(db *ReadOnlyDBColumnFamily, normalizedName string, claimId string) <-chan *prefixes.PrefixRowKV {
-	handle, err := EnsureHandle(db, prefixes.ClaimShortIdPrefix)
+func (db *ReadOnlyDBColumnFamily) ClaimShortIdIter(normalizedName string, claimId string) <-chan *prefixes.PrefixRowKV {
+	handle, err := db.EnsureHandle(prefixes.ClaimShortIdPrefix)
 	if err != nil {
 		return nil
 	}
@@ -544,9 +538,9 @@ func ClaimShortIdIter(db *ReadOnlyDBColumnFamily, normalizedName string, claimId
 	return ch
 }
 
-func GetCachedClaimHash(db *ReadOnlyDBColumnFamily, txNum uint32, position uint16) (*prefixes.TXOToClaimValue, error) {
+func (db *ReadOnlyDBColumnFamily) GetCachedClaimHash(txNum uint32, position uint16) (*prefixes.TXOToClaimValue, error) {
 	// TODO: implement cache
-	handle, err := EnsureHandle(db, prefixes.TXOToClaim)
+	handle, err := db.EnsureHandle(prefixes.TXOToClaim)
 	if err != nil {
 		return nil, err
 	}
@@ -570,7 +564,7 @@ func GetCachedClaimHash(db *ReadOnlyDBColumnFamily, txNum uint32, position uint1
 // GetBlockerHash get the hash of the blocker or filterer of the claim.
 // TODO: this currently converts the byte arrays to strings, which is not
 // very efficient. Might want to figure out a better way to do this.
-func GetBlockerHash(db *ReadOnlyDBColumnFamily, claimHash, repostedClaimHash, channelHash []byte) ([]byte, []byte, error) {
+func (db *ReadOnlyDBColumnFamily) GetBlockerHash(claimHash, repostedClaimHash, channelHash []byte) ([]byte, []byte, error) {
 	claimHashStr := string(claimHash)
 	respostedClaimHashStr := string(repostedClaimHash)
 	channelHashStr := string(channelHash)

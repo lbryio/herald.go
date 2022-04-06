@@ -219,8 +219,8 @@ func UDPPing(ip, port string) (*SPVPong, error) {
 // UDPServer is a goroutine that starts an udp server that implements the hubs
 // Ping/Pong protocol to find out about each other without making full TCP
 // connections.
-func UDPServer(args *Args) error {
-	address := ":" + args.Port
+func (s *Server) UDPServer() error {
+	address := ":" + s.Args.Port
 	tip := make([]byte, 32)
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
@@ -243,7 +243,7 @@ func UDPServer(args *Args) error {
 		}
 
 		sAddr := addr.IP.String()
-		pong := makeSPVPong(defaultFlags|availableFlag, 0, tip, sAddr, args.Country)
+		pong := makeSPVPong(defaultFlags|availableFlag, 0, tip, sAddr, s.Args.Country)
 		data := pong.Encode()
 
 		_, err = conn.WriteToUDP(data, addr)

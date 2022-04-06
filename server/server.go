@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"hash"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/lbryio/hub/db"
+	"github.com/lbryio/hub/internal"
 	"github.com/lbryio/hub/internal/metrics"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -46,6 +48,9 @@ type Server struct {
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
 	ExternalIP       net.IP
+	HeightSubs       map[net.Addr]net.Conn
+	HeightSubsMut    sync.RWMutex
+	NotifierChan     chan *internal.HeightHash
 	pb.UnimplementedHubServer
 }
 
@@ -92,6 +97,7 @@ func getVersion() string {
 	'blockchain.address.unsubscribe'
 */
 
+// PeerSubsLoadOrStore thread safe load or store for peer subs
 func (s *Server) PeerSubsLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	key := peer.peerKey()
 	s.PeerSubsMut.RLock()
@@ -107,6 +113,7 @@ func (s *Server) PeerSubsLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	}
 }
 
+// PeerServersLoadOrStore thread safe load or store for peer servers
 func (s *Server) PeerServersLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	key := peer.peerKey()
 	s.PeerServersMut.RLock()
@@ -122,6 +129,7 @@ func (s *Server) PeerServersLoadOrStore(peer *Peer) (actual *Peer, loaded bool) 
 	}
 }
 
+// Run "main" function for starting the server. This blocks.
 func (s *Server) Run() {
 	l, err := net.Listen("tcp", ":"+s.Args.Port)
 	if err != nil {
@@ -192,14 +200,22 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	var myDB *db.ReadOnlyDBColumnFamily
 	// var dbShutdown = func() {}
 	if !args.DisableResolve {
-		tmpName := fmt.Sprintf("/tmp/%d", time.Now().Nanosecond())
-		logrus.Warn("tmpName", tmpName)
+		tmpName, err := ioutil.TempDir("", "go-lbry-hub")
+		if err != nil {
+			logrus.Info(err)
+			log.Fatal(err)
+		}
+		logrus.Info("tmpName", tmpName)
+		if err != nil {
+			logrus.Info(err)
+		}
 		myDB, _, err = db.GetProdDB(args.DBPath, tmpName)
 		// dbShutdown = func() {
 		// 	db.Shutdown(myDB)
 		// }
 		if err != nil {
 			// Can't load the db, fail loudly
+			logrus.Info(err)
 			log.Fatalln(err)
 		}
 
@@ -245,23 +261,41 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
+		HeightSubs:       make(map[net.Addr]net.Conn),
+		HeightSubsMut:    sync.RWMutex{},
+		NotifierChan:     make(chan *internal.HeightHash),
 	}
 
 	// Start up our background services
 	if !args.DisableResolve && !args.DisableRocksDBRefresh {
-		db.RunDetectChanges(myDB)
+		logrus.Info("Running detect changes")
+		myDB.RunDetectChanges(s.NotifierChan)
 	}
 	if !args.DisableBlockingAndFiltering {
-		db.RunGetBlocksAndFiltes(myDB)
+		myDB.RunGetBlocksAndFilters()
 	}
 	if !args.DisableStartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}
 	if !args.DisableStartUDP {
 		go func() {
-			err := UDPServer(args)
+			err := s.UDPServer()
 			if err != nil {
 				log.Println("UDP Server failed!", err)
+			}
+		}()
+	}
+	if !args.DisableStartNotifier {
+		go func() {
+			err := s.NotifierServer()
+			if err != nil {
+				log.Println("Notifier Server failed!", err)
+			}
+		}()
+		go func() {
+			err := s.RunNotifier()
+			if err != nil {
+				log.Println("RunNotifier failed!", err)
 			}
 		}()
 	}
@@ -372,146 +406,36 @@ func (s *Server) Height(ctx context.Context, args *pb.EmptyMessage) (*pb.UInt32V
 	}
 }
 
-func ResolveResultToOutput(res *db.ResolveResult) *pb.Output {
-	// func ResolveResultToOutput(res *db.ResolveResult, outputType byte) *OutputWType {
-	// res.ClaimHash
-	var channelOutput *pb.Output
-	var repostOutput *pb.Output
-
-	if res.ChannelTxHash != nil {
-		channelOutput = &pb.Output{
-			TxHash: res.ChannelTxHash,
-			Nout:   uint32(res.ChannelTxPostition),
-			Height: res.ChannelHeight,
+// HeightSubscribe takes a height to wait for the server to reach and waits until it reaches that
+// height or higher and returns the current height. If the db is off it will return 0.
+func (s *Server) HeightSubscribe(arg *pb.UInt32Value, stream pb.Hub_HeightSubscribeServer) error {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "height"}).Inc()
+	if s.DB != nil {
+		want := arg.Value
+		for s.DB.LastState.Height < want {
+			if s.DB.LastState.Height >= want {
+				err := stream.Send(&pb.UInt32Value{Value: s.DB.LastState.Height})
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+	} else {
+		if err := stream.Send(&pb.UInt32Value{Value: 0}); err != nil {
+			return err
 		}
 	}
-
-	if res.RepostTxHash != nil {
-		repostOutput = &pb.Output{
-			TxHash: res.RepostTxHash,
-			Nout:   uint32(res.RepostTxPostition),
-			Height: res.RepostHeight,
-		}
-	}
-
-	claimMeta := &pb.ClaimMeta{
-		Channel:          channelOutput,
-		Repost:           repostOutput,
-		ShortUrl:         res.ShortUrl,
-		Reposted:         uint32(res.Reposted),
-		IsControlling:    res.IsControlling,
-		CreationHeight:   res.CreationHeight,
-		ExpirationHeight: res.ExpirationHeight,
-		ClaimsInChannel:  res.ClaimsInChannel,
-		EffectiveAmount:  res.EffectiveAmount,
-		SupportAmount:    res.SupportAmount,
-	}
-
-	claim := &pb.Output_Claim{
-		Claim: claimMeta,
-	}
-
-	output := &pb.Output{
-		TxHash: res.TxHash,
-		Nout:   uint32(res.Position),
-		Height: res.Height,
-		Meta:   claim,
-	}
-
-	// outputWType := &OutputWType{
-	// 	Output:     output,
-	// 	OutputType: outputType,
-	// }
-
-	return output
+	return nil
 }
 
-func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*pb.Output, []*pb.Output, error) {
-	// func ExpandedResolveResultToOutput(res *db.ExpandedResolveResult) ([]*OutputWType, []*OutputWType, error) {
-	// FIXME: Set references in extraTxos properly
-	// FIXME: figure out the handling of rows and extra properly
-	// FIXME: want to return empty list or nil when extraTxos is empty?
-	txos := make([]*pb.Output, 0)
-	extraTxos := make([]*pb.Output, 0)
-	// txos := make([]*OutputWType, 0)
-	// extraTxos := make([]*OutputWType, 0)
-	// Errors
-	if x := res.Channel.GetError(); x != nil {
-		logrus.Warn("Channel error: ", x)
-		outputErr := &pb.Output_Error{
-			Error: &pb.Error{
-				Text: x.Error.Error(),
-				Code: pb.Error_Code(x.ErrorType), //FIXME
-			},
-		}
-		// res := &OutputWType{
-		// 	Output:     &pb.Output{Meta: outputErr},
-		// 	OutputType: OutputErrorType,
-		// }
-		res := &pb.Output{Meta: outputErr}
-		txos = append(txos, res)
-		return txos, nil, nil
-	}
-	if x := res.Stream.GetError(); x != nil {
-		logrus.Warn("Stream error: ", x)
-		outputErr := &pb.Output_Error{
-			Error: &pb.Error{
-				Text: x.Error.Error(),
-				Code: pb.Error_Code(x.ErrorType), //FIXME
-			},
-		}
-		// res := &OutputWType{
-		// 	Output:     &pb.Output{Meta: outputErr},
-		// 	OutputType: OutputErrorType,
-		// }
-		res := &pb.Output{Meta: outputErr}
-		txos = append(txos, res)
-		return txos, nil, nil
-	}
+// HeightHashSubscribe takes a height to wait for the server to reach and waits until it reaches that
+// height or higher and returns the current height. If the db is off it will return 0.
+func (s *Server) HeightHashSubscribe() error {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "height_hash"}).Inc()
 
-	// Not errors
-	var channel, stream, repost, repostedChannel *db.ResolveResult
-
-	channel = res.Channel.GetResult()
-	stream = res.Stream.GetResult()
-	repost = res.Repost.GetResult()
-	repostedChannel = res.RepostedChannel.GetResult()
-
-	if channel != nil && stream == nil {
-		// Channel
-		output := ResolveResultToOutput(channel)
-		txos = append(txos, output)
-
-		if repost != nil {
-			output := ResolveResultToOutput(repost)
-			extraTxos = append(extraTxos, output)
-		}
-		if repostedChannel != nil {
-			output := ResolveResultToOutput(repostedChannel)
-			extraTxos = append(extraTxos, output)
-		}
-
-		return txos, extraTxos, nil
-	} else if stream != nil {
-		output := ResolveResultToOutput(stream)
-		txos = append(txos, output)
-		if channel != nil {
-			output := ResolveResultToOutput(channel)
-			extraTxos = append(extraTxos, output)
-		}
-		if repost != nil {
-			output := ResolveResultToOutput(repost)
-			extraTxos = append(extraTxos, output)
-		}
-		if repostedChannel != nil {
-			output := ResolveResultToOutput(repostedChannel)
-			extraTxos = append(extraTxos, output)
-		}
-
-		return txos, extraTxos, nil
-	}
-
-	return nil, nil, nil
+	return nil
 }
 
 func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs, error) {
@@ -521,24 +445,15 @@ func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs
 	allExtraTxos := make([]*pb.Output, 0)
 
 	for _, url := range args.Value {
-		res := db.Resolve(s.DB, url)
-		txos, extraTxos, err := ExpandedResolveResultToOutput(res)
+		res := s.DB.Resolve(url)
+		txos, extraTxos, err := res.ToOutputs()
 		if err != nil {
 			return nil, err
 		}
-		// FIXME: there may be a more efficient way to do this.
+		// TODO: there may be a more efficient way to do this.
 		allTxos = append(allTxos, txos...)
 		allExtraTxos = append(allExtraTxos, extraTxos...)
 	}
-
-	// for _, row := range allExtraTxos {
-	// 	for _, txo := range allExtraTxos {
-	// 		if txo.TxHash == row.TxHash && txo.Nout == row.Nout {
-	// 			txo.Extra = row.Extra
-	// 			break
-	// 		}
-	// 	}
-	// }
 
 	res := &pb.Outputs{
 		Txos:         allTxos,

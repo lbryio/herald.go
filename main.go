@@ -46,7 +46,7 @@ func main() {
 
 			s.EsClient.Stop()
 			s.GrpcServer.GracefulStop()
-			db.Shutdown(s.DB)
+			s.DB.Shutdown()
 
 			log.Println("Returning from main...")
 		}()
