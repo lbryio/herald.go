@@ -588,6 +588,7 @@ type SearchRequest struct {
 	AllLanguages          []string         `protobuf:"bytes,56,rep,name=all_languages,json=allLanguages,proto3" json:"all_languages"`
 	RemoveDuplicates      bool             `protobuf:"varint,57,opt,name=remove_duplicates,json=removeDuplicates,proto3" json:"remove_duplicates"`
 	NoTotals              bool             `protobuf:"varint,58,opt,name=no_totals,json=noTotals,proto3" json:"no_totals"`
+	SdHash                string           `protobuf:"bytes,59,opt,name=sd_hash,json=sdHash,proto3" json:"sd_hash"`
 }
 
 func (x *SearchRequest) Reset() {
@@ -998,6 +999,13 @@ func (x *SearchRequest) GetNoTotals() bool {
 		return x.NoTotals
 	}
 	return false
+}
+
+func (x *SearchRequest) GetSdHash() string {
+	if x != nil {
+		return x.SdHash
+	}
+	return ""
 }
 
 var File_hub_proto protoreflect.FileDescriptor

@@ -120,4 +120,5 @@ message SearchRequest {
   repeated string all_languages = 56;
   bool remove_duplicates = 57;
   bool no_totals = 58;
+  string sd_hash = 59;
 }
