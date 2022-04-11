@@ -1,15 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"time"
 
-	"github.com/lbryio/hub/db"
-	"github.com/lbryio/hub/db/prefixes"
-	"github.com/lbryio/hub/internal"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"
@@ -33,8 +28,6 @@ func main() {
 		ctxWCancel, cancel := context.WithCancel(ctx)
 		defer cancel()
 
-		// TODO: Figure out if / where we need signal handling
-
 		initsignals()
 		interrupt := interruptListener()
 
@@ -52,109 +45,6 @@ func main() {
 		}()
 
 		<-interrupt
-		return
-	} else if args.CmdType == server.DBCmd {
-		options := &db.IterOptions{
-			FillCache:    false,
-			Prefix:       []byte{prefixes.SupportAmount},
-			Start:        nil,
-			Stop:         nil,
-			IncludeStart: true,
-			IncludeStop:  false,
-			IncludeKey:   true,
-			IncludeValue: true,
-			RawKey:       true,
-			RawValue:     true,
-		}
-
-		dbVal, err := db.GetDB("/mnt/d/data/wallet/lbry-rocksdb/")
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		db.ReadWriteRawN(dbVal, options, "./testdata/support_amount.csv", 10)
-
-		return
-	} else if args.CmdType == server.DBCmd2 {
-		pxs := prefixes.GetPrefixes()
-		for _, prefix := range pxs {
-			//var rawPrefix byte = prefixes.ClaimExpiration
-
-			//prefix := []byte{rawPrefix}
-			columnFamily := string(prefix)
-			options := &db.IterOptions{
-				FillCache:    false,
-				Prefix:       prefix,
-				Start:        nil,
-				Stop:         nil,
-				IncludeStart: true,
-				IncludeStop:  false,
-				IncludeKey:   true,
-				IncludeValue: true,
-				RawKey:       true,
-				RawValue:     true,
-			}
-
-			dbVal, handles, err := db.GetDBCF("/mnt/d/data/snapshot_1072108/lbry-rocksdb/", columnFamily)
-			if err != nil {
-				log.Fatalln(err)
-			}
-
-			options.CfHandle = handles[1]
-			var n = 10
-			if bytes.Equal(prefix, []byte{prefixes.Undo}) || bytes.Equal(prefix, []byte{prefixes.DBState}) {
-				n = 1
-			}
-
-			db.ReadWriteRawNCF(dbVal, options, fmt.Sprintf("./testdata/%s.csv", columnFamily), n)
-		}
-
-		return
-	} else if args.CmdType == server.DBCmd3 {
-		// streamHash, _ := hex.DecodeString("9a0ed686ecdad9b6cb965c4d6681c02f0bbc66a6")
-		channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
-		name := internal.NormalizeName("@Styxhexenhammer666")
-		// txNum := uint32(0x6284e3)
-		// position := uint16(0x0)
-		// For stream claim
-		// txNum := uint32(0x369e2b2)
-		// position := uint16(0x0)
-		// typ := uint8(prefixes.ACTIVATED_CLAIM_TXO_TYPE)
-		var rawPrefix byte = prefixes.ChannelToClaim
-		var startRaw []byte = nil
-		prefix := []byte{rawPrefix}
-		columnFamily := string(prefix)
-		// start := prefixes.NewClaimTakeoverKey(name)
-		// start := prefixes.NewActiveAmountKey(channelHash, prefixes.ACTIVATED_SUPPORT_TXO_TYPE, 0)
-		start := prefixes.NewChannelToClaimKey(channelHash, name)
-		startRaw = start.PackKey()
-		// start := &prefixes.ChannelCountKey{
-		// 	Prefix:      prefix,
-		// 	ChannelHash: channelHash,
-		// }
-		// startRaw := prefixes.ChannelCountKeyPackPartial(start, 1)
-		// startRaw := start.PackKey()
-		options := &db.IterOptions{
-			FillCache:    false,
-			Prefix:       prefix,
-			Start:        startRaw,
-			Stop:         nil,
-			IncludeStart: true,
-			IncludeStop:  false,
-			IncludeKey:   true,
-			IncludeValue: true,
-			RawKey:       true,
-			RawValue:     true,
-		}
-
-		dbVal, handles, err := db.GetDBCF("/mnt/d/data/snapshot_1072108/lbry-rocksdb/", columnFamily)
-		if err != nil {
-			log.Fatalln(err)
-		}
-
-		options.CfHandle = handles[1]
-
-		db.ReadWriteRawNColumnFamilies(dbVal, options, fmt.Sprintf("./testdata/%s_resolve.csv", columnFamily), 1)
 		return
 	}
 

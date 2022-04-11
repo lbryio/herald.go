@@ -181,12 +181,7 @@ func (v *DBStateValue) PackValue() []byte {
 	histFlushCount = (OnesCompTwiddle32 - uint32(v.HistFlushCount))
 	compFlushCount = (OnesCompTwiddle32 - uint32(v.CompFlushCount))
 	compCursor = (OnesCompTwiddle32 - uint32(v.CompCursor))
-	// if v.HistFlushCount < 0 {
-	// }
-	// if v.CompFlushCount < 0 {
-	// }
-	// if v.CompCursor < 0 {
-	// }
+
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1:], histFlushCount)
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4:], compFlushCount)
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4:], compCursor)
@@ -687,6 +682,13 @@ type BlockTxsKey struct {
 
 type BlockTxsValue struct {
 	TxHashes [][]byte `json:"tx_hashes"`
+}
+
+func (k *BlockTxsKey) NewBlockTxsKey(height uint32) *BlockTxsKey {
+	return &BlockTxsKey{
+		Prefix: []byte{BlockTXs},
+		Height: height,
+	}
 }
 
 func (k *BlockTxsKey) PackKey() []byte {

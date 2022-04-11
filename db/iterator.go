@@ -1,5 +1,7 @@
 package db
 
+// iterator.go contains the implementation for iterators on rocksdb used by the hub
+
 import (
 	"bytes"
 
@@ -97,6 +99,7 @@ func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
 	return o
 }
 
+// ReadRow reads a row from the db, returns nil when no more rows are available.
 func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 	it := opts.It
 	if !it.Valid() {
@@ -165,12 +168,12 @@ func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 	return kv
 }
 
+// StopIteration returns true if we've hit the criteria to end iteration on this key
 func (o *IterOptions) StopIteration(key []byte) bool {
 	if key == nil {
 		return false
 	}
 
-	// TODO: Look at not doing floating point conversions for this
 	maxLenStop := intMin(len(key), len(o.Stop))
 	maxLenStart := intMin(len(key), len(o.Start))
 	if o.Stop != nil &&

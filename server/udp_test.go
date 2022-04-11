@@ -35,7 +35,7 @@ func TestUDPPing(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 
-			toAddr := "spv17.lbry.com"
+			toAddr := "spv15.lbry.com"
 			toPort := "50001"
 
 			pong, err := server.UDPPing(toAddr, toPort)

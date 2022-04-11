@@ -1,11 +1,13 @@
 package db
 
+// db.go contains basic functions for representing and accessing the state of
+// a read-only version of the rocksdb database.
+
 import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
 	"os"
-	"sort"
 	"time"
 
 	"github.com/lbryio/hub/db/db_stack"
@@ -305,13 +307,6 @@ func (ps *PathSegment) String() string {
 	return ps.name
 }
 
-// BisectRight returns the index of the first element in the list that is greater than or equal to the value.
-// https://stackoverflow.com/questions/29959506/is-there-a-go-analog-of-pythons-bisect-module
-func BisectRight(arr []interface{}, val uint32) uint32 {
-	i := sort.Search(len(arr), func(i int) bool { return arr[i].(uint32) >= val })
-	return uint32(i)
-}
-
 //
 // Iterators / db construction functions
 //
@@ -539,6 +534,11 @@ func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*Re
 
 // Advance advance the db to the given height.
 func (db *ReadOnlyDBColumnFamily) Advance(height uint32) {
+	// DB wasn't created when we initialized headers, reinit
+	if db.TxCounts.Len() == 0 {
+		db.InitHeaders()
+		db.InitTxCounts()
+	}
 	// TODO: assert tx_count not in self.db.tx_counts, f'boom {tx_count} in {len(self.db.tx_counts)} tx counts'
 	if db.TxCounts.Len() != height {
 		log.Error("tx count len:", db.TxCounts.Len(), "height:", height)
@@ -758,15 +758,6 @@ func (db *ReadOnlyDBColumnFamily) InitTxCounts() error {
 	duration := time.Since(start)
 	log.Println("len(db.TxCounts), cap(db.TxCounts):", db.TxCounts.Len(), db.TxCounts.Cap())
 	log.Println("Time to get txCounts:", duration)
-
-	// whjy not needs to be len-1 because we start loading with the zero block
-	// and the txcounts start at one???
-	// db.Height = db.TxCounts.Len()
-	// if db.TxCounts.Len() > 0 {
-	// 	db.Height = db.TxCounts.Len() - 1
-	// } else {
-	// 	log.Println("db.TxCounts.Len() == 0 ???")
-	// }
 
 	return nil
 }

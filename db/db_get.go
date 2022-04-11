@@ -1,5 +1,7 @@
 package db
 
+// db_get.go contains the basic access functions to the database.
+
 import (
 	"encoding/hex"
 	"fmt"
@@ -311,11 +313,6 @@ func (db *ReadOnlyDBColumnFamily) GetSupportAmount(claimHash []byte) (uint64, er
 }
 
 func (db *ReadOnlyDBColumnFamily) GetTxHash(txNum uint32) ([]byte, error) {
-	/*
-	   if self._cache_all_tx_hashes:
-	       return self.total_transactions[tx_num]
-	   return self.prefix_db.tx_hash.get(tx_num, deserialize_value=False)
-	*/
 	// TODO: caching
 	handle, err := db.EnsureHandle(prefixes.TxHash)
 	if err != nil {

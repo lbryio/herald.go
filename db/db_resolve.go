@@ -1,5 +1,7 @@
 package db
 
+// db_resolve.go contains functions relevant to resolving a claim.
+
 import (
 	"bytes"
 	"encoding/hex"
@@ -38,7 +40,7 @@ func PrepareResolveResult(
 		return nil, err
 	}
 
-	height, createdHeight := db.TxCounts.TxCountsBisectRight(txNum, rootTxNum, BisectRight)
+	height, createdHeight := db.TxCounts.TxCountsBisectRight(txNum, rootTxNum)
 	lastTakeoverHeight := controllingClaim.Height
 
 	expirationHeight := GetExpirationHeight(height)
@@ -84,7 +86,7 @@ func PrepareResolveResult(
 				return nil, err
 			}
 			repostTxPostition = repostTxo.Position
-			repostHeight, _ = db.TxCounts.TxCountsBisectRight(repostTxo.TxNum, rootTxNum, BisectRight)
+			repostHeight, _ = db.TxCounts.TxCountsBisectRight(repostTxo.TxNum, rootTxNum)
 		}
 	}
 
@@ -120,7 +122,7 @@ func PrepareResolveResult(
 				return nil, err
 			}
 			channelTxPostition = channelVals.Position
-			channelHeight, _ = db.TxCounts.TxCountsBisectRight(channelVals.TxNum, rootTxNum, BisectRight)
+			channelHeight, _ = db.TxCounts.TxCountsBisectRight(channelVals.TxNum, rootTxNum)
 		}
 	}
 

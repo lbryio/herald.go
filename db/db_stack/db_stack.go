@@ -1,7 +1,12 @@
 package db_stack
 
+// The db_stack package contains the implementation of a generic slice backed stack
+// used for tracking various states in the hub, i.e. headers and txcounts
+
 import (
 	"sync"
+
+	"github.com/lbryio/hub/internal"
 )
 
 type SliceBackedStack struct {
@@ -81,16 +86,13 @@ func (s *SliceBackedStack) GetSlice() []interface{} {
 }
 
 // This function is dangerous because it assumes underlying types
-func (s *SliceBackedStack) TxCountsBisectRight(
-	txNum, rootTxNum uint32,
-	bisectFunc func([]interface{}, uint32) uint32,
-) (uint32, uint32) {
+func (s *SliceBackedStack) TxCountsBisectRight(txNum, rootTxNum uint32) (uint32, uint32) {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	txCounts := s.slice[:s.Len()]
-	height := bisectFunc(txCounts, txNum)
-	createdHeight := bisectFunc(txCounts, rootTxNum)
+	height := internal.BisectRight(txCounts, txNum)
+	createdHeight := internal.BisectRight(txCounts, rootTxNum)
 
 	return height, createdHeight
 }
