@@ -1,7 +1,7 @@
-FROM golang:1.16.11-bullseye
+FROM golang:1.17.8-bullseye
 
-RUN apt-get update && \
-    apt-get upgrade && \
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
     apt-get install -y dnsutils git libsnappy-dev liblz4-dev libzstd-dev zlib1g-dev \
             autoconf automake libtool curl make g++
 RUN cd /tmp && \
