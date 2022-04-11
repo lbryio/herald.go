@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/lbryio/hub/internal"
+	"github.com/lbryio/lbcd/chaincfg/chainhash"
 )
 
 const (
@@ -113,10 +114,10 @@ type DBStateKey struct {
 }
 
 type DBStateValue struct {
-	Genesis        []byte
+	Genesis        *chainhash.Hash
 	Height         uint32
 	TxCount        uint32
-	Tip            []byte
+	Tip            *chainhash.Hash
 	UtxoFlushCount uint32
 	WallTime       uint32
 	FirstSync      bool
@@ -129,10 +130,10 @@ type DBStateValue struct {
 
 func NewDBStateValue() *DBStateValue {
 	return &DBStateValue{
-		Genesis:        make([]byte, 32),
+		Genesis:        new(chainhash.Hash),
 		Height:         0,
 		TxCount:        0,
-		Tip:            make([]byte, 32),
+		Tip:            new(chainhash.Hash),
 		UtxoFlushCount: 0,
 		WallTime:       0,
 		FirstSync:      true,
@@ -220,11 +221,13 @@ func DBStateKeyUnpack(key []byte) *DBStateKey {
 }
 
 func DBStateValueUnpack(value []byte) *DBStateValue {
+	genesis := (*chainhash.Hash)(value[:32])
+	tip := (*chainhash.Hash)(value[32+4+4 : 32+4+4+32])
 	x := &DBStateValue{
-		Genesis:        value[:32],
+		Genesis:        genesis,
 		Height:         binary.BigEndian.Uint32(value[32:]),
 		TxCount:        binary.BigEndian.Uint32(value[32+4:]),
-		Tip:            value[32+4+4 : 32+4+4+32],
+		Tip:            tip,
 		UtxoFlushCount: binary.BigEndian.Uint32(value[32+4+4+32:]),
 		WallTime:       binary.BigEndian.Uint32(value[32+4+4+32+4:]),
 		FirstSync:      value[32+4+4+32+4+4] == 1,
@@ -583,7 +586,7 @@ type BlockHashKey struct {
 }
 
 type BlockHashValue struct {
-	BlockHash []byte `json:"block_hash"`
+	BlockHash *chainhash.Hash `json:"block_hash"`
 }
 
 func NewBlockHashKey(height uint32) *BlockHashKey {
@@ -670,8 +673,10 @@ func BlockHashKeyUnpack(key []byte) *BlockHashKey {
 }
 
 func BlockHashValueUnpack(value []byte) *BlockHashValue {
+	// hash := chainhash.Hash{}
+	hash := (*chainhash.Hash)(value)
 	return &BlockHashValue{
-		BlockHash: value[:32],
+		BlockHash: hash,
 	}
 }
 
@@ -681,7 +686,7 @@ type BlockTxsKey struct {
 }
 
 type BlockTxsValue struct {
-	TxHashes [][]byte `json:"tx_hashes"`
+	TxHashes []*chainhash.Hash `json:"tx_hashes"`
 }
 
 func (k *BlockTxsKey) NewBlockTxsKey(height uint32) *BlockTxsKey {
@@ -712,7 +717,7 @@ func (v *BlockTxsValue) PackValue() []byte {
 			log.Println("Warning, txhash not 32 bytes", tx)
 			return nil
 		}
-		copy(value[i*32:], tx)
+		copy(value[i*32:], tx[:])
 	}
 
 	return value
@@ -773,9 +778,9 @@ func BlockTxsKeyUnpack(key []byte) *BlockTxsKey {
 
 func BlockTxsValueUnpack(value []byte) *BlockTxsValue {
 	numHashes := len(value) / 32
-	txs := make([][]byte, numHashes)
+	txs := make([]*chainhash.Hash, numHashes)
 	for i := 0; i < numHashes; i++ {
-		txs[i] = value[i*32 : (i+1)*32]
+		txs[i] = (*chainhash.Hash)(value[i*32 : (i+1)*32])
 	}
 	return &BlockTxsValue{
 		TxHashes: txs,
@@ -881,7 +886,7 @@ type TxHashKey struct {
 }
 
 type TxHashValue struct {
-	TxHash []byte `json:"tx_hash"`
+	TxHash *chainhash.Hash `json:"tx_hash"`
 }
 
 func NewTxHashKey(txNum uint32) *TxHashKey {
@@ -965,13 +970,13 @@ func TxHashKeyUnpack(key []byte) *TxHashKey {
 
 func TxHashValueUnpack(value []byte) *TxHashValue {
 	return &TxHashValue{
-		TxHash: value,
+		TxHash: (*chainhash.Hash)(value),
 	}
 }
 
 type TxNumKey struct {
-	Prefix []byte `json:"prefix"`
-	TxHash []byte `json:"tx_hash"`
+	Prefix []byte          `json:"prefix"`
+	TxHash *chainhash.Hash `json:"tx_hash"`
 }
 
 type TxNumValue struct {
@@ -1045,7 +1050,7 @@ func TxNumKeyUnpack(key []byte) *TxNumKey {
 	prefixLen := 1
 	return &TxNumKey{
 		Prefix: key[:prefixLen],
-		TxHash: key[prefixLen : prefixLen+32],
+		TxHash: (*chainhash.Hash)(key[prefixLen : prefixLen+32]),
 	}
 }
 
@@ -1056,8 +1061,8 @@ func TxNumValueUnpack(value []byte) *TxNumValue {
 }
 
 type TxKey struct {
-	Prefix []byte `json:"prefix"`
-	TxHash []byte `json:"tx_hash"`
+	Prefix []byte          `json:"prefix"`
+	TxHash *chainhash.Hash `json:"tx_hash"`
 }
 
 type TxValue struct {
@@ -1131,7 +1136,7 @@ func TxKeyUnpack(key []byte) *TxKey {
 	prefixLen := 1
 	return &TxKey{
 		Prefix: key[:prefixLen],
-		TxHash: key[prefixLen : prefixLen+32],
+		TxHash: (*chainhash.Hash)(key[prefixLen : prefixLen+32]),
 	}
 }
 
