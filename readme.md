@@ -41,7 +41,7 @@ Contributions to this project are welcome, encouraged, and compensated. Details 
 
 ### Dev Dependencies
 
-Install Go 1.14+
+Install Go 1.17+
 
 - Ubuntu: `sudo add-apt-repository ppa:longsleep/golang-backports && sudo apt install golang-go`
 - OSX: `brew install go`
