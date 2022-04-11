@@ -17,12 +17,12 @@ func GetExpirationHeight(lastUpdatedHeight uint32) uint32 {
 
 func GetExpirationHeightFull(lastUpdatedHeight uint32, extended bool) uint32 {
 	if extended {
-		return lastUpdatedHeight + NExtendedClaimExpirationTime
+		return lastUpdatedHeight + ExtendedClaimExpirationTime
 	}
-	if lastUpdatedHeight < NExtendedClaimExpirationForkHeight {
-		return lastUpdatedHeight + NOriginalClaimExpirationTime
+	if lastUpdatedHeight < ExtendedClaimExpirationForkHeight {
+		return lastUpdatedHeight + OriginalClaimExpirationTime
 	}
-	return lastUpdatedHeight + NExtendedClaimExpirationTime
+	return lastUpdatedHeight + ExtendedClaimExpirationTime
 }
 
 // EnsureHandle is a helper function to ensure that the db has a handle to the given column family.
@@ -274,7 +274,7 @@ func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint
 }
 
 func (db *ReadOnlyDBColumnFamily) GetEffectiveAmount(claimHash []byte, supportOnly bool) (uint64, error) {
-	supportAmount, err := db.GetActiveAmount(claimHash, prefixes.ACTIVATED_SUPPORT_TXO_TYPE, db.Height+1)
+	supportAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivatedSupportTXOType, db.Height+1)
 	if err != nil {
 		return 0, err
 	}
@@ -283,7 +283,7 @@ func (db *ReadOnlyDBColumnFamily) GetEffectiveAmount(claimHash []byte, supportOn
 		return supportAmount, nil
 	}
 
-	activationAmount, err := db.GetActiveAmount(claimHash, prefixes.ACTIVATED_CLAIM_TXO_TYPE, db.Height+1)
+	activationAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivateClaimTXOType, db.Height+1)
 	if err != nil {
 		return 0, err
 	}
@@ -347,9 +347,9 @@ func (db *ReadOnlyDBColumnFamily) GetActivationFull(txNum uint32, postition uint
 	}
 
 	if isSupport {
-		typ = prefixes.ACTIVATED_SUPPORT_TXO_TYPE
+		typ = prefixes.ActivatedSupportTXOType
 	} else {
-		typ = prefixes.ACTIVATED_CLAIM_TXO_TYPE
+		typ = prefixes.ActivateClaimTXOType
 	}
 
 	key := prefixes.NewActivationKey(typ, txNum, postition)

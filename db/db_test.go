@@ -606,20 +606,20 @@ func TestGetExpirationHeight(t *testing.T) {
 	var expHeight uint32 = 0
 
 	expHeight = dbpkg.GetExpirationHeight(lastUpdated)
-	if lastUpdated+dbpkg.NOriginalClaimExpirationTime != expHeight {
-		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.NOriginalClaimExpirationTime, expHeight)
+	if lastUpdated+dbpkg.OriginalClaimExpirationTime != expHeight {
+		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.OriginalClaimExpirationTime, expHeight)
 	}
 
-	lastUpdated = dbpkg.NExtendedClaimExpirationForkHeight + 1
+	lastUpdated = dbpkg.ExtendedClaimExpirationForkHeight + 1
 	expHeight = dbpkg.GetExpirationHeight(lastUpdated)
-	if lastUpdated+dbpkg.NExtendedClaimExpirationTime != expHeight {
-		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.NExtendedClaimExpirationTime, expHeight)
+	if lastUpdated+dbpkg.ExtendedClaimExpirationTime != expHeight {
+		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.ExtendedClaimExpirationTime, expHeight)
 	}
 
 	lastUpdated = 0
 	expHeight = dbpkg.GetExpirationHeightFull(lastUpdated, true)
-	if lastUpdated+dbpkg.NExtendedClaimExpirationTime != expHeight {
-		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.NExtendedClaimExpirationTime, expHeight)
+	if lastUpdated+dbpkg.ExtendedClaimExpirationTime != expHeight {
+		t.Errorf("Expected %d, got %d", lastUpdated+dbpkg.ExtendedClaimExpirationTime, expHeight)
 	}
 }
 

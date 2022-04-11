@@ -26,16 +26,16 @@ import (
 
 const (
 	// Blochchain height / expiration constants
-	NOriginalClaimExpirationTime       = 262974
-	NExtendedClaimExpirationTime       = 2102400
-	NExtendedClaimExpirationForkHeight = 400155
-	NNormalizedNameForkHeight          = 539940 // targeting 21 March 2019
-	NMinTakeoverWorkaroundHeight       = 496850
-	NMaxTakeoverWorkaroundHeight       = 658300 // targeting 30 Oct 2019
-	NWitnessForkHeight                 = 680770 // targeting 11 Dec 2019
-	NAllClaimsInMerkleForkHeight       = 658310 // targeting 30 Oct 2019
-	ProportionalDelayFactor            = 32
-	MaxTakeoverDelay                   = 4032
+	OriginalClaimExpirationTime       = 262974
+	ExtendedClaimExpirationTime       = 2102400
+	ExtendedClaimExpirationForkHeight = 400155
+	NormalizedNameForkHeight          = 539940 // targeting 21 March 2019
+	MinTakeoverWorkaroundHeight       = 496850
+	MaxTakeoverWorkaroundHeight       = 658300 // targeting 30 Oct 2019
+	WitnessForkHeight                 = 680770 // targeting 11 Dec 2019
+	AllClaimsInMerkleForkHeight       = 658310 // targeting 30 Oct 2019
+	ProportionalDelayFactor           = 32
+	MaxTakeoverDelay                  = 4032
 	// Initial size constants
 	InitialTxCountSize = 1200000
 )
@@ -440,7 +440,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 		cfNames = append(cfNames, cfName)
 	}
 
-	db, err := GetDBColumnFamlies(name, secondaryPath, cfNames)
+	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
 
 	cleanup := func() {
 		db.DB.Close()
@@ -455,21 +455,10 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 		return nil, cleanup, err
 	}
 
-	// Wait for the height to be greater than zero
-	// for {
-	// 	ReadDBState(db)
-	// 	if db.LastState.Height > 0 {
-	// 		logrus.Infof("db height is > 0: %+v\n", db.LastState)
-	// 		break
-	// 	}
-	// 	time.Sleep(time.Millisecond * 100)
-	// 	logrus.Infof("Waiting for db height to be > 0: %+v\n", db.LastState)
-	// }
-
 	return db, cleanup, nil
 }
 
-func GetDBColumnFamlies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
+func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
 	opts := grocksdb.NewDefaultOptions()
 	roOpts := grocksdb.NewDefaultReadOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -591,7 +580,7 @@ func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan *internal.Height
 				log.Debug("DetectChanges:", db.LastState)
 				lastPrint = time.Now()
 			}
-			err := db.DetectChanges(notifCh)
+			err := db.detectChanges(notifCh)
 			if err != nil {
 				log.Infof("Error detecting changes: %#v", err)
 			}
@@ -606,7 +595,7 @@ func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan *internal.Height
 }
 
 // DetectChanges keep the rocksdb db in sync and handle reorgs
-func (db *ReadOnlyDBColumnFamily) DetectChanges(notifCh chan *internal.HeightHash) error {
+func (db *ReadOnlyDBColumnFamily) detectChanges(notifCh chan *internal.HeightHash) error {
 	err := db.DB.TryCatchUpWithPrimary()
 	if err != nil {
 		return err

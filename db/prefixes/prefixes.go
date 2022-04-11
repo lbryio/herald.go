@@ -60,8 +60,8 @@ const (
 	SupportAmount = 'a'
 	BlockTXs      = 'b'
 
-	ACTIVATED_CLAIM_TXO_TYPE   = 1
-	ACTIVATED_SUPPORT_TXO_TYPE = 2
+	ActivateClaimTXOType    = 1
+	ActivatedSupportTXOType = 2
 
 	OnesCompTwiddle64 uint64 = 0xffffffffffffffff
 	OnesCompTwiddle32 uint32 = 0xffffffff
@@ -192,18 +192,18 @@ func (v *DBStateValue) PackValue() []byte {
 }
 
 func DBStateKeyPackPartialKey(key *DBStateKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return DBStateKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return DBStateKeyPackPartial(key, fields)
 	}
 }
 
-func DBStateKeyPackPartialNFields(nFields int) func(*DBStateKey) []byte {
+func DBStateKeyPackPartialfields(fields int) func(*DBStateKey) []byte {
 	return func(u *DBStateKey) []byte {
-		return DBStateKeyPackPartial(u, nFields)
+		return DBStateKeyPackPartial(u, fields)
 	}
 }
 
-func DBStateKeyPackPartial(k *DBStateKey, nFields int) []byte {
+func DBStateKeyPackPartial(k *DBStateKey, fields int) []byte {
 	prefixLen := 1
 	var n = prefixLen
 
@@ -269,31 +269,31 @@ func (v *UndoValue) PackValue() []byte {
 }
 
 func UndoKeyPackPartialKey(key *UndoKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return UndoKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return UndoKeyPackPartial(key, fields)
 	}
 }
 
-func UndoKeyPackPartialNFields(nFields int) func(*UndoKey) []byte {
+func UndoKeyPackPartialfields(fields int) func(*UndoKey) []byte {
 	return func(u *UndoKey) []byte {
-		return UndoKeyPackPartial(u, nFields)
+		return UndoKeyPackPartial(u, fields)
 	}
 }
 
-func UndoKeyPackPartial(k *UndoKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func UndoKeyPackPartial(k *UndoKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 8
@@ -302,7 +302,7 @@ func UndoKeyPackPartial(k *UndoKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -394,34 +394,34 @@ func (v *HashXUTXOValue) PackValue() []byte {
 
 // HashXUTXOKeyPackPartialKey creates a pack partial key function for n fields.
 func HashXUTXOKeyPackPartialKey(key *HashXUTXOKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return HashXUTXOKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return HashXUTXOKeyPackPartial(key, fields)
 	}
 }
 
-// HashXUTXOKeyPackPartialNFields creates a pack partial key function for n fields.
-func HashXUTXOKeyPackPartialNFields(nFields int) func(*HashXUTXOKey) []byte {
+// HashXUTXOKeyPackPartialfields creates a pack partial key function for n fields.
+func HashXUTXOKeyPackPartialfields(fields int) func(*HashXUTXOKey) []byte {
 	return func(u *HashXUTXOKey) []byte {
-		return HashXUTXOKeyPackPartial(u, nFields)
+		return HashXUTXOKeyPackPartial(u, fields)
 	}
 }
 
 // HashXUTXOKeyPackPartial packs a variable number of fields into a byte
 // array
-func HashXUTXOKeyPackPartial(k *HashXUTXOKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func HashXUTXOKeyPackPartial(k *HashXUTXOKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -434,7 +434,7 @@ func HashXUTXOKeyPackPartial(k *HashXUTXOKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -509,33 +509,33 @@ func (v *HashXHistoryValue) PackValue() []byte {
 
 // HashXHistoryKeyPackPartialKey creates a pack partial key function for n fields.
 func HashXHistoryKeyPackPartialKey(key *HashXHistoryKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return HashXHistoryKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return HashXHistoryKeyPackPartial(key, fields)
 	}
 }
 
-// HashXHistoryKeyPackPartialNFields creates a pack partial key function for n fields.
-func HashXHistoryKeyPackPartialNFields(nFields int) func(*HashXHistoryKey) []byte {
+// HashXHistoryKeyPackPartialfields creates a pack partial key function for n fields.
+func HashXHistoryKeyPackPartialfields(fields int) func(*HashXHistoryKey) []byte {
 	return func(u *HashXHistoryKey) []byte {
-		return HashXHistoryKeyPackPartial(u, nFields)
+		return HashXHistoryKeyPackPartial(u, fields)
 	}
 }
 
 // HashXHistoryKeyPackPartial packs a variable number of fields into a byte
 // array
-func HashXHistoryKeyPackPartial(k *HashXHistoryKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func HashXHistoryKeyPackPartial(k *HashXHistoryKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 2 {
-		nFields = 2
+	if fields > 2 {
+		fields = 2
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 11
@@ -546,7 +546,7 @@ func HashXHistoryKeyPackPartial(k *HashXHistoryKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -615,31 +615,31 @@ func (v *BlockHashValue) PackValue() []byte {
 }
 
 func BlockHashKeyPackPartialKey(key *BlockHashKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return BlockHashKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return BlockHashKeyPackPartial(key, fields)
 	}
 }
 
-func BlockHashKeyPackPartialNFields(nFields int) func(*BlockHashKey) []byte {
+func BlockHashKeyPackPartialfields(fields int) func(*BlockHashKey) []byte {
 	return func(u *BlockHashKey) []byte {
-		return BlockHashKeyPackPartial(u, nFields)
+		return BlockHashKeyPackPartial(u, fields)
 	}
 }
 
-func BlockHashKeyPackPartial(k *BlockHashKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func BlockHashKeyPackPartial(k *BlockHashKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -652,7 +652,7 @@ func BlockHashKeyPackPartial(k *BlockHashKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -673,7 +673,6 @@ func BlockHashKeyUnpack(key []byte) *BlockHashKey {
 }
 
 func BlockHashValueUnpack(value []byte) *BlockHashValue {
-	// hash := chainhash.Hash{}
 	hash := (*chainhash.Hash)(value)
 	return &BlockHashValue{
 		BlockHash: hash,
@@ -724,30 +723,30 @@ func (v *BlockTxsValue) PackValue() []byte {
 }
 
 func BlockTxsKeyPackPartialKey(key *BlockTxsKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return BlockTxsKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return BlockTxsKeyPackPartial(key, fields)
 	}
 }
 
-func BlockTxsKeyPackPartialNFields(nFields int) func(*BlockTxsKey) []byte {
+func BlockTxsKeyPackPartialfields(fields int) func(*BlockTxsKey) []byte {
 	return func(u *BlockTxsKey) []byte {
-		return BlockTxsKeyPackPartial(u, nFields)
+		return BlockTxsKeyPackPartial(u, fields)
 	}
 }
 
-func BlockTxsKeyPackPartial(k *BlockTxsKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func BlockTxsKeyPackPartial(k *BlockTxsKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -756,7 +755,7 @@ func BlockTxsKeyPackPartial(k *BlockTxsKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -822,30 +821,30 @@ func (v *TxCountValue) PackValue() []byte {
 }
 
 func TxCountKeyPackPartialKey(key *TxCountKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return TxCountKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return TxCountKeyPackPartial(key, fields)
 	}
 }
 
-func TxCountKeyPackPartialNFields(nFields int) func(*TxCountKey) []byte {
+func TxCountKeyPackPartialfields(fields int) func(*TxCountKey) []byte {
 	return func(u *TxCountKey) []byte {
-		return TxCountKeyPackPartial(u, nFields)
+		return TxCountKeyPackPartial(u, fields)
 	}
 }
 
-func TxCountKeyPackPartial(k *TxCountKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func TxCountKeyPackPartial(k *TxCountKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -854,7 +853,7 @@ func TxCountKeyPackPartial(k *TxCountKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -916,30 +915,30 @@ func (v *TxHashValue) PackValue() []byte {
 }
 
 func TxHashKeyPackPartialKey(key *TxHashKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return TxHashKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return TxHashKeyPackPartial(key, fields)
 	}
 }
 
-func TxHashKeyPackPartialNFields(nFields int) func(*TxHashKey) []byte {
+func TxHashKeyPackPartialfields(fields int) func(*TxHashKey) []byte {
 	return func(u *TxHashKey) []byte {
-		return TxHashKeyPackPartial(u, nFields)
+		return TxHashKeyPackPartial(u, fields)
 	}
 }
 
-func TxHashKeyPackPartial(k *TxHashKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func TxHashKeyPackPartial(k *TxHashKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -948,7 +947,7 @@ func TxHashKeyPackPartial(k *TxHashKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1002,30 +1001,30 @@ func (v *TxNumValue) PackValue() []byte {
 }
 
 func TxNumKeyPackPartialKey(key *TxNumKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return TxNumKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return TxNumKeyPackPartial(key, fields)
 	}
 }
 
-func TxNumKeyPackPartialNFields(nFields int) func(*TxNumKey) []byte {
+func TxNumKeyPackPartialfields(fields int) func(*TxNumKey) []byte {
 	return func(u *TxNumKey) []byte {
-		return TxNumKeyPackPartial(u, nFields)
+		return TxNumKeyPackPartial(u, fields)
 	}
 }
 
-func TxNumKeyPackPartial(k *TxNumKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func TxNumKeyPackPartial(k *TxNumKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 32
@@ -1034,7 +1033,7 @@ func TxNumKeyPackPartial(k *TxNumKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1088,30 +1087,30 @@ func (v *TxValue) PackValue() []byte {
 }
 
 func TxKeyPackPartialKey(key *TxKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return TxKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return TxKeyPackPartial(key, fields)
 	}
 }
 
-func TxKeyPackPartialNFields(nFields int) func(*TxKey) []byte {
+func TxKeyPackPartialfields(fields int) func(*TxKey) []byte {
 	return func(u *TxKey) []byte {
-		return TxKeyPackPartial(u, nFields)
+		return TxKeyPackPartial(u, fields)
 	}
 }
 
-func TxKeyPackPartial(k *TxKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func TxKeyPackPartial(k *TxKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 32
@@ -1120,7 +1119,7 @@ func TxKeyPackPartial(k *TxKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1185,31 +1184,31 @@ func (v *BlockHeaderValue) PackValue() []byte {
 }
 
 func BlockHeaderKeyPackPartialKey(key *BlockHeaderKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return BlockHeaderKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return BlockHeaderKeyPackPartial(key, fields)
 	}
 }
 
-func BlockHeaderKeyPackPartialNFields(nFields int) func(*BlockHeaderKey) []byte {
+func BlockHeaderKeyPackPartialfields(fields int) func(*BlockHeaderKey) []byte {
 	return func(u *BlockHeaderKey) []byte {
-		return BlockHeaderKeyPackPartial(u, nFields)
+		return BlockHeaderKeyPackPartial(u, fields)
 	}
 }
 
-func BlockHeaderKeyPackPartial(k *BlockHeaderKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func BlockHeaderKeyPackPartial(k *BlockHeaderKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -1218,7 +1217,7 @@ func BlockHeaderKeyPackPartial(k *BlockHeaderKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1303,31 +1302,31 @@ func (v *ClaimToTXOValue) PackValue() []byte {
 }
 
 func ClaimToTXOKeyPackPartialKey(key *ClaimToTXOKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ClaimToTXOKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ClaimToTXOKeyPackPartial(key, fields)
 	}
 }
 
-func ClaimToTXOKeyPackPartialNFields(nFields int) func(*ClaimToTXOKey) []byte {
+func ClaimToTXOKeyPackPartialfields(fields int) func(*ClaimToTXOKey) []byte {
 	return func(u *ClaimToTXOKey) []byte {
-		return ClaimToTXOKeyPackPartial(u, nFields)
+		return ClaimToTXOKeyPackPartial(u, fields)
 	}
 }
 
-func ClaimToTXOKeyPackPartial(k *ClaimToTXOKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ClaimToTXOKeyPackPartial(k *ClaimToTXOKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -1336,7 +1335,7 @@ func ClaimToTXOKeyPackPartial(k *ClaimToTXOKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1412,30 +1411,30 @@ func (v *TXOToClaimValue) PackValue() []byte {
 }
 
 func TXOToClaimKeyPackPartialKey(key *TXOToClaimKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return TXOToClaimKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return TXOToClaimKeyPackPartial(key, fields)
 	}
 }
 
-func TXOToClaimKeyPackPartialNFields(nFields int) func(*TXOToClaimKey) []byte {
+func TXOToClaimKeyPackPartialfields(fields int) func(*TXOToClaimKey) []byte {
 	return func(u *TXOToClaimKey) []byte {
-		return TXOToClaimKeyPackPartial(u, nFields)
+		return TXOToClaimKeyPackPartial(u, fields)
 	}
 }
 
-func TXOToClaimKeyPackPartial(k *TXOToClaimKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func TXOToClaimKeyPackPartial(k *TXOToClaimKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 2 {
-		nFields = 2
+	if fields > 2 {
+		fields = 2
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -1446,7 +1445,7 @@ func TXOToClaimKeyPackPartial(k *TXOToClaimKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1525,25 +1524,25 @@ func (v *ClaimShortIDValue) PackValue() []byte {
 }
 
 func ClaimShortIDKeyPackPartialKey(key *ClaimShortIDKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ClaimShortIDKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ClaimShortIDKeyPackPartial(key, fields)
 	}
 }
 
-func ClaimShortIDKeyPackPartialNFields(nFields int) func(*ClaimShortIDKey) []byte {
+func ClaimShortIDKeyPackPartialfields(fields int) func(*ClaimShortIDKey) []byte {
 	return func(u *ClaimShortIDKey) []byte {
-		return ClaimShortIDKeyPackPartial(u, nFields)
+		return ClaimShortIDKeyPackPartial(u, fields)
 	}
 }
 
-func ClaimShortIDKeyPackPartial(k *ClaimShortIDKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ClaimShortIDKeyPackPartial(k *ClaimShortIDKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 4 {
-		nFields = 4
+	if fields > 4 {
+		fields = 4
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
@@ -1552,7 +1551,7 @@ func ClaimShortIDKeyPackPartial(k *ClaimShortIDKey, nFields int) []byte {
 	partialClaimLen := len(k.PartialClaimId)
 
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 2 + nameLen
@@ -1567,7 +1566,7 @@ func ClaimShortIDKeyPackPartial(k *ClaimShortIDKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1648,31 +1647,31 @@ func (v *ClaimToChannelValue) PackValue() []byte {
 }
 
 func ClaimToChannelKeyPackPartialKey(key *ClaimToChannelKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ClaimToChannelKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ClaimToChannelKeyPackPartial(key, fields)
 	}
 }
 
-func ClaimToChannelKeyPackPartialNFields(nFields int) func(*ClaimToChannelKey) []byte {
+func ClaimToChannelKeyPackPartialfields(fields int) func(*ClaimToChannelKey) []byte {
 	return func(u *ClaimToChannelKey) []byte {
-		return ClaimToChannelKeyPackPartial(u, nFields)
+		return ClaimToChannelKeyPackPartial(u, fields)
 	}
 }
 
-func ClaimToChannelKeyPackPartial(k *ClaimToChannelKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ClaimToChannelKeyPackPartial(k *ClaimToChannelKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -1685,7 +1684,7 @@ func ClaimToChannelKeyPackPartial(k *ClaimToChannelKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1767,31 +1766,31 @@ func (v *ChannelToClaimValue) PackValue() []byte {
 }
 
 func ChannelToClaimKeyPackPartialKey(key *ChannelToClaimKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ChannelToClaimKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ChannelToClaimKeyPackPartial(key, fields)
 	}
 }
 
-func ChannelToClaimKeyPackPartialNFields(nFields int) func(*ChannelToClaimKey) []byte {
+func ChannelToClaimKeyPackPartialfields(fields int) func(*ChannelToClaimKey) []byte {
 	return func(u *ChannelToClaimKey) []byte {
-		return ChannelToClaimKeyPackPartial(u, nFields)
+		return ChannelToClaimKeyPackPartial(u, fields)
 	}
 }
 
-func ChannelToClaimKeyPackPartial(k *ChannelToClaimKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ChannelToClaimKeyPackPartial(k *ChannelToClaimKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 4 {
-		nFields = 4
+	if fields > 4 {
+		fields = 4
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	nameLen := len(k.Name)
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -1806,7 +1805,7 @@ func ChannelToClaimKeyPackPartial(k *ChannelToClaimKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1878,30 +1877,30 @@ func (v *ChannelCountValue) PackValue() []byte {
 }
 
 func ChannelCountKeyPackPartialKey(key *ChannelCountKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ChannelCountKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ChannelCountKeyPackPartial(key, fields)
 	}
 }
 
-func ChannelCountKeyPackPartialNFields(nFields int) func(*ChannelCountKey) []byte {
+func ChannelCountKeyPackPartialfields(fields int) func(*ChannelCountKey) []byte {
 	return func(u *ChannelCountKey) []byte {
-		return ChannelCountKeyPackPartial(u, nFields)
+		return ChannelCountKeyPackPartial(u, fields)
 	}
 }
 
-func ChannelCountKeyPackPartial(k *ChannelCountKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ChannelCountKeyPackPartial(k *ChannelCountKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -1910,7 +1909,7 @@ func ChannelCountKeyPackPartial(k *ChannelCountKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -1971,30 +1970,30 @@ func (v *SupportAmountValue) PackValue() []byte {
 }
 
 func SupportAmountKeyPackPartialKey(key *SupportAmountKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return SupportAmountKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return SupportAmountKeyPackPartial(key, fields)
 	}
 }
 
-func SupportAmountKeyPackPartialNFields(nFields int) func(*SupportAmountKey) []byte {
+func SupportAmountKeyPackPartialfields(fields int) func(*SupportAmountKey) []byte {
 	return func(u *SupportAmountKey) []byte {
-		return SupportAmountKeyPackPartial(u, nFields)
+		return SupportAmountKeyPackPartial(u, fields)
 	}
 }
 
-func SupportAmountKeyPackPartial(k *SupportAmountKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func SupportAmountKeyPackPartial(k *SupportAmountKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -2003,7 +2002,7 @@ func SupportAmountKeyPackPartial(k *SupportAmountKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2061,31 +2060,31 @@ func (v *ClaimToSupportValue) PackValue() []byte {
 }
 
 func ClaimToSupportKeyPackPartialKey(key *ClaimToSupportKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ClaimToSupportKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ClaimToSupportKeyPackPartial(key, fields)
 	}
 }
 
-func ClaimToSupportKeyPackPartialNFields(nFields int) func(*ClaimToSupportKey) []byte {
+func ClaimToSupportKeyPackPartialfields(fields int) func(*ClaimToSupportKey) []byte {
 	return func(u *ClaimToSupportKey) []byte {
-		return ClaimToSupportKeyPackPartial(u, nFields)
+		return ClaimToSupportKeyPackPartial(u, fields)
 	}
 }
 
-func ClaimToSupportKeyPackPartial(k *ClaimToSupportKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ClaimToSupportKeyPackPartial(k *ClaimToSupportKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -2098,7 +2097,7 @@ func ClaimToSupportKeyPackPartial(k *ClaimToSupportKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2160,30 +2159,30 @@ func (v *SupportToClaimValue) PackValue() []byte {
 }
 
 func SupportToClaimKeyPackPartialKey(key *SupportToClaimKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return SupportToClaimKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return SupportToClaimKeyPackPartial(key, fields)
 	}
 }
 
-func SupportToClaimKeyPackPartialNFields(nFields int) func(*SupportToClaimKey) []byte {
+func SupportToClaimKeyPackPartialfields(fields int) func(*SupportToClaimKey) []byte {
 	return func(u *SupportToClaimKey) []byte {
-		return SupportToClaimKeyPackPartial(u, nFields)
+		return SupportToClaimKeyPackPartial(u, fields)
 	}
 }
 
-func SupportToClaimKeyPackPartial(k *SupportToClaimKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func SupportToClaimKeyPackPartial(k *SupportToClaimKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 2 {
-		nFields = 2
+	if fields > 2 {
+		fields = 2
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -2194,7 +2193,7 @@ func SupportToClaimKeyPackPartial(k *SupportToClaimKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2260,31 +2259,31 @@ func (v *ClaimExpirationValue) PackValue() []byte {
 }
 
 func ClaimExpirationKeyPackPartialKey(key *ClaimExpirationKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ClaimExpirationKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ClaimExpirationKeyPackPartial(key, fields)
 	}
 }
 
-func ClaimExpirationKeyPackPartialNFields(nFields int) func(*ClaimExpirationKey) []byte {
+func ClaimExpirationKeyPackPartialfields(fields int) func(*ClaimExpirationKey) []byte {
 	return func(u *ClaimExpirationKey) []byte {
-		return ClaimExpirationKeyPackPartial(u, nFields)
+		return ClaimExpirationKeyPackPartial(u, fields)
 	}
 }
 
-func ClaimExpirationKeyPackPartial(k *ClaimExpirationKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ClaimExpirationKeyPackPartial(k *ClaimExpirationKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -2297,7 +2296,7 @@ func ClaimExpirationKeyPackPartial(k *ClaimExpirationKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2379,31 +2378,31 @@ func (v *ClaimTakeoverValue) PackValue() []byte {
 }
 
 func ClaimTakeoverKeyPackPartialKey(key *ClaimTakeoverKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ClaimTakeoverKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ClaimTakeoverKeyPackPartial(key, fields)
 	}
 }
 
-func ClaimTakeoverKeyPackPartialNFields(nFields int) func(*ClaimTakeoverKey) []byte {
+func ClaimTakeoverKeyPackPartialfields(fields int) func(*ClaimTakeoverKey) []byte {
 	return func(u *ClaimTakeoverKey) []byte {
-		return ClaimTakeoverKeyPackPartial(u, nFields)
+		return ClaimTakeoverKeyPackPartial(u, fields)
 	}
 }
 
-func ClaimTakeoverKeyPackPartial(k *ClaimTakeoverKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ClaimTakeoverKeyPackPartial(k *ClaimTakeoverKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	nameLen := len(k.NormalizedName)
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 2 + nameLen
@@ -2412,7 +2411,7 @@ func ClaimTakeoverKeyPackPartial(k *ClaimTakeoverKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2450,11 +2449,11 @@ type PendingActivationKey struct {
 }
 
 func (k *PendingActivationKey) IsSupport() bool {
-	return k.TxoType == ACTIVATED_SUPPORT_TXO_TYPE
+	return k.TxoType == ActivatedSupportTXOType
 }
 
 func (k *PendingActivationKey) IsClaim() bool {
-	return k.TxoType == ACTIVATED_CLAIM_TXO_TYPE
+	return k.TxoType == ActivateClaimTXOType
 }
 
 type PendingActivationValue struct {
@@ -2488,31 +2487,31 @@ func (v *PendingActivationValue) PackValue() []byte {
 }
 
 func PendingActivationKeyPackPartialKey(key *PendingActivationKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return PendingActivationKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return PendingActivationKeyPackPartial(key, fields)
 	}
 }
 
-func PendingActivationKeyPackPartialNFields(nFields int) func(*PendingActivationKey) []byte {
+func PendingActivationKeyPackPartialfields(fields int) func(*PendingActivationKey) []byte {
 	return func(u *PendingActivationKey) []byte {
-		return PendingActivationKeyPackPartial(u, nFields)
+		return PendingActivationKeyPackPartial(u, fields)
 	}
 }
 
-func PendingActivationKeyPackPartial(k *PendingActivationKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func PendingActivationKeyPackPartial(k *PendingActivationKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 4 {
-		nFields = 4
+	if fields > 4 {
+		fields = 4
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>4sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -2527,7 +2526,7 @@ func PendingActivationKeyPackPartial(k *PendingActivationKey, nFields int) []byt
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2612,30 +2611,30 @@ func (v *ActivationValue) PackValue() []byte {
 }
 
 func ActivationKeyPackPartialKey(key *ActivationKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ActivationKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ActivationKeyPackPartial(key, fields)
 	}
 }
 
-func ActivationKeyPackPartialNFields(nFields int) func(*ActivationKey) []byte {
+func ActivationKeyPackPartialfields(fields int) func(*ActivationKey) []byte {
 	return func(u *ActivationKey) []byte {
-		return ActivationKeyPackPartial(u, nFields)
+		return ActivationKeyPackPartial(u, fields)
 	}
 }
 
-func ActivationKeyPackPartial(k *ActivationKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ActivationKeyPackPartial(k *ActivationKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 1
@@ -2648,7 +2647,7 @@ func ActivationKeyPackPartial(k *ActivationKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2729,30 +2728,30 @@ func (v *ActiveAmountValue) PackValue() []byte {
 }
 
 func ActiveAmountKeyPackPartialKey(key *ActiveAmountKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return ActiveAmountKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return ActiveAmountKeyPackPartial(key, fields)
 	}
 }
 
-func ActiveAmountKeyPackPartialNFields(nFields int) func(*ActiveAmountKey) []byte {
+func ActiveAmountKeyPackPartialfields(fields int) func(*ActiveAmountKey) []byte {
 	return func(u *ActiveAmountKey) []byte {
-		return ActiveAmountKeyPackPartial(u, nFields)
+		return ActiveAmountKeyPackPartial(u, fields)
 	}
 }
 
-func ActiveAmountKeyPackPartial(k *ActiveAmountKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func ActiveAmountKeyPackPartial(k *ActiveAmountKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 5 {
-		nFields = 5
+	if fields > 5 {
+		fields = 5
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -2769,7 +2768,7 @@ func ActiveAmountKeyPackPartial(k *ActiveAmountKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2854,32 +2853,32 @@ func (v *EffectiveAmountValue) PackValue() []byte {
 }
 
 func EffectiveAmountKeyPackPartialKey(key *EffectiveAmountKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return EffectiveAmountKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return EffectiveAmountKeyPackPartial(key, fields)
 	}
 }
 
-func EffectiveAmountKeyPackPartialNFields(nFields int) func(*EffectiveAmountKey) []byte {
+func EffectiveAmountKeyPackPartialfields(fields int) func(*EffectiveAmountKey) []byte {
 	return func(u *EffectiveAmountKey) []byte {
-		return EffectiveAmountKeyPackPartial(u, nFields)
+		return EffectiveAmountKeyPackPartial(u, fields)
 	}
 }
 
-func EffectiveAmountKeyPackPartial(k *EffectiveAmountKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func EffectiveAmountKeyPackPartial(k *EffectiveAmountKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	nameLen := len(k.NormalizedName)
 	nameLenLen := 2 + nameLen
-	if nFields > 4 {
-		nFields = 4
+	if fields > 4 {
+		fields = 4
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 2 + nameLen
@@ -2894,7 +2893,7 @@ func EffectiveAmountKeyPackPartial(k *EffectiveAmountKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -2968,30 +2967,30 @@ func (v *RepostValue) PackValue() []byte {
 }
 
 func RepostKeyPackPartialKey(key *RepostKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return RepostKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return RepostKeyPackPartial(key, fields)
 	}
 }
 
-func RepostKeyPackPartialNFields(nFields int) func(*RepostKey) []byte {
+func RepostKeyPackPartialfields(fields int) func(*RepostKey) []byte {
 	return func(u *RepostKey) []byte {
-		return RepostKeyPackPartial(u, nFields)
+		return RepostKeyPackPartial(u, fields)
 	}
 }
 
-func RepostKeyPackPartial(k *RepostKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func RepostKeyPackPartial(k *RepostKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -3000,7 +2999,7 @@ func RepostKeyPackPartial(k *RepostKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -3066,30 +3065,30 @@ func (v *RepostedValue) PackValue() []byte {
 }
 
 func RepostedKeyPackPartialKey(key *RepostedKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return RepostedKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return RepostedKeyPackPartial(key, fields)
 	}
 }
 
-func RepostedKeyPackPartialNFields(nFields int) func(*RepostedKey) []byte {
+func RepostedKeyPackPartialfields(fields int) func(*RepostedKey) []byte {
 	return func(u *RepostedKey) []byte {
-		return RepostedKeyPackPartial(u, nFields)
+		return RepostedKeyPackPartial(u, fields)
 	}
 }
 
-func RepostedKeyPackPartial(k *RepostedKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func RepostedKeyPackPartial(k *RepostedKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 20
@@ -3102,7 +3101,7 @@ func RepostedKeyPackPartial(k *RepostedKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -3224,30 +3223,30 @@ func (v *TouchedOrDeletedClaimValue) PackValue() []byte {
 }
 
 func TouchedOrDeletedClaimKeyPackPartialKey(key *TouchedOrDeletedClaimKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return TouchedOrDeletedClaimKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return TouchedOrDeletedClaimKeyPackPartial(key, fields)
 	}
 }
 
-func TouchedOrDeletedClaimPackPartialNFields(nFields int) func(*TouchedOrDeletedClaimKey) []byte {
+func TouchedOrDeletedClaimPackPartialfields(fields int) func(*TouchedOrDeletedClaimKey) []byte {
 	return func(u *TouchedOrDeletedClaimKey) []byte {
-		return TouchedOrDeletedClaimKeyPackPartial(u, nFields)
+		return TouchedOrDeletedClaimKeyPackPartial(u, fields)
 	}
 }
 
-func TouchedOrDeletedClaimKeyPackPartial(k *TouchedOrDeletedClaimKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func TouchedOrDeletedClaimKeyPackPartial(k *TouchedOrDeletedClaimKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 1 {
-		nFields = 1
+	if fields > 1 {
+		fields = 1
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 4
@@ -3256,7 +3255,7 @@ func TouchedOrDeletedClaimKeyPackPartial(k *TouchedOrDeletedClaimKey, nFields in
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -3327,33 +3326,33 @@ func (k *UTXOValue) PackValue() []byte {
 }
 
 func UTXOKeyPackPartialKey(key *UTXOKey) func(int) []byte {
-	return func(nFields int) []byte {
-		return UTXOKeyPackPartial(key, nFields)
+	return func(fields int) []byte {
+		return UTXOKeyPackPartial(key, fields)
 	}
 }
 
-func UTXOKeyPackPartialNFields(nFields int) func(*UTXOKey) []byte {
+func UTXOKeyPackPartialfields(fields int) func(*UTXOKey) []byte {
 	return func(u *UTXOKey) []byte {
-		return UTXOKeyPackPartial(u, nFields)
+		return UTXOKeyPackPartial(u, fields)
 	}
 }
 
 // UTXOKeyPackPartial packs a variable number of fields for a UTXOKey into
 // a byte array.
-func UTXOKeyPackPartial(k *UTXOKey, nFields int) []byte {
-	// Limit nFields between 0 and number of fields, we always at least need
+func UTXOKeyPackPartial(k *UTXOKey, fields int) []byte {
+	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
-	if nFields > 3 {
-		nFields = 3
+	if fields > 3 {
+		fields = 3
 	}
-	if nFields < 0 {
-		nFields = 0
+	if fields < 0 {
+		fields = 0
 	}
 
 	// b'>11sLH'
 	prefixLen := 1
 	var n = prefixLen
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 1:
 			n += 11
@@ -3366,7 +3365,7 @@ func UTXOKeyPackPartial(k *UTXOKey, nFields int) []byte {
 
 	key := make([]byte, n)
 
-	for i := 0; i <= nFields; i++ {
+	for i := 0; i <= fields; i++ {
 		switch i {
 		case 0:
 			copy(key, k.Prefix)
@@ -3735,12 +3734,12 @@ func UnpackGenericValue(key, value []byte) (interface{}, error) {
 	return generic(value, key[0], 1, "unpack value")
 }
 
-func PackPartialGenericKey(prefix byte, key interface{}, nFields int) ([]byte, error) {
+func PackPartialGenericKey(prefix byte, key interface{}, fields int) ([]byte, error) {
 	if key == nil {
 		return nil, fmt.Errorf("key length zero")
 	}
 	genericRes, err := generic(key, prefix, 4, "pack partial key")
-	res := genericRes.(func(int) []byte)(nFields)
+	res := genericRes.(func(int) []byte)(fields)
 	return res, err
 }
 
