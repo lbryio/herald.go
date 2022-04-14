@@ -164,7 +164,7 @@ func (db *ReadOnlyDBColumnFamily) GetShortClaimIdUrl(name string, normalizedName
 		// Prefix and handle
 		options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
 		// Start and stop bounds
-		options = options.WithStart(keyPrefix)
+		options = options.WithStart(keyPrefix).WithStop(keyPrefix)
 		// Don't include the key
 		options = options.WithIncludeValue(false)
 
@@ -428,8 +428,6 @@ func (db *ReadOnlyDBColumnFamily) GetControllingClaim(name string) (*prefixes.Cl
 	log.Println(hex.EncodeToString(rawKey))
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
 	defer slice.Free()
-	log.Printf("slice: %#v", slice)
-	log.Printf("err: %#v", err)
 
 	if err != nil {
 		return nil, err
