@@ -150,7 +150,7 @@ func (s *Server) Run() {
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
 func MakeHubServer(ctx context.Context, args *Args) *Server {
-	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(10))
+	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(0))
 
 	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
 	if err != nil {

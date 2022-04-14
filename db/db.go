@@ -332,8 +332,10 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	}
 
 	go func() {
-		defer it.Close()
-		defer close(ch)
+		defer func() {
+			it.Close()
+			close(ch)
+		}()
 
 		var prevKey []byte
 		// FIXME: There's messy uses of kv being nil / not nil here.

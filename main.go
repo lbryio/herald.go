@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	_ "net/http/pprof"
+
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/lbryio/hub/server"
 	"github.com/lbryio/lbry.go/v2/extras/util"

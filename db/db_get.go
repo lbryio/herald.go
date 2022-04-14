@@ -44,6 +44,7 @@ func (db *ReadOnlyDBColumnFamily) GetBlockHash(height uint32) ([]byte, error) {
 	key := prefixes.NewBlockHashKey(height)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {
@@ -64,6 +65,7 @@ func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
 	key := prefixes.NewHeaderKey(height)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {
@@ -127,6 +129,7 @@ func (db *ReadOnlyDBColumnFamily) GetClaimsInChannelCount(channelHash []byte) (u
 	rawKey := key.PackKey()
 
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return 0, err
 	} else if slice.Size() == 0 {
@@ -188,6 +191,7 @@ func (db *ReadOnlyDBColumnFamily) GetRepost(claimHash []byte) ([]byte, error) {
 	key := prefixes.NewRepostKey(claimHash)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {
@@ -234,6 +238,7 @@ func (db *ReadOnlyDBColumnFamily) GetChannelForClaim(claimHash []byte, txNum uin
 	key := prefixes.NewClaimToChannelKey(claimHash, txNum, position)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {
@@ -300,6 +305,7 @@ func (db *ReadOnlyDBColumnFamily) GetSupportAmount(claimHash []byte) (uint64, er
 	key := prefixes.NewSupportAmountKey(claimHash)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return 0, err
 	} else if slice.Size() == 0 {
@@ -322,6 +328,7 @@ func (db *ReadOnlyDBColumnFamily) GetTxHash(txNum uint32) ([]byte, error) {
 	key := prefixes.NewTxHashKey(txNum)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	}
@@ -355,6 +362,7 @@ func (db *ReadOnlyDBColumnFamily) GetActivationFull(txNum uint32, postition uint
 	key := prefixes.NewActivationKey(typ, txNum, postition)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return 0, err
 	}
@@ -379,6 +387,7 @@ func (db *ReadOnlyDBColumnFamily) GetCachedClaimTxo(claim []byte, useCache bool)
 	key := prefixes.NewClaimToTXOKey(claim)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	}
@@ -418,6 +427,7 @@ func (db *ReadOnlyDBColumnFamily) GetControllingClaim(name string) (*prefixes.Cl
 	rawKey := key.PackKey()
 	log.Println(hex.EncodeToString(rawKey))
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	log.Printf("slice: %#v", slice)
 	log.Printf("err: %#v", err)
 
@@ -468,6 +478,7 @@ func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountVa
 	key := prefixes.NewTxCountKey(height)
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	}
@@ -490,6 +501,7 @@ func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {
 	key := prefixes.NewDBStateKey()
 	rawKey := key.PackKey()
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {
@@ -546,6 +558,7 @@ func (db *ReadOnlyDBColumnFamily) GetCachedClaimHash(txNum uint32, position uint
 	rawKey := key.PackKey()
 
 	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {

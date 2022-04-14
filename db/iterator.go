@@ -108,9 +108,12 @@ func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 	}
 
 	key := it.Key()
+	defer key.Free()
 	keyData := key.Data()
 	keyLen := len(keyData)
+
 	value := it.Value()
+	defer value.Free()
 	valueData := value.Data()
 	valueLen := len(valueData)
 
@@ -155,9 +158,6 @@ func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 			outValue = newValueData
 		}
 	}
-
-	key.Free()
-	value.Free()
 
 	kv := &prefixes.PrefixRowKV{
 		Key:   outKey,
