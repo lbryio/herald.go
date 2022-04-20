@@ -1,4 +1,4 @@
-package db_stack
+package stack
 
 // The db_stack package contains the implementation of a generic slice backed stack
 // used for tracking various states in the hub, i.e. headers and txcounts
@@ -9,21 +9,21 @@ import (
 	"github.com/lbryio/hub/internal"
 )
 
-type SliceBackedStack struct {
+type SliceBacked struct {
 	slice []interface{}
 	len   uint32
 	mut   sync.RWMutex
 }
 
-func NewSliceBackedStack(size int) *SliceBackedStack {
-	return &SliceBackedStack{
+func NewSliceBacked(size int) *SliceBacked {
+	return &SliceBacked{
 		slice: make([]interface{}, size),
 		len:   0,
 		mut:   sync.RWMutex{},
 	}
 }
 
-func (s *SliceBackedStack) Push(v interface{}) {
+func (s *SliceBacked) Push(v interface{}) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -35,7 +35,7 @@ func (s *SliceBackedStack) Push(v interface{}) {
 	s.len++
 }
 
-func (s *SliceBackedStack) Pop() interface{} {
+func (s *SliceBacked) Pop() interface{} {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -46,7 +46,7 @@ func (s *SliceBackedStack) Pop() interface{} {
 	return s.slice[s.len]
 }
 
-func (s *SliceBackedStack) Get(i uint32) interface{} {
+func (s *SliceBacked) Get(i uint32) interface{} {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
@@ -56,7 +56,7 @@ func (s *SliceBackedStack) Get(i uint32) interface{} {
 	return s.slice[i]
 }
 
-func (s *SliceBackedStack) GetTip() interface{} {
+func (s *SliceBacked) GetTip() interface{} {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
@@ -66,27 +66,27 @@ func (s *SliceBackedStack) GetTip() interface{} {
 	return s.slice[s.len-1]
 }
 
-func (s *SliceBackedStack) Len() uint32 {
+func (s *SliceBacked) Len() uint32 {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	return s.len
 }
 
-func (s *SliceBackedStack) Cap() int {
+func (s *SliceBacked) Cap() int {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	return cap(s.slice)
 }
 
-func (s *SliceBackedStack) GetSlice() []interface{} {
+func (s *SliceBacked) GetSlice() []interface{} {
 	// This is not thread safe so I won't bother with locking
 	return s.slice
 }
 
 // This function is dangerous because it assumes underlying types
-func (s *SliceBackedStack) TxCountsBisectRight(txNum, rootTxNum uint32) (uint32, uint32) {
+func (s *SliceBacked) TxCountsBisectRight(txNum, rootTxNum uint32) (uint32, uint32) {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 

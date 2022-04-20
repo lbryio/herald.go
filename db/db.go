@@ -10,8 +10,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/lbryio/hub/db/db_stack"
 	"github.com/lbryio/hub/db/prefixes"
+	"github.com/lbryio/hub/db/stack"
 	"github.com/lbryio/hub/internal"
 	"github.com/lbryio/hub/internal/metrics"
 	pb "github.com/lbryio/hub/protobuf/go"
@@ -48,10 +48,10 @@ type ReadOnlyDBColumnFamily struct {
 	DB                     *grocksdb.DB
 	Handles                map[string]*grocksdb.ColumnFamilyHandle
 	Opts                   *grocksdb.ReadOptions
-	TxCounts               *db_stack.SliceBackedStack
+	TxCounts               *stack.SliceBacked
 	Height                 uint32
 	LastState              *prefixes.DBStateValue
-	Headers                *db_stack.SliceBackedStack
+	Headers                *stack.SliceBacked
 	BlockingChannelHashes  [][]byte
 	FilteringChannelHashes [][]byte
 	BlockedStreams         map[string][]byte
@@ -410,6 +410,7 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 // GetDB functions that open and return a db
 //
 
+// GetWriteDBCF opens a db for writing with all columns families opened.
 func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	opts := grocksdb.NewDefaultOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -461,6 +462,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	return db, cleanup, nil
 }
 
+// GetDBColumnFamilies gets a db with the specified column families and secondary path.
 func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
 	opts := grocksdb.NewDefaultOptions()
 	roOpts := grocksdb.NewDefaultReadOptions()
@@ -565,6 +567,7 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 	db.Headers.Pop()
 }
 
+// Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
 	db.ShutdownChan <- struct{}{}
 	<-db.DoneChan
@@ -709,7 +712,7 @@ func (db *ReadOnlyDBColumnFamily) InitHeaders() error {
 	}
 
 	//TODO: figure out a reasonable default and make it a constant
-	db.Headers = db_stack.NewSliceBackedStack(12000)
+	db.Headers = stack.NewSliceBacked(12000)
 
 	startKey := prefixes.NewHeaderKey(0)
 	// endKey := prefixes.NewHeaderKey(db.LastState.Height)
@@ -736,7 +739,7 @@ func (db *ReadOnlyDBColumnFamily) InitTxCounts() error {
 		return err
 	}
 
-	db.TxCounts = db_stack.NewSliceBackedStack(InitialTxCountSize)
+	db.TxCounts = stack.NewSliceBacked(InitialTxCountSize)
 
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
@@ -769,6 +772,7 @@ func (db *ReadOnlyDBColumnFamily) RunGetBlocksAndFilters() {
 	}()
 }
 
+// GetBlocksAndFilters gets the blocked and filtered channels and streams from the database.
 func (db *ReadOnlyDBColumnFamily) GetBlocksAndFilters() error {
 	blockedChannels, blockedStreams, err := db.GetStreamsAndChannelRepostedByChannelHashes(db.BlockingChannelHashes)
 	if err != nil {
@@ -789,6 +793,7 @@ func (db *ReadOnlyDBColumnFamily) GetBlocksAndFilters() error {
 	return nil
 }
 
+// GetDBCF Get the database and open given column families.
 func GetDBCF(name string, cf string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, error) {
 	opts := grocksdb.NewDefaultOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -808,6 +813,7 @@ func GetDBCF(name string, cf string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHand
 	return db, handles, nil
 }
 
+// GetDB Get the database.
 func GetDB(name string) (*grocksdb.DB, error) {
 	opts := grocksdb.NewDefaultOptions()
 	db, err := grocksdb.OpenDbAsSecondary(opts, name, "asdf")

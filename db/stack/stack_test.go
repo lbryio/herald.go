@@ -1,16 +1,16 @@
-package db_stack_test
+package stack_test
 
 import (
 	"testing"
 	"time"
 
-	"github.com/lbryio/hub/db/db_stack"
+	"github.com/lbryio/hub/db/stack"
 )
 
 func TestPush(t *testing.T) {
 	var want uint32 = 3
 
-	stack := db_stack.NewSliceBackedStack(10)
+	stack := stack.NewSliceBacked(10)
 
 	stack.Push(0)
 	stack.Push(1)
@@ -22,7 +22,7 @@ func TestPush(t *testing.T) {
 }
 
 func TestPushPop(t *testing.T) {
-	stack := db_stack.NewSliceBackedStack(10)
+	stack := stack.NewSliceBacked(10)
 
 	for i := 0; i < 5; i++ {
 		stack.Push(i)
@@ -46,20 +46,20 @@ func TestPushPop(t *testing.T) {
 	}
 }
 
-func doPushes(stack *db_stack.SliceBackedStack, numPushes int) {
+func doPushes(stack *stack.SliceBacked, numPushes int) {
 	for i := 0; i < numPushes; i++ {
 		stack.Push(i)
 	}
 }
 
-func doPops(stack *db_stack.SliceBackedStack, numPops int) {
+func doPops(stack *stack.SliceBacked, numPops int) {
 	for i := 0; i < numPops; i++ {
 		stack.Pop()
 	}
 }
 
 func TestMultiThreaded(t *testing.T) {
-	stack := db_stack.NewSliceBackedStack(100000)
+	stack := stack.NewSliceBacked(100000)
 
 	go doPushes(stack, 100000)
 	go doPushes(stack, 100000)
@@ -83,7 +83,7 @@ func TestMultiThreaded(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	stack := db_stack.NewSliceBackedStack(10)
+	stack := stack.NewSliceBacked(10)
 
 	for i := 0; i < 5; i++ {
 		stack.Push(i)
@@ -107,7 +107,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestLenCap(t *testing.T) {
-	stack := db_stack.NewSliceBackedStack(10)
+	stack := stack.NewSliceBacked(10)
 
 	if got := stack.Len(); got != 0 {
 		t.Errorf("got %v, want %v", got, 0)

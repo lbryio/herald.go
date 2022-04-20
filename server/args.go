@@ -13,8 +13,6 @@ const (
 	ServeCmd  = iota
 	SearchCmd = iota
 	DBCmd     = iota
-	DBCmd2    = iota
-	DBCmd3    = iota
 )
 
 // Args struct contains the arguments to the hub server.
@@ -106,8 +104,6 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	serveCmd := parser.NewCommand("serve", "start the hub server")
 	searchCmd := parser.NewCommand("search", "claim search")
 	dbCmd := parser.NewCommand("db", "db testing")
-	dbCmd2 := parser.NewCommand("db2", "db testing")
-	dbCmd3 := parser.NewCommand("db3", "db testing")
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
@@ -210,10 +206,6 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		args.CmdType = SearchCmd
 	} else if dbCmd.Happened() {
 		args.CmdType = DBCmd
-	} else if dbCmd2.Happened() {
-		args.CmdType = DBCmd2
-	} else if dbCmd3.Happened() {
-		args.CmdType = DBCmd3
 	}
 
 	if *text != "" {

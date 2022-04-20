@@ -11,10 +11,14 @@ import (
 	"github.com/linxGnu/grocksdb"
 )
 
+// GetExpirationHeight returns the expiration height for the given height. Uses
+// the original claim expiration time.
 func GetExpirationHeight(lastUpdatedHeight uint32) uint32 {
 	return GetExpirationHeightFull(lastUpdatedHeight, false)
 }
 
+// GetExpirationHeightFull returns the expiration height for the given height.
+// Takes boolean to indicated whether to use extended or original expiration time.
 func GetExpirationHeightFull(lastUpdatedHeight uint32, extended bool) uint32 {
 	if extended {
 		return lastUpdatedHeight + ExtendedClaimExpirationTime
@@ -35,6 +39,7 @@ func (db *ReadOnlyDBColumnFamily) EnsureHandle(prefix byte) (*grocksdb.ColumnFam
 	return handle, nil
 }
 
+// GetBlockHash returns the block hash for the given height.
 func (db *ReadOnlyDBColumnFamily) GetBlockHash(height uint32) ([]byte, error) {
 	handle, err := db.EnsureHandle(prefixes.BlockHash)
 	if err != nil {
@@ -77,6 +82,7 @@ func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
 	return rawValue, nil
 }
 
+// GetStreamsAndChannelRepostedByChannelHashes returns a map of streams and channel hashes that are reposted by the given channel hashes.
 func (db *ReadOnlyDBColumnFamily) GetStreamsAndChannelRepostedByChannelHashes(reposterChannelHashes [][]byte) (map[string][]byte, map[string][]byte, error) {
 	handle, err := db.EnsureHandle(prefixes.ChannelToClaim)
 	if err != nil {
@@ -119,6 +125,7 @@ func (db *ReadOnlyDBColumnFamily) GetStreamsAndChannelRepostedByChannelHashes(re
 	return streams, channels, nil
 }
 
+// GetClaimsInChannelCount returns the number of claims in the given channel.
 func (db *ReadOnlyDBColumnFamily) GetClaimsInChannelCount(channelHash []byte) (uint32, error) {
 	handle, err := db.EnsureHandle(prefixes.ChannelCount)
 	if err != nil {

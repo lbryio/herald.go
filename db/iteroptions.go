@@ -1,6 +1,6 @@
 package db
 
-// iterator.go contains the implementation for iterators on rocksdb used by the hub
+// iteroptions.go contains the implementation for iterators on rocksdb used by the hub
 
 import (
 	"bytes"

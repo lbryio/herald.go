@@ -146,6 +146,50 @@ func (s *Server) Run() {
 	}
 }
 
+func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
+	tmpName, err := ioutil.TempDir("", "go-lbry-hub")
+	if err != nil {
+		logrus.Info(err)
+		log.Fatal(err)
+	}
+	logrus.Info("tmpName", tmpName)
+	if err != nil {
+		logrus.Info(err)
+	}
+	myDB, _, err := db.GetProdDB(args.DBPath, tmpName)
+	// dbShutdown = func() {
+	// 	db.Shutdown(myDB)
+	// }
+	if err != nil {
+		// Can't load the db, fail loudly
+		logrus.Info(err)
+		log.Fatalln(err)
+	}
+
+	blockingChannelHashes := make([][]byte, 0, 10)
+	filteringChannelHashes := make([][]byte, 0, 10)
+
+	for _, id := range args.BlockingChannelIds {
+		hash, err := hex.DecodeString(id)
+		if err != nil {
+			logrus.Warn("Invalid channel id: ", id)
+		}
+		blockingChannelHashes = append(blockingChannelHashes, hash)
+	}
+
+	for _, id := range args.FilteringChannelIds {
+		hash, err := hex.DecodeString(id)
+		if err != nil {
+			logrus.Warn("Invalid channel id: ", id)
+		}
+		filteringChannelHashes = append(filteringChannelHashes, hash)
+	}
+
+	myDB.BlockingChannelHashes = blockingChannelHashes
+	myDB.FilteringChannelHashes = filteringChannelHashes
+	return myDB, nil
+}
+
 // MakeHubServer takes the arguments given to a hub when it's started and
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
@@ -200,46 +244,10 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	var myDB *db.ReadOnlyDBColumnFamily
 	// var dbShutdown = func() {}
 	if !args.DisableResolve {
-		tmpName, err := ioutil.TempDir("", "go-lbry-hub")
+		myDB, err = LoadDatabase(args)
 		if err != nil {
-			logrus.Info(err)
-			log.Fatal(err)
+			logrus.Warning(err)
 		}
-		logrus.Info("tmpName", tmpName)
-		if err != nil {
-			logrus.Info(err)
-		}
-		myDB, _, err = db.GetProdDB(args.DBPath, tmpName)
-		// dbShutdown = func() {
-		// 	db.Shutdown(myDB)
-		// }
-		if err != nil {
-			// Can't load the db, fail loudly
-			logrus.Info(err)
-			log.Fatalln(err)
-		}
-
-		blockingChannelHashes := make([][]byte, 0, 10)
-		filteringChannelHashes := make([][]byte, 0, 10)
-
-		for _, id := range args.BlockingChannelIds {
-			hash, err := hex.DecodeString(id)
-			if err != nil {
-				logrus.Warn("Invalid channel id: ", id)
-			}
-			blockingChannelHashes = append(blockingChannelHashes, hash)
-		}
-
-		for _, id := range args.FilteringChannelIds {
-			hash, err := hex.DecodeString(id)
-			if err != nil {
-				logrus.Warn("Invalid channel id: ", id)
-			}
-			filteringChannelHashes = append(filteringChannelHashes, hash)
-		}
-
-		myDB.BlockingChannelHashes = blockingChannelHashes
-		myDB.FilteringChannelHashes = filteringChannelHashes
 	}
 
 	s := &Server{
