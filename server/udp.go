@@ -2,13 +2,13 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 	"strconv"
 	"strings"
 	"time"
 
 	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/lbryio/lbry.go/v2/extras/errors"
 )
 
 const maxBufferSize = 1024
@@ -210,7 +210,7 @@ func UDPPing(ip, port string) (*SPVPong, error) {
 	pong := decodeSPVPong(buffer[:n])
 
 	if pong == nil {
-		return nil, errors.Base("Pong decoding failed")
+		return nil, fmt.Errorf("Pong decoding failed")
 	}
 
 	return pong, nil
@@ -219,8 +219,8 @@ func UDPPing(ip, port string) (*SPVPong, error) {
 // UDPServer is a goroutine that starts an udp server that implements the hubs
 // Ping/Pong protocol to find out about each other without making full TCP
 // connections.
-func UDPServer(args *Args) error {
-	address := ":" + args.Port
+func (s *Server) UDPServer() error {
+	address := ":" + s.Args.Port
 	tip := make([]byte, 32)
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
@@ -243,7 +243,7 @@ func UDPServer(args *Args) error {
 		}
 
 		sAddr := addr.IP.String()
-		pong := makeSPVPong(defaultFlags|availableFlag, 0, tip, sAddr, args.Country)
+		pong := makeSPVPong(defaultFlags|availableFlag, 0, tip, sAddr, s.Args.Country)
 		data := pong.Encode()
 
 		_, err = conn.WriteToUDP(data, addr)

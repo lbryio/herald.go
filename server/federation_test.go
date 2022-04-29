@@ -1,4 +1,4 @@
-package server
+package server_test
 
 import (
 	"bufio"
@@ -12,6 +12,7 @@ import (
 
 	"github.com/lbryio/hub/internal/metrics"
 	pb "github.com/lbryio/hub/protobuf/go"
+	server "github.com/lbryio/hub/server"
 	dto "github.com/prometheus/client_model/go"
 	"google.golang.org/grpc"
 )
@@ -43,25 +44,32 @@ func removeFile(fileName string) {
 	}
 }
 
-func makeDefaultArgs() *Args {
-	args := &Args{
-		CmdType:                ServeCmd,
-		Host:                   DefaultHost,
-		Port:                   DefaultPort,
-		EsHost:                 DefaultEsHost,
-		EsPort:                 DefaultEsPort,
-		PrometheusPort:         DefaultPrometheusPort,
-		EsIndex:                DefaultEsIndex,
-		RefreshDelta:           DefaultRefreshDelta,
-		CacheTTL:               DefaultCacheTTL,
-		PeerFile:               DefaultPeerFile,
-		Country:                DefaultCountry,
-		DisableEs:              true,
-		Debug:                  true,
-		DisableLoadPeers:       true,
-		DisableStartPrometheus: true,
-		DisableStartUDP:        true,
-		DisableWritePeers:      true,
+// makeDefaultArgs creates a default set of arguments for testing the server.
+func makeDefaultArgs() *server.Args {
+	args := &server.Args{
+		CmdType:                     server.ServeCmd,
+		Host:                        server.DefaultHost,
+		Port:                        server.DefaultPort,
+		DBPath:                      server.DefaultDBPath,
+		EsHost:                      server.DefaultEsHost,
+		EsPort:                      server.DefaultEsPort,
+		PrometheusPort:              server.DefaultPrometheusPort,
+		NotifierPort:                server.DefaultNotifierPort,
+		EsIndex:                     server.DefaultEsIndex,
+		RefreshDelta:                server.DefaultRefreshDelta,
+		CacheTTL:                    server.DefaultCacheTTL,
+		PeerFile:                    server.DefaultPeerFile,
+		Country:                     server.DefaultCountry,
+		DisableEs:                   true,
+		Debug:                       true,
+		DisableLoadPeers:            true,
+		DisableStartPrometheus:      true,
+		DisableStartUDP:             true,
+		DisableWritePeers:           true,
+		DisableRocksDBRefresh:       true,
+		DisableResolve:              true,
+		DisableBlockingAndFiltering: true,
+		DisableStartNotifier:        true,
 	}
 
 	return args
@@ -88,26 +96,26 @@ func TestAddPeer(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := MakeHubServer(ctx, args)
-			server.ExternalIP = net.IPv4(0, 0, 0, 0)
+			hubServer := server.MakeHubServer(ctx, args)
+			hubServer.ExternalIP = net.IPv4(0, 0, 0, 0)
 			metrics.PeersKnown.Set(0)
 
 			for i := 0; i < 10; i++ {
-				var peer *Peer
+				var peer *server.Peer
 				if strings.Contains(tt.name, "1 unique") {
-					peer = &Peer{
+					peer = &server.Peer{
 						Address: "1.1.1.1",
 						Port:    "50051",
 					}
 				} else {
 					x := i + 1
-					peer = &Peer{
+					peer = &server.Peer{
 						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}
 				//log.Printf("Adding peer %+v\n", msg)
-				err := server.addPeer(peer, false, false)
+				err := hubServer.AddPeerExported()(peer, false, false)
 				if err != nil {
 					log.Println(err)
 				}
@@ -147,31 +155,31 @@ func TestPeerWriter(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := MakeHubServer(ctx, args)
-			server.ExternalIP = net.IPv4(0, 0, 0, 0)
+			hubServer := server.MakeHubServer(ctx, args)
+			hubServer.ExternalIP = net.IPv4(0, 0, 0, 0)
 
 			for i := 0; i < 10; i++ {
-				var peer *Peer
+				var peer *server.Peer
 				if strings.Contains(tt.name, "1 unique") {
-					peer = &Peer{
+					peer = &server.Peer{
 						Address: "1.1.1.1",
 						Port:    "50051",
 					}
 				} else {
 					x := i + 1
-					peer = &Peer{
+					peer = &server.Peer{
 						Address: fmt.Sprintf("%d.%d.%d.%d", x, x, x, x),
 						Port:    "50051",
 					}
 				}
 				//log.Printf("Adding peer %+v\n", peer)
-				err := server.addPeer(peer, false, false)
+				err := hubServer.AddPeerExported()(peer, false, false)
 				if err != nil {
 					log.Println(err)
 				}
 			}
 			//log.Println("Counting lines...")
-			got := lineCountFile(server.Args.PeerFile)
+			got := lineCountFile(hubServer.Args.PeerFile)
 			if got != tt.want {
 				t.Errorf("lineCountFile(peers.txt) = %d, want %d", got, tt.want)
 			}
@@ -211,12 +219,12 @@ func TestAddPeerEndpoint(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := MakeHubServer(ctx, args)
-			server2 := MakeHubServer(ctx, args2)
+			hubServer := server.MakeHubServer(ctx, args)
+			hubServer2 := server.MakeHubServer(ctx, args2)
 			metrics.PeersKnown.Set(0)
-			go server.Run()
-			go server2.Run()
-			//go server.Run()
+			go hubServer.Run()
+			go hubServer2.Run()
+			//go hubServer.Run()
 			conn, err := grpc.Dial("localhost:"+args.Port,
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
@@ -237,15 +245,15 @@ func TestAddPeerEndpoint(t *testing.T) {
 				log.Println(err)
 			}
 
-			server.GrpcServer.GracefulStop()
-			server2.GrpcServer.GracefulStop()
-			got1 := server.getNumPeers()
-			got2 := server2.getNumPeers()
+			hubServer.GrpcServer.GracefulStop()
+			hubServer2.GrpcServer.GracefulStop()
+			got1 := hubServer.GetNumPeersExported()()
+			got2 := hubServer2.GetNumPeersExported()()
 			if got1 != tt.wantServerOne {
-				t.Errorf("len(server.PeerServers) = %d, want %d\n", got1, tt.wantServerOne)
+				t.Errorf("len(hubServer.PeerServers) = %d, want %d\n", got1, tt.wantServerOne)
 			}
 			if got2 != tt.wantServerTwo {
-				t.Errorf("len(server2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
+				t.Errorf("len(hubServer2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
 			}
 		})
 	}
@@ -277,13 +285,13 @@ func TestAddPeerEndpoint2(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := MakeHubServer(ctx, args)
-			server2 := MakeHubServer(ctx, args2)
-			server3 := MakeHubServer(ctx, args3)
+			hubServer := server.MakeHubServer(ctx, args)
+			hubServer2 := server.MakeHubServer(ctx, args2)
+			hubServer3 := server.MakeHubServer(ctx, args3)
 			metrics.PeersKnown.Set(0)
-			go server.Run()
-			go server2.Run()
-			go server3.Run()
+			go hubServer.Run()
+			go hubServer2.Run()
+			go hubServer3.Run()
 			conn, err := grpc.Dial("localhost:"+args.Port,
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
@@ -313,20 +321,20 @@ func TestAddPeerEndpoint2(t *testing.T) {
 				log.Println(err)
 			}
 
-			server.GrpcServer.GracefulStop()
-			server2.GrpcServer.GracefulStop()
-			server3.GrpcServer.GracefulStop()
-			got1 := server.getNumPeers()
-			got2 := server2.getNumPeers()
-			got3 := server3.getNumPeers()
+			hubServer.GrpcServer.GracefulStop()
+			hubServer2.GrpcServer.GracefulStop()
+			hubServer3.GrpcServer.GracefulStop()
+			got1 := hubServer.GetNumPeersExported()()
+			got2 := hubServer2.GetNumPeersExported()()
+			got3 := hubServer3.GetNumPeersExported()()
 			if got1 != tt.wantServerOne {
-				t.Errorf("len(server.PeerServers) = %d, want %d\n", got1, tt.wantServerOne)
+				t.Errorf("len(hubServer.PeerServers) = %d, want %d\n", got1, tt.wantServerOne)
 			}
 			if got2 != tt.wantServerTwo {
-				t.Errorf("len(server2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
+				t.Errorf("len(hubServer2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
 			}
 			if got3 != tt.wantServerThree {
-				t.Errorf("len(server3.PeerServers) = %d, want %d\n", got3, tt.wantServerThree)
+				t.Errorf("len(hubServer3.PeerServers) = %d, want %d\n", got3, tt.wantServerThree)
 			}
 		})
 	}
@@ -358,13 +366,13 @@ func TestAddPeerEndpoint3(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := MakeHubServer(ctx, args)
-			server2 := MakeHubServer(ctx, args2)
-			server3 := MakeHubServer(ctx, args3)
+			hubServer := server.MakeHubServer(ctx, args)
+			hubServer2 := server.MakeHubServer(ctx, args2)
+			hubServer3 := server.MakeHubServer(ctx, args3)
 			metrics.PeersKnown.Set(0)
-			go server.Run()
-			go server2.Run()
-			go server3.Run()
+			go hubServer.Run()
+			go hubServer2.Run()
+			go hubServer3.Run()
 			conn, err := grpc.Dial("localhost:"+args.Port,
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
@@ -402,20 +410,20 @@ func TestAddPeerEndpoint3(t *testing.T) {
 				log.Println(err)
 			}
 
-			server.GrpcServer.GracefulStop()
-			server2.GrpcServer.GracefulStop()
-			server3.GrpcServer.GracefulStop()
-			got1 := server.getNumPeers()
-			got2 := server2.getNumPeers()
-			got3 := server3.getNumPeers()
+			hubServer.GrpcServer.GracefulStop()
+			hubServer2.GrpcServer.GracefulStop()
+			hubServer3.GrpcServer.GracefulStop()
+			got1 := hubServer.GetNumPeersExported()()
+			got2 := hubServer2.GetNumPeersExported()()
+			got3 := hubServer3.GetNumPeersExported()()
 			if got1 != tt.wantServerOne {
-				t.Errorf("len(server.PeerServers) = %d, want %d\n", got1, tt.wantServerOne)
+				t.Errorf("len(hubServer.PeerServers) = %d, want %d\n", got1, tt.wantServerOne)
 			}
 			if got2 != tt.wantServerTwo {
-				t.Errorf("len(server2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
+				t.Errorf("len(hubServer2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
 			}
 			if got3 != tt.wantServerThree {
-				t.Errorf("len(server3.PeerServers) = %d, want %d\n", got3, tt.wantServerThree)
+				t.Errorf("len(hubServer3.PeerServers) = %d, want %d\n", got3, tt.wantServerThree)
 			}
 		})
 	}
@@ -436,41 +444,41 @@ func TestUDPServer(t *testing.T) {
 		want string
 	}{
 		{
-			name: "hubs server external ip",
+			name: "hubs hubServer external ip",
 			want: "127.0.0.1",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			server := MakeHubServer(ctx, args)
-			server2 := MakeHubServer(ctx, args2)
-			go server.Run()
-			go server2.Run()
+			hubServer := server.MakeHubServer(ctx, args)
+			hubServer2 := server.MakeHubServer(ctx, args2)
+			go hubServer.Run()
+			go hubServer2.Run()
 			metrics.PeersKnown.Set(0)
 
-			peer := &Peer{
+			peer := &server.Peer{
 				Address: "0.0.0.0",
 				Port:    "50052",
 			}
 
-			err := server.addPeer(peer, true, true)
+			err := hubServer.AddPeerExported()(peer, true, true)
 			if err != nil {
 				log.Println(err)
 			}
 
-			server.GrpcServer.GracefulStop()
-			server2.GrpcServer.GracefulStop()
+			hubServer.GrpcServer.GracefulStop()
+			hubServer2.GrpcServer.GracefulStop()
 
-			got1 := server.ExternalIP.String()
+			got1 := hubServer.ExternalIP.String()
 			if got1 != tt.want {
-				t.Errorf("server.ExternalIP = %s, want %s\n", got1, tt.want)
-				t.Errorf("server.Args.Port = %s\n", server.Args.Port)
+				t.Errorf("hubServer.ExternalIP = %s, want %s\n", got1, tt.want)
+				t.Errorf("hubServer.Args.Port = %s\n", hubServer.Args.Port)
 			}
-			got2 := server2.ExternalIP.String()
+			got2 := hubServer2.ExternalIP.String()
 			if got2 != tt.want {
-				t.Errorf("server2.ExternalIP = %s, want %s\n", got2, tt.want)
-				t.Errorf("server2.Args.Port = %s\n", server2.Args.Port)
+				t.Errorf("hubServer2.ExternalIP = %s, want %s\n", got2, tt.want)
+				t.Errorf("hubServer2.Args.Port = %s\n", hubServer2.Args.Port)
 			}
 		})
 	}

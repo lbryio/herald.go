@@ -12,46 +12,66 @@ import (
 const (
 	ServeCmd  = iota
 	SearchCmd = iota
+	DBCmd     = iota
 )
 
 // Args struct contains the arguments to the hub server.
 type Args struct {
-	CmdType                int
-	Host                   string
-	Port                   string
-	EsHost                 string
-	EsPort                 string
-	PrometheusPort         string
-	EsIndex                string
-	RefreshDelta           int
-	CacheTTL               int
-	PeerFile               string
-	Country                string
-	DisableEs              bool
-	Debug                  bool
-	DisableLoadPeers       bool
-	DisableStartPrometheus bool
-	DisableStartUDP        bool
-	DisableWritePeers      bool
-	DisableFederation      bool
+	CmdType                     int
+	Host                        string
+	Port                        string
+	DBPath                      string
+	EsHost                      string
+	EsPort                      string
+	PrometheusPort              string
+	NotifierPort                string
+	EsIndex                     string
+	RefreshDelta                int
+	CacheTTL                    int
+	PeerFile                    string
+	Country                     string
+	BlockingChannelIds          []string
+	FilteringChannelIds         []string
+	Debug                       bool
+	DisableEs                   bool
+	DisableLoadPeers            bool
+	DisableStartPrometheus      bool
+	DisableStartUDP             bool
+	DisableWritePeers           bool
+	DisableFederation           bool
+	DisableRocksDBRefresh       bool
+	DisableResolve              bool
+	DisableBlockingAndFiltering bool
+	DisableStartNotifier        bool
 }
 
 const (
-	DefaultHost                   = "0.0.0.0"
-	DefaultPort                   = "50051"
-	DefaultEsHost                 = "http://localhost"
-	DefaultEsIndex                = "claims"
-	DefaultEsPort                 = "9200"
-	DefaultPrometheusPort         = "2112"
-	DefaultRefreshDelta           = 5
-	DefaultCacheTTL               = 5
-	DefaultPeerFile               = "peers.txt"
-	DefaultCountry                = "US"
-	DefaultDisableLoadPeers       = false
-	DefaultDisableStartPrometheus = false
-	DefaultDisableStartUDP        = false
-	DefaultDisableWritePeers      = false
-	DefaultDisableFederation      = false
+	DefaultHost                        = "0.0.0.0"
+	DefaultPort                        = "50051"
+	DefaultDBPath                      = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
+	DefaultEsHost                      = "http://localhost"
+	DefaultEsIndex                     = "claims"
+	DefaultEsPort                      = "9200"
+	DefaultPrometheusPort              = "2112"
+	DefaultNotifierPort                = "18080"
+	DefaultRefreshDelta                = 5
+	DefaultCacheTTL                    = 5
+	DefaultPeerFile                    = "peers.txt"
+	DefaultCountry                     = "US"
+	DefaultDisableLoadPeers            = false
+	DefaultDisableStartPrometheus      = false
+	DefaultDisableStartUDP             = false
+	DefaultDisableWritePeers           = false
+	DefaultDisableFederation           = false
+	DefaultDisableRockDBRefresh        = false
+	DefaultDisableResolve              = false
+	DefaultDisableBlockingAndFiltering = false
+	DisableStartNotifier               = false
+)
+
+var (
+	DefaultBlockingChannelIds  = []string{}
+	DefaultFilteringChannelIds = []string{}
 )
 
 // GetEnvironment takes the environment variables as an array of strings
@@ -83,17 +103,22 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
 	searchCmd := parser.NewCommand("search", "claim search")
+	dbCmd := parser.NewCommand("db", "db testing")
 
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
+	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: DefaultEsHost})
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
+	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
 	peerFile := parser.String("", "peerfile", &argparse.Options{Required: false, Help: "Initial peer file for federation", Default: DefaultPeerFile})
 	country := parser.String("", "country", &argparse.Options{Required: false, Help: "Country this node is running in. Default US.", Default: DefaultCountry})
+	blockingChannelIds := parser.StringList("", "blocking-channel-ids", &argparse.Options{Required: false, Help: "Blocking channel ids", Default: DefaultBlockingChannelIds})
+	filteringChannelIds := parser.StringList("", "filtering-channel-ids", &argparse.Options{Required: false, Help: "Filtering channel ids", Default: DefaultFilteringChannelIds})
 
 	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 	disableEs := parser.Flag("", "disable-es", &argparse.Options{Required: false, Help: "Disable elastic search, for running/testing independently", Default: false})
@@ -102,6 +127,10 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableStartUdp := parser.Flag("", "disable-start-udp", &argparse.Options{Required: false, Help: "Disable start UDP ping server", Default: DefaultDisableStartUDP})
 	disableWritePeers := parser.Flag("", "disable-write-peers", &argparse.Options{Required: false, Help: "Disable write peer to disk as we learn about them", Default: DefaultDisableWritePeers})
 	disableFederation := parser.Flag("", "disable-federation", &argparse.Options{Required: false, Help: "Disable server federation", Default: DefaultDisableFederation})
+	disableRocksDBRefresh := parser.Flag("", "disable-rocksdb-refresh", &argparse.Options{Required: false, Help: "Disable rocksdb refreshing", Default: DefaultDisableRockDBRefresh})
+	disableResolve := parser.Flag("", "disable-resolve", &argparse.Options{Required: false, Help: "Disable resolve endpoint (and rocksdb loading)", Default: DefaultDisableRockDBRefresh})
+	disableBlockingAndFiltering := parser.Flag("", "disable-blocking-and-filtering", &argparse.Options{Required: false, Help: "Disable blocking and filtering of channels and streams", Default: DefaultDisableBlockingAndFiltering})
+	disableStartNotifier := parser.Flag("", "disable-start-notifier", &argparse.Options{Required: false, Help: "Disable start notifier", Default: DisableStartNotifier})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -120,24 +149,32 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	}
 
 	args := &Args{
-		CmdType:                SearchCmd,
-		Host:                   *host,
-		Port:                   *port,
-		EsHost:                 *esHost,
-		EsPort:                 *esPort,
-		PrometheusPort:         *prometheusPort,
-		EsIndex:                *esIndex,
-		RefreshDelta:           *refreshDelta,
-		CacheTTL:               *cacheTTL,
-		PeerFile:               *peerFile,
-		Country:                *country,
-		DisableEs:              *disableEs,
-		Debug:                  *debug,
-		DisableLoadPeers:       *disableLoadPeers,
-		DisableStartPrometheus: *disableStartPrometheus,
-		DisableStartUDP:        *disableStartUdp,
-		DisableWritePeers:      *disableWritePeers,
-		DisableFederation:      *disableFederation,
+		CmdType:                     SearchCmd,
+		Host:                        *host,
+		Port:                        *port,
+		DBPath:                      *dbPath,
+		EsHost:                      *esHost,
+		EsPort:                      *esPort,
+		PrometheusPort:              *prometheusPort,
+		NotifierPort:                *notifierPort,
+		EsIndex:                     *esIndex,
+		RefreshDelta:                *refreshDelta,
+		CacheTTL:                    *cacheTTL,
+		PeerFile:                    *peerFile,
+		Country:                     *country,
+		BlockingChannelIds:          *blockingChannelIds,
+		FilteringChannelIds:         *filteringChannelIds,
+		Debug:                       *debug,
+		DisableEs:                   *disableEs,
+		DisableLoadPeers:            *disableLoadPeers,
+		DisableStartPrometheus:      *disableStartPrometheus,
+		DisableStartUDP:             *disableStartUdp,
+		DisableWritePeers:           *disableWritePeers,
+		DisableFederation:           *disableFederation,
+		DisableRocksDBRefresh:       *disableRocksDBRefresh,
+		DisableResolve:              *disableResolve,
+		DisableBlockingAndFiltering: *disableBlockingAndFiltering,
+		DisableStartNotifier:        *disableStartNotifier,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
@@ -167,6 +204,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		args.CmdType = ServeCmd
 	} else if searchCmd.Happened() {
 		args.CmdType = SearchCmd
+	} else if dbCmd.Happened() {
+		args.CmdType = DBCmd
 	}
 
 	if *text != "" {

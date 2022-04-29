@@ -3,8 +3,10 @@ package server
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"hash"
+	"io/ioutil"
 	"log"
 	"net"
 	"net/http"
@@ -14,12 +16,15 @@ import (
 	"time"
 
 	"github.com/ReneKroon/ttlcache/v2"
+	"github.com/lbryio/hub/db"
+	"github.com/lbryio/hub/internal"
 	"github.com/lbryio/hub/internal/metrics"
 	"github.com/lbryio/hub/meta"
 	pb "github.com/lbryio/hub/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	logrus "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -29,6 +34,7 @@ type Server struct {
 	Args             *Args
 	MultiSpaceRe     *regexp.Regexp
 	WeirdCharsRe     *regexp.Regexp
+	DB               *db.ReadOnlyDBColumnFamily
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
 	S256             *hash.Hash
@@ -42,6 +48,9 @@ type Server struct {
 	PeerSubsMut      sync.RWMutex
 	NumPeerSubs      *int64
 	ExternalIP       net.IP
+	HeightSubs       map[net.Addr]net.Conn
+	HeightSubsMut    sync.RWMutex
+	NotifierChan     chan *internal.HeightHash
 	pb.UnimplementedHubServer
 }
 
@@ -88,6 +97,7 @@ func getVersion() string {
 	'blockchain.address.unsubscribe'
 */
 
+// PeerSubsLoadOrStore thread safe load or store for peer subs
 func (s *Server) PeerSubsLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	key := peer.peerKey()
 	s.PeerSubsMut.RLock()
@@ -103,6 +113,7 @@ func (s *Server) PeerSubsLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	}
 }
 
+// PeerServersLoadOrStore thread safe load or store for peer servers
 func (s *Server) PeerServersLoadOrStore(peer *Peer) (actual *Peer, loaded bool) {
 	key := peer.peerKey()
 	s.PeerServersMut.RLock()
@@ -118,6 +129,7 @@ func (s *Server) PeerServersLoadOrStore(peer *Peer) (actual *Peer, loaded bool) 
 	}
 }
 
+// Run "main" function for starting the server. This blocks.
 func (s *Server) Run() {
 	l, err := net.Listen("tcp", ":"+s.Args.Port)
 	if err != nil {
@@ -127,18 +139,62 @@ func (s *Server) Run() {
 	pb.RegisterHubServer(s.GrpcServer, s)
 	reflection.Register(s.GrpcServer)
 
-	log.Printf("listening on %s\n", l.Addr().String())
-	log.Println(s.Args)
+	log.Printf("Server.Run() #### listening on %s\n", l.Addr().String())
+	log.Printf("%#v\n", s.Args)
 	if err := s.GrpcServer.Serve(l); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
+	tmpName, err := ioutil.TempDir("", "go-lbry-hub")
+	if err != nil {
+		logrus.Info(err)
+		log.Fatal(err)
+	}
+	logrus.Info("tmpName", tmpName)
+	if err != nil {
+		logrus.Info(err)
+	}
+	myDB, _, err := db.GetProdDB(args.DBPath, tmpName)
+	// dbShutdown = func() {
+	// 	db.Shutdown(myDB)
+	// }
+	if err != nil {
+		// Can't load the db, fail loudly
+		logrus.Info(err)
+		log.Fatalln(err)
+	}
+
+	blockingChannelHashes := make([][]byte, 0, 10)
+	filteringChannelHashes := make([][]byte, 0, 10)
+
+	for _, id := range args.BlockingChannelIds {
+		hash, err := hex.DecodeString(id)
+		if err != nil {
+			logrus.Warn("Invalid channel id: ", id)
+		}
+		blockingChannelHashes = append(blockingChannelHashes, hash)
+	}
+
+	for _, id := range args.FilteringChannelIds {
+		hash, err := hex.DecodeString(id)
+		if err != nil {
+			logrus.Warn("Invalid channel id: ", id)
+		}
+		filteringChannelHashes = append(filteringChannelHashes, hash)
+	}
+
+	myDB.BlockingChannelHashes = blockingChannelHashes
+	myDB.FilteringChannelHashes = filteringChannelHashes
+	return myDB, nil
 }
 
 // MakeHubServer takes the arguments given to a hub when it's started and
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
 func MakeHubServer(ctx context.Context, args *Args) *Server {
-	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(10))
+	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(0))
 
 	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
 	if err != nil {
@@ -184,11 +240,22 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	numSubs := new(int64)
 	*numSubs = 0
 
+	//TODO: is this the right place to load the db?
+	var myDB *db.ReadOnlyDBColumnFamily
+	// var dbShutdown = func() {}
+	if !args.DisableResolve {
+		myDB, err = LoadDatabase(args)
+		if err != nil {
+			logrus.Warning(err)
+		}
+	}
+
 	s := &Server{
 		GrpcServer:       grpcServer,
 		Args:             args,
 		MultiSpaceRe:     multiSpaceRe,
 		WeirdCharsRe:     weirdCharsRe,
+		DB:               myDB,
 		EsClient:         client,
 		QueryCache:       cache,
 		S256:             &s256,
@@ -202,17 +269,41 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		PeerSubsMut:      sync.RWMutex{},
 		NumPeerSubs:      numSubs,
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
+		HeightSubs:       make(map[net.Addr]net.Conn),
+		HeightSubsMut:    sync.RWMutex{},
+		NotifierChan:     make(chan *internal.HeightHash),
 	}
 
 	// Start up our background services
+	if !args.DisableResolve && !args.DisableRocksDBRefresh {
+		logrus.Info("Running detect changes")
+		myDB.RunDetectChanges(s.NotifierChan)
+	}
+	if !args.DisableBlockingAndFiltering {
+		myDB.RunGetBlocksAndFilters()
+	}
 	if !args.DisableStartPrometheus {
 		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
 	}
 	if !args.DisableStartUDP {
 		go func() {
-			err := UDPServer(args)
+			err := s.UDPServer()
 			if err != nil {
 				log.Println("UDP Server failed!", err)
+			}
+		}()
+	}
+	if !args.DisableStartNotifier {
+		go func() {
+			err := s.NotifierServer()
+			if err != nil {
+				log.Println("Notifier Server failed!", err)
+			}
+		}()
+		go func() {
+			err := s.RunNotifier()
+			if err != nil {
+				log.Println("RunNotifier failed!", err)
 			}
 		}()
 	}
@@ -312,4 +403,76 @@ func (s *Server) Ping(ctx context.Context, args *pb.EmptyMessage) (*pb.StringVal
 func (s *Server) Version(ctx context.Context, args *pb.EmptyMessage) (*pb.StringValue, error) {
 	metrics.RequestsCount.With(prometheus.Labels{"method": "version"}).Inc()
 	return &pb.StringValue{Value: getVersion()}, nil
+}
+
+func (s *Server) Height(ctx context.Context, args *pb.EmptyMessage) (*pb.UInt32Value, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "height"}).Inc()
+	if s.DB != nil {
+		return &pb.UInt32Value{Value: s.DB.LastState.Height}, nil
+	} else {
+		return &pb.UInt32Value{Value: 0}, nil
+	}
+}
+
+// HeightSubscribe takes a height to wait for the server to reach and waits until it reaches that
+// height or higher and returns the current height. If the db is off it will return 0.
+func (s *Server) HeightSubscribe(arg *pb.UInt32Value, stream pb.Hub_HeightSubscribeServer) error {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "height"}).Inc()
+	if s.DB != nil {
+		want := arg.Value
+		for s.DB.LastState.Height < want {
+			if s.DB.LastState.Height >= want {
+				err := stream.Send(&pb.UInt32Value{Value: s.DB.LastState.Height})
+				if err != nil {
+					return err
+				}
+				return nil
+			}
+			time.Sleep(time.Millisecond * 100)
+		}
+	} else {
+		if err := stream.Send(&pb.UInt32Value{Value: 0}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// HeightHashSubscribe takes a height to wait for the server to reach and waits until it reaches that
+// height or higher and returns the current height. If the db is off it will return 0.
+func (s *Server) HeightHashSubscribe() error {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "height_hash"}).Inc()
+
+	return nil
+}
+
+func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs, error) {
+	metrics.RequestsCount.With(prometheus.Labels{"method": "resolve"}).Inc()
+
+	allTxos := make([]*pb.Output, 0)
+	allExtraTxos := make([]*pb.Output, 0)
+
+	for _, url := range args.Value {
+		res := s.DB.Resolve(url)
+		txos, extraTxos, err := res.ToOutputs()
+		if err != nil {
+			return nil, err
+		}
+		// TODO: there may be a more efficient way to do this.
+		allTxos = append(allTxos, txos...)
+		allExtraTxos = append(allExtraTxos, extraTxos...)
+	}
+
+	res := &pb.Outputs{
+		Txos:         allTxos,
+		ExtraTxos:    allExtraTxos,
+		Total:        uint32(len(allTxos) + len(allExtraTxos)),
+		Offset:       0,   //TODO
+		Blocked:      nil, //TODO
+		BlockedTotal: 0,   //TODO
+	}
+
+	logrus.Warn(res)
+
+	return res, nil
 }

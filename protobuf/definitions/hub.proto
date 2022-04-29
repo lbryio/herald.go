@@ -6,14 +6,17 @@ import "result.proto";
 package pb;
 
 service Hub {
-  rpc Search (SearchRequest) returns (Outputs) {}
-  rpc Ping (EmptyMessage) returns (StringValue) {}
-  rpc Hello (HelloMessage) returns (HelloMessage) {}
-  rpc AddPeer (ServerMessage) returns (StringValue) {}
-  rpc PeerSubscribe (ServerMessage) returns (StringValue) {}
-  rpc Version (EmptyMessage) returns (StringValue) {}
-  rpc Features (EmptyMessage) returns (StringValue) {}
+  rpc Search(SearchRequest) returns (Outputs) {}
+  rpc Ping(EmptyMessage) returns (StringValue) {}
+  rpc Hello(HelloMessage) returns (HelloMessage) {}
+  rpc AddPeer(ServerMessage) returns (StringValue) {}
+  rpc PeerSubscribe(ServerMessage) returns (StringValue) {}
+  rpc Version(EmptyMessage) returns (StringValue) {}
+  rpc Features(EmptyMessage) returns (StringValue) {}
   rpc Broadcast(EmptyMessage) returns (UInt32Value) {}
+  rpc Height(EmptyMessage) returns (UInt32Value) {}
+  rpc HeightSubscribe(UInt32Value) returns (stream UInt32Value) {}
+  rpc Resolve(StringArray) returns (Outputs) {}
 }
 
 message EmptyMessage {}
@@ -36,6 +39,10 @@ message InvertibleField {
 
 message StringValue {
   string value = 1;
+}
+
+message StringArray {
+  repeated string value = 1;
 }
 
 message BoolValue {

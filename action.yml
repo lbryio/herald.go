@@ -1,0 +1,5 @@
+name: 'Build and Test'
+description: 'Build and test hub'
+runs:
+  using: 'docker'
+  image: 'jeffreypicard/hub-github-action'

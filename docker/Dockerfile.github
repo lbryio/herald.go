@@ -1,0 +1,25 @@
+FROM golang:1.17.8-bullseye
+
+RUN apt-get update -y && \
+    apt-get upgrade -y && \
+    apt-get install -y dnsutils git libsnappy-dev liblz4-dev libzstd-dev zlib1g-dev \
+            autoconf automake libtool curl make g++
+RUN cd /tmp && \
+    wget https://github.com/protocolbuffers/protobuf/releases/download/v3.17.1/protobuf-all-3.17.1.tar.gz && \
+    tar xfzv protobuf-all-3.17.1.tar.gz && \
+    cd protobuf-3.17.1 && \
+    ./autogen.sh && \
+    ./configure && \
+    make && \
+    make install && \
+    ldconfig && \
+    rm -rf /tmp/proto*
+RUN cd /tmp && \
+    git clone https://github.com/facebook/rocksdb.git && \
+    cd rocksdb && \
+    git checkout v6.26.1 && \
+    make shared_lib && \
+    make install-shared && \
+    rm -rf /tmp/rocksdb
+
+CMD ["bash"]
