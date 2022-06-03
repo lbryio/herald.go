@@ -6,7 +6,7 @@ package stack
 import (
 	"sync"
 
-	"github.com/lbryio/hub/internal"
+	"github.com/lbryio/herald/internal"
 )
 
 type SliceBacked struct {

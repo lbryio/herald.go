@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	pb "github.com/lbryio/hub/protobuf/go"
-	server "github.com/lbryio/hub/server"
+	pb "github.com/lbryio/herald/protobuf/go"
+	server "github.com/lbryio/herald/server"
 	"github.com/olivere/elastic/v7"
 )
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	server "github.com/lbryio/hub/server"
+	server "github.com/lbryio/herald/server"
 )
 
 // TestUDPPing tests UDPPing correctness against prod server.

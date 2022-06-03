@@ -1,4 +1,4 @@
-module github.com/lbryio/hub
+module github.com/lbryio/herald
 
 go 1.17
 
@@ -15,11 +15,14 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/text v0.3.7
 	google.golang.org/grpc v1.38.0
-	google.golang.org/protobuf v1.27.1
+	google.golang.org/protobuf v1.28.0
 	gopkg.in/karalabe/cookiejar.v1 v1.0.0-20141109175019-e1490cae028c
 )
 
-require golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
+require (
+	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
+	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.2.0 // indirect
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

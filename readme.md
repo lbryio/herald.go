@@ -1,10 +1,9 @@
-# LBRY Hub
+# LBRY Herald
 
-A hub provides back-end services to LBRY clients. Services include
+A herald server provides back-end services to LBRY clients. Services include
 
 - URL resolution
 - search
-- wallet services (getting and sending transactions, address subscription)
 - hub federation and discovery
 
 This project will eventually subsume and replace the
@@ -26,13 +25,18 @@ Follow the instructions [here](https://lbry.tech/resources/wallet-server).
 ### Run this hub
 
 ```bash
-./hub serve
+./herald serve
+```
+
+```bash
+# run with remote services disabled so it can run completely solo
+./herald serve --disable-rocksdb-refresh --disable-load-peers --disable-resolve --disable-es --disable-blocking-and-filtering
 ```
 
 ### Search for stuff
 
 ```bash
-./hub search text goes here
+./herald search text goes here
 ```
 
 ## Contributing
@@ -41,9 +45,9 @@ Contributions to this project are welcome, encouraged, and compensated. Details 
 
 ### Dev Dependencies
 
-Install Go 1.17+
+Install Go 1.18+
 
-- Ubuntu: `sudo add-apt-repository ppa:longsleep/golang-backports && sudo apt install golang-go`
+- Ubuntu: `sudo snap install go`
 - OSX: `brew install go`
 - Windows https://golang.org/doc/install
 
@@ -63,8 +67,8 @@ Install rocksdb and setup your CGO flags, on ubuntu
 
 ```
 sudo apt-get install libgflags-dev libsnappy-dev zlib1g-dev libbz2-dev libzstd-dev liblz4-dev
-export CGO_CFLAGS="-I/path/to/rocksdb/include"
-export CGO_LDFLAGS="-L/path/to/rocksdb -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd -lbz2"
+# export CGO_CFLAGS="-I/path/to/rocksdb/include"
+export CGO_LDFLAGS="-L/usr/local/lib/ -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd -lbz2"
 ```
 
 ```

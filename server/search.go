@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/lbryio/hub/internal"
-	"github.com/lbryio/hub/internal/metrics"
-	pb "github.com/lbryio/hub/protobuf/go"
+	"github.com/lbryio/herald/internal"
+	"github.com/lbryio/herald/internal/metrics"
+	pb "github.com/lbryio/herald/protobuf/go"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/text/cases"
