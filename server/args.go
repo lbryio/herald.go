@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	"github.com/akamensky/argparse"
-	pb "github.com/lbryio/hub/protobuf/go"
+	pb "github.com/lbryio/herald/protobuf/go"
 )
 
 const (

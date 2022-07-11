@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lbryio/hub/db/stack"
+	"github.com/lbryio/herald/db/stack"
 )
 
 func TestPush(t *testing.T) {

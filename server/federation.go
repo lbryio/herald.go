@@ -11,8 +11,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/lbryio/hub/internal/metrics"
-	pb "github.com/lbryio/hub/protobuf/go"
+	"github.com/lbryio/herald/internal/metrics"
+	pb "github.com/lbryio/herald/protobuf/go"
 	"google.golang.org/grpc"
 )
 

@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/lbryio/hub/protobuf/go/pb";
+option go_package = "github.com/lbryio/herald/protobuf/go/pb";
 import "result.proto";
 
 package pb;

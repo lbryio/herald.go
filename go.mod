@@ -1,6 +1,6 @@
-module github.com/lbryio/hub
+module github.com/lbryio/herald
 
-go 1.17
+go 1.18
 
 // replace github.com/lbryio/lbry.go/v3 => /home/loki/dev/lbry/lbry.go
 

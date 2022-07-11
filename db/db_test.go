@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	dbpkg "github.com/lbryio/hub/db"
-	"github.com/lbryio/hub/db/prefixes"
-	"github.com/lbryio/hub/internal"
+	dbpkg "github.com/lbryio/herald/db"
+	"github.com/lbryio/herald/db/prefixes"
+	"github.com/lbryio/herald/internal"
 	"github.com/linxGnu/grocksdb"
 )
 

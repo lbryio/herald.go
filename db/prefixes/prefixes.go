@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lbryio/hub/internal"
+	"github.com/lbryio/herald/internal"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
 )
 

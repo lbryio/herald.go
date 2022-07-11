@@ -7,9 +7,9 @@ import (
 
 	_ "net/http/pprof"
 
-	"github.com/lbryio/hub/internal"
-	pb "github.com/lbryio/hub/protobuf/go"
-	"github.com/lbryio/hub/server"
+	"github.com/lbryio/herald/internal"
+	pb "github.com/lbryio/herald/protobuf/go"
+	"github.com/lbryio/herald/server"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )

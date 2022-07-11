@@ -25,7 +25,7 @@ AREA_RENAME = {
 def build_upload_binary(release: github3.repos.release.Release) -> None:
     # os.chdir(absolute_path)
     # os.system("go build .")
-    cmd = f'CGO_ENABLED=0 go build -v -ldflags "-X github.com/lbryio/hub/meta.Version={release.name}"'
+    cmd = f'CGO_ENABLED=0 go build -v -ldflags "-X github.com/lbryio/herald/meta.Version={release.name}"'
     print(cmd)
     # os.system("go build .")
     os.system(cmd)
@@ -185,7 +185,7 @@ def release(args):
     unlabeled = []
     fixups = []
     areas = {}
-    for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/hub"):
+    for pr in gh.search_issues(f"merged:>={previous_release._json_data['created_at']} repo:lbryio/herald"):
         area_labels = list(get_labels(pr, 'area'))
         type_label = get_label(pr, 'type')
         if area_labels and type_label:
