@@ -14,7 +14,7 @@ require (
 	github.com/prometheus/client_model v0.2.0
 	github.com/sirupsen/logrus v1.8.1
 	golang.org/x/text v0.3.7
-	google.golang.org/grpc v1.38.0
+	google.golang.org/grpc v1.46.0
 	google.golang.org/protobuf v1.27.1
 	gopkg.in/karalabe/cookiejar.v1 v1.0.0-20141109175019-e1490cae028c
 )
