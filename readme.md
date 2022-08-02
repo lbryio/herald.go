@@ -1,13 +1,13 @@
 # LBRY Herald
 
-A herald server provides back-end services to LBRY clients. Services include
+herald.go is a not yet feature complete go rewrite of the [existing implementation in python](https://github.com/lbryio/hub/tree/master/hub/herald). A herald server provides back-end services to LBRY clients. Services include
 
 - URL resolution
 - search
 - hub federation and discovery
 
 This project will eventually subsume and replace the
-[wallet server](https://github.com/lbryio/lbry-sdk/blob/v0.92.0/docker/Dockerfile.wallet_server)
+[herald](https://github.com/lbryio/hub/blob/master/docs/docker_examples/hub-compose.yml#L38)
 and the [lighthouse](https://github.com/lbryio/lighthouse) search provider.
 
 ![](./diagram.png)
