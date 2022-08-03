@@ -446,20 +446,24 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 
 	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
 
-	cleanup := func() {
-		db.DB.Close()
+	cleanupFiles := func() {
 		err = os.RemoveAll(secondaryPath)
 		if err != nil {
 			log.Println(err)
 		}
 	}
-	db.Cleanup = cleanup
 
 	if err != nil {
-		return nil, cleanup, err
+		return nil, cleanupFiles, err
 	}
 
-	return db, cleanup, nil
+	cleanupDB := func() {
+		db.DB.Close()
+		cleanupFiles()
+	}
+	db.Cleanup = cleanupDB
+
+	return db, cleanupDB, nil
 }
 
 // GetDBColumnFamilies gets a db with the specified column families and secondary path.

@@ -208,6 +208,15 @@ func RoundUpReleaseTime(q *elastic.BoolQuery, rqs []*pb.RangeField, name string)
 	return q
 }
 
+// FieldUnsetOr takes a bool query, and a term name. A query is constructed
+// such that either the field does not exist OR the field exists and matches
+// the original query.
+func FieldUnsetOr(q *elastic.BoolQuery, name string) *elastic.BoolQuery {
+	qUnset := elastic.NewBoolQuery().MustNot(elastic.NewExistsQuery(name))
+	qSet := elastic.NewBoolQuery().Must(elastic.NewExistsQuery(name)).Must(q)
+	return elastic.NewBoolQuery().Should(qUnset, qSet)
+}
+
 // Search /*
 // Search logic is as follows:
 // 1) Setup query with params given
@@ -673,7 +682,8 @@ func (s *Server) setupEsQuery(
 	q = AddRangeField(q, in.CreationHeight, "creation_height")
 	q = AddRangeField(q, in.ActivationHeight, "activation_height")
 	q = AddRangeField(q, in.ExpirationHeight, "expiration_height")
-	q = RoundUpReleaseTime(q, in.ReleaseTime, "release_time")
+	qReleaseTime := RoundUpReleaseTime(elastic.NewBoolQuery(), in.ReleaseTime, "release_time")
+	q = q.Must(FieldUnsetOr(qReleaseTime, "release_time"))
 	q = AddRangeField(q, in.RepostCount, "repost_count")
 	q = AddRangeField(q, in.FeeAmount, "fee_amount")
 	q = AddRangeField(q, in.Duration, "duration")
