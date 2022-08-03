@@ -10,9 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/lbryio/herald/internal/metrics"
-	pb "github.com/lbryio/herald/protobuf/go"
-	server "github.com/lbryio/herald/server"
+	"github.com/lbryio/herald.go/internal/metrics"
+	pb "github.com/lbryio/herald.go/protobuf/go"
+	server "github.com/lbryio/herald.go/server"
 	dto "github.com/prometheus/client_model/go"
 	"google.golang.org/grpc"
 )

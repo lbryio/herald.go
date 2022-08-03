@@ -6,7 +6,7 @@ package stack
 import (
 	"sync"
 
-	"github.com/lbryio/herald/internal"
+	"github.com/lbryio/herald.go/internal"
 )
 
 type SliceBacked struct {

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lbryio/herald/db/prefixes"
-	"github.com/lbryio/herald/internal"
-	pb "github.com/lbryio/herald/protobuf/go"
+	"github.com/lbryio/herald.go/db/prefixes"
+	"github.com/lbryio/herald.go/internal"
+	pb "github.com/lbryio/herald.go/protobuf/go"
 	lbryurl "github.com/lbryio/lbry.go/v3/url"
 	log "github.com/sirupsen/logrus"
 )

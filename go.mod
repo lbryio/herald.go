@@ -1,4 +1,4 @@
-module github.com/lbryio/herald
+module github.com/lbryio/herald.go
 
 go 1.18
 

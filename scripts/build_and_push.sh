@@ -1,6 +1,6 @@
 #!/bin/bash
 
-IMPORT_PATH="github.com/lbryio/herald"
+IMPORT_PATH="github.com/lbryio/herald.go"
 
 function print_and_die() {
   echo "$1"
@@ -22,7 +22,7 @@ echo "using tag $LATEST_TAG"
 git checkout "$LATEST_TAG"
 
 CGO_ENABLED=0 go build -v -ldflags "-X ${IMPORT_PATH}/meta.Version=${VERSION}"
-docker build . -t lbry/herald:latest
-docker tag lbry/herald:latest lbry/herald:"$LATEST_TAG"
-docker push lbry/herald:latest
-docker push lbry/herald:"$LATEST_TAG"
+docker build . -t lbry/herald.go:latest
+docker tag lbry/herald.go:latest lbry/herald.go:"$LATEST_TAG"
+docker push lbry/herald.go:latest
+docker push lbry/herald.go:"$LATEST_TAG"

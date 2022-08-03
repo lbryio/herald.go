@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	pb "github.com/lbryio/herald/protobuf/go"
+	pb "github.com/lbryio/herald.go/protobuf/go"
 )
 
 // TestParseArgs
