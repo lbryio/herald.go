@@ -17,9 +17,9 @@ RUN cd /tmp && \
 RUN cd /tmp && \
     git clone https://github.com/facebook/rocksdb.git && \
     cd rocksdb && \
-    git checkout v6.26.1 && \
-    make shared_lib && \
-    make install-shared && \
+    git checkout v6.29.5 && \
+    make static_lib && \
+    make install && \
     rm -rf /tmp/rocksdb
 
 CMD ["bash"]

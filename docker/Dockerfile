@@ -7,4 +7,4 @@ COPY . /app
 RUN go build
 FROM alpine:latest
 COPY --from=stage1 /app/hub /hub
-ENTRYPOINT ["/hub", "serve"]
+ENTRYPOINT ["/herald.go", "serve"]
