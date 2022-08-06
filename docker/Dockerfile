@@ -4,7 +4,7 @@ EXPOSE 50051
 RUN mkdir /app
 WORKDIR /app
 COPY . /app
-RUN go build
+RUN go build -o herald .
 FROM alpine:latest
-COPY --from=stage1 /app/hub /hub
-ENTRYPOINT ["/herald.go", "serve"]
+COPY --from=stage1 /app/herald /herald
+ENTRYPOINT ["/herald", "serve"]
