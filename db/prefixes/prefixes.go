@@ -17,7 +17,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/lbryio/herald/internal"
+	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
 )
 

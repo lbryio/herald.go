@@ -9,8 +9,8 @@ import (
 	"os"
 	"testing"
 
-	dbpkg "github.com/lbryio/herald/db"
-	prefixes "github.com/lbryio/herald/db/prefixes"
+	dbpkg "github.com/lbryio/herald.go/db"
+	prefixes "github.com/lbryio/herald.go/db/prefixes"
 	"github.com/linxGnu/grocksdb"
 )
 

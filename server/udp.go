@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/lbryio/herald/protobuf/go"
+	pb "github.com/lbryio/herald.go/protobuf/go"
 )
 
 const maxBufferSize = 1024

@@ -5,7 +5,7 @@ package db
 import (
 	"bytes"
 
-	"github.com/lbryio/herald/db/prefixes"
+	"github.com/lbryio/herald.go/db/prefixes"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"

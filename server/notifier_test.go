@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/lbryio/herald/internal"
-	"github.com/lbryio/herald/server"
+	"github.com/lbryio/herald.go/internal"
+	"github.com/lbryio/herald.go/server"
 	"github.com/sirupsen/logrus"
 )
 

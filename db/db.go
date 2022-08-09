@@ -10,11 +10,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/lbryio/herald/db/prefixes"
-	"github.com/lbryio/herald/db/stack"
-	"github.com/lbryio/herald/internal"
-	"github.com/lbryio/herald/internal/metrics"
-	pb "github.com/lbryio/herald/protobuf/go"
+	"github.com/lbryio/herald.go/db/prefixes"
+	"github.com/lbryio/herald.go/db/stack"
+	"github.com/lbryio/herald.go/internal"
+	"github.com/lbryio/herald.go/internal/metrics"
+	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"

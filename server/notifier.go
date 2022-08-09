@@ -4,7 +4,7 @@ import (
 	"encoding/binary"
 	"net"
 
-	"github.com/lbryio/herald/internal"
+	"github.com/lbryio/herald.go/internal"
 	"github.com/sirupsen/logrus"
 )
 
