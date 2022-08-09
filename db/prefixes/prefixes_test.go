@@ -28,12 +28,25 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.Colu
 	columnFamily := records[0][0]
 	records = records[1:]
 
+	cleanupFiles := func() {
+		err = os.RemoveAll("./tmp")
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
 	// wOpts := grocksdb.NewDefaultWriteOptions()
 	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	db, err := grocksdb.OpenDb(opts, "tmp")
 	if err != nil {
 		log.Println(err)
+		// Garbage might have been left behind by a prior crash.
+		cleanupFiles()
+		db, err = grocksdb.OpenDb(opts, "tmp")
+		if err != nil {
+			log.Println(err)
+		}
 	}
 	handle, err := db.CreateColumnFamily(opts, columnFamily)
 	if err != nil {
@@ -41,10 +54,7 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.Colu
 	}
 	toDefer := func() {
 		db.Close()
-		err = os.RemoveAll("./tmp")
-		if err != nil {
-			log.Println(err)
-		}
+		cleanupFiles()
 	}
 
 	return db, records, toDefer, handle
@@ -101,7 +111,7 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 				log.Println(err)
 			}
 			if !bytes.Equal(gotKey, wantKey) {
-				t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+				t.Errorf("gotKey: %+v, wantKey: %+v\n", gotKey, wantKey)
 			}
 			if !bytes.Equal(got, want) {
 				t.Errorf("got: %+v, want: %+v\n", got, want)
