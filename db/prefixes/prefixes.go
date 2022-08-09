@@ -176,16 +176,10 @@ func (v *DBStateValue) PackValue() []byte {
 	}
 	value[32+4+4+32+4+4] = bitSetVar
 	value[32+4+4+32+4+4+1] = v.DDVersion
-	var histFlushCount uint32
-	var compFlushCount uint32
-	var compCursor uint32
-	histFlushCount = (OnesCompTwiddle32 - uint32(v.HistFlushCount))
-	compFlushCount = (OnesCompTwiddle32 - uint32(v.CompFlushCount))
-	compCursor = (OnesCompTwiddle32 - uint32(v.CompCursor))
 
-	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1:], histFlushCount)
-	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4:], compFlushCount)
-	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4:], compCursor)
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1:], uint32(v.HistFlushCount))
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4:], uint32(v.CompFlushCount))
+	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4:], uint32(v.CompCursor))
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4+4+4:], v.EsSyncHeight)
 
 	return value
@@ -232,9 +226,9 @@ func DBStateValueUnpack(value []byte) *DBStateValue {
 		WallTime:       binary.BigEndian.Uint32(value[32+4+4+32+4:]),
 		FirstSync:      value[32+4+4+32+4+4] == 1,
 		DDVersion:      value[32+4+4+32+4+4+1],
-		HistFlushCount: int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1:])),
-		CompFlushCount: int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4:])),
-		CompCursor:     int32(^binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4:])),
+		HistFlushCount: int32(binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1:])),
+		CompFlushCount: int32(binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4:])),
+		CompCursor:     int32(binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4:])),
 		EsSyncHeight:   binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4+4:]),
 	}
 	return x
