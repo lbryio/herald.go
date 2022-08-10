@@ -1559,7 +1559,7 @@ type ClaimToChannelKey struct {
 }
 
 type ClaimToChannelValue struct {
-	SigningHash []byte `json:"signing_hash"`
+	SigningHash []byte `struct:"[20]byte" json:"signing_hash"`
 }
 
 func NewClaimToChannelKey(claimHash []byte, txNum uint32, position uint16) *ClaimToChannelKey {
@@ -2664,20 +2664,6 @@ func ActiveAmountValueUnpack(value []byte) *ActiveAmountValue {
 }
 
 type OnesComplementEffectiveAmount uint64
-
-func (amt *OnesComplementEffectiveAmount) SizeOf() int {
-	return 8
-}
-
-func (amt *OnesComplementEffectiveAmount) Pack(buf []byte, order binary.ByteOrder) ([]byte, error) {
-	binary.BigEndian.PutUint64(buf, OnesCompTwiddle64-uint64(*amt))
-	return buf[8:], nil
-}
-
-func (amt *OnesComplementEffectiveAmount) Unpack(buf []byte, order binary.ByteOrder) ([]byte, error) {
-	*amt = OnesComplementEffectiveAmount(OnesCompTwiddle64 - binary.BigEndian.Uint64(buf))
-	return buf[8:], nil
-}
 
 type EffectiveAmountKey struct {
 	Prefix                      []byte                        `struct:"[1]byte" json:"prefix"`

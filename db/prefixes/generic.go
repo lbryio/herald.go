@@ -7,11 +7,59 @@ import (
 	"strings"
 
 	"github.com/go-restruct/restruct"
+	"github.com/lbryio/lbcd/chaincfg/chainhash"
 )
 
 func init() {
 	restruct.EnableExprBeta()
 }
+
+// Type OnesComplementEffectiveAmount (uint64) has to be encoded specially
+// to get the desired sort ordering.
+// Implement the Sizer, Packer, Unpacker interface to handle it manually.
+
+func (amt *OnesComplementEffectiveAmount) SizeOf() int {
+	return 8
+}
+
+func (amt *OnesComplementEffectiveAmount) Pack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	binary.BigEndian.PutUint64(buf, OnesCompTwiddle64-uint64(*amt))
+	return buf[8:], nil
+}
+
+func (amt *OnesComplementEffectiveAmount) Unpack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	*amt = OnesComplementEffectiveAmount(OnesCompTwiddle64 - binary.BigEndian.Uint64(buf))
+	return buf[8:], nil
+}
+
+// Struct BlockTxsValue has a field TxHashes of type []*chainhash.Hash.
+// I haven't been able to figure out the right annotations to make
+// restruct.Pack,Unpack work automagically.
+// Implement the Sizer, Packer, Unpacker interface to handle it manually.
+
+func (kv *BlockTxsValue) SizeOf() int {
+	return 32 * len(kv.TxHashes)
+}
+
+func (kv *BlockTxsValue) Pack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	offset := 0
+	for _, h := range kv.TxHashes {
+		offset += copy(buf[offset:], h[:])
+	}
+	return buf[offset:], nil
+}
+
+func (kv *BlockTxsValue) Unpack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	offset := 0
+	kv.TxHashes = make([]*chainhash.Hash, len(buf)/32)
+	for i, _ := range kv.TxHashes {
+		kv.TxHashes[i] = (*chainhash.Hash)(buf[offset:32])
+		offset += 32
+	}
+	return buf[offset:], nil
+}
+
+// Metadata associated with each prefix/table
 
 type tableMeta struct {
 	newKey         func() interface{}
@@ -595,12 +643,8 @@ var RegressionAPI_1 = &SerializationAPI{
 	PackValue: func(value BaseValue) ([]byte, error) {
 		return GenericPack(value, -1)
 	},
-	UnpackKey: func(key []byte) (BaseKey, error) {
-		return UnpackGenericKey(key)
-	},
-	UnpackValue: func(prefix []byte, value []byte) (BaseValue, error) {
-		return UnpackGenericValue(prefix, value)
-	},
+	UnpackKey:   UnpackGenericKey,
+	UnpackValue: UnpackGenericValue,
 }
 
 var RegressionAPI_2 = &SerializationAPI{
