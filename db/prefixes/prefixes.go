@@ -129,8 +129,44 @@ type ValueUnpacker interface {
 	UnpackValue(buf []byte)
 }
 
+type LengthEncodedName struct {
+	NameLen uint16 `struct:"sizeof=Name"`
+	Name    string `json:"name"`
+}
+
+func NewLengthEncodedName(s string) LengthEncodedName {
+	return LengthEncodedName{
+		NameLen: uint16(len(s)),
+		Name:    s,
+	}
+}
+
+type LengthEncodedNormalizedName struct {
+	NormalizedNameLen uint16 `struct:"sizeof=NormalizedName"`
+	NormalizedName    string `json:"normalized_name"`
+}
+
+func NewLengthEncodedNormalizedName(s string) LengthEncodedNormalizedName {
+	return LengthEncodedNormalizedName{
+		NormalizedNameLen: uint16(len(s)),
+		NormalizedName:    s,
+	}
+}
+
+type LengthEncodedPartialClaimId struct {
+	PartialClaimIdLen uint8  `struct:"sizeof=PartialClaimId"`
+	PartialClaimId    string `json:"partial_claim_id"`
+}
+
+func NewLengthEncodedPartialClaimId(s string) LengthEncodedPartialClaimId {
+	return LengthEncodedPartialClaimId{
+		PartialClaimIdLen: uint8(len(s)),
+		PartialClaimId:    s,
+	}
+}
+
 type DBStateKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 }
 
 type DBStateValue struct {
@@ -247,12 +283,12 @@ func DBStateValueUnpack(value []byte) *DBStateValue {
 }
 
 type UndoKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height uint64 `json:"height"`
 }
 
 type UndoValue struct {
-	Data []byte `json:"data"`
+	Data []byte `struct-while:"!_eof" json:"data"`
 }
 
 func (k *UndoKey) PackKey() []byte {
@@ -327,8 +363,8 @@ func UndoValueUnpack(value []byte) *UndoValue {
 }
 
 type UTXOKey struct {
-	Prefix []byte `json:"prefix"`
-	HashX  []byte `json:"hashx"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
+	HashX  []byte `struct:"[11]byte" json:"hashx"`
 	TxNum  uint32 `json:"tx_num"`
 	Nout   uint16 `json:"nout"`
 }
@@ -338,14 +374,14 @@ type UTXOValue struct {
 }
 
 type HashXUTXOKey struct {
-	Prefix      []byte `json:"prefix"`
-	ShortTXHash []byte `json:"short_tx_hash"`
+	Prefix      []byte `struct:"[1]byte" json:"prefix"`
+	ShortTXHash []byte `struct:"[4]byte" json:"short_tx_hash"`
 	TxNum       uint32 `json:"tx_num"`
 	Nout        uint16 `json:"nout"`
 }
 
 type HashXUTXOValue struct {
-	HashX []byte `json:"hashx"`
+	HashX []byte `struct:"[11]byte" json:"hashx"`
 }
 
 //
@@ -455,13 +491,13 @@ func HashXUTXOValueUnpack(value []byte) *HashXUTXOValue {
 }
 
 type HashXHistoryKey struct {
-	Prefix []byte `json:"prefix"`
-	HashX  []byte `json:"hashx"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
+	HashX  []byte `struct:"[11]byte" json:"hashx"`
 	Height uint32 `json:"height"`
 }
 
 type HashXHistoryValue struct {
-	HashXes []uint16 `json:"hashxes"`
+	HashXes []uint16 `struct-while:"!_eof" json:"hashxes"`
 }
 
 func (k *HashXHistoryKey) String() string {
@@ -559,7 +595,7 @@ func HashXHistoryValueUnpack(value []byte) *HashXHistoryValue {
 }
 
 type BlockHashKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height uint32 `json:"height"`
 }
 
@@ -650,12 +686,12 @@ func BlockHashValueUnpack(value []byte) *BlockHashValue {
 }
 
 type BlockTxsKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height uint32 `json:"height"`
 }
 
 type BlockTxsValue struct {
-	TxHashes []*chainhash.Hash `json:"tx_hashes"`
+	TxHashes []*chainhash.Hash `struct-while:"!_eof" json:"tx_hashes"`
 }
 
 func (k *BlockTxsKey) NewBlockTxsKey(height uint32) *BlockTxsKey {
@@ -749,7 +785,7 @@ func BlockTxsValueUnpack(value []byte) *BlockTxsValue {
 }
 
 type TxCountKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height uint32 `json:"height"`
 }
 
@@ -834,7 +870,7 @@ func TxCountValueUnpack(value []byte) *TxCountValue {
 }
 
 type TxHashKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	TxNum  uint32 `json:"tx_num"`
 }
 
@@ -920,7 +956,7 @@ func TxHashValueUnpack(value []byte) *TxHashValue {
 }
 
 type TxNumKey struct {
-	Prefix []byte          `json:"prefix"`
+	Prefix []byte          `struct:"[1]byte" json:"prefix"`
 	TxHash *chainhash.Hash `json:"tx_hash"`
 }
 
@@ -998,12 +1034,12 @@ func TxNumValueUnpack(value []byte) *TxNumValue {
 }
 
 type TxKey struct {
-	Prefix []byte          `json:"prefix"`
-	TxHash *chainhash.Hash `json:"tx_hash"`
+	Prefix []byte          `struct:"[1]byte" json:"prefix"`
+	TxHash *chainhash.Hash `struct:"*[32]byte" json:"tx_hash"`
 }
 
 type TxValue struct {
-	RawTx []byte `json:"raw_tx"`
+	RawTx []byte `struct-while:"!_eof" json:"raw_tx"`
 }
 
 func (k *TxKey) PackKey() []byte {
@@ -1166,8 +1202,8 @@ func BlockHeaderValueUnpack(value []byte) *BlockHeaderValue {
 }
 
 type ClaimToTXOKey struct {
-	Prefix    []byte `json:"prefix"`
-	ClaimHash []byte `json:"claim_hash"`
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 type ClaimToTXOValue struct {
@@ -1177,7 +1213,7 @@ type ClaimToTXOValue struct {
 	RootPosition            uint16 `json:"root_position"`
 	Amount                  uint64 `json:"amount"`
 	ChannelSignatureIsValid bool   `json:"channel_signature_is_valid"`
-	Name                    string `json:"name"`
+	LengthEncodedName
 }
 
 func NewClaimToTXOKey(claimHash []byte) *ClaimToTXOKey {
@@ -1278,19 +1314,19 @@ func ClaimToTXOValueUnpack(value []byte) *ClaimToTXOValue {
 		RootPosition:            binary.BigEndian.Uint16(value[10:]),
 		Amount:                  binary.BigEndian.Uint64(value[12:]),
 		ChannelSignatureIsValid: value[20] == 1,
-		Name:                    string(value[23 : 23+nameLen]),
+		LengthEncodedName:       NewLengthEncodedName(string(value[23 : 23+nameLen])),
 	}
 }
 
 type TXOToClaimKey struct {
-	Prefix   []byte `json:"prefix"`
+	Prefix   []byte `struct:"[1]byte" json:"prefix"`
 	TxNum    uint32 `json:"tx_num"`
 	Position uint16 `json:"position"`
 }
 
 type TXOToClaimValue struct {
-	ClaimHash []byte `json:"claim_hash"`
-	Name      string `json:"name"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
+	LengthEncodedName
 }
 
 func NewTXOToClaimKey(txNum uint32, position uint16) *TXOToClaimKey {
@@ -1377,17 +1413,17 @@ func TXOToClaimKeyUnpack(key []byte) *TXOToClaimKey {
 func TXOToClaimValueUnpack(value []byte) *TXOToClaimValue {
 	nameLen := binary.BigEndian.Uint16(value[20:])
 	return &TXOToClaimValue{
-		ClaimHash: value[:20],
-		Name:      string(value[22 : 22+nameLen]),
+		ClaimHash:         value[:20],
+		LengthEncodedName: NewLengthEncodedName(string(value[22 : 22+nameLen])),
 	}
 }
 
 type ClaimShortIDKey struct {
-	Prefix         []byte `json:"prefix"`
-	NormalizedName string `json:"normalized_name"`
-	PartialClaimId string `json:"partial_claim_id"`
-	RootTxNum      uint32 `json:"root_tx_num"`
-	RootPosition   uint16 `json:"root_position"`
+	Prefix                      []byte `struct:"[1]byte" json:"prefix"`
+	LengthEncodedNormalizedName        // fields NormalizedNameLen, NormalizedName
+	LengthEncodedPartialClaimId        // fields PartialClaimIdLen, PartialClaimId
+	RootTxNum                   uint32 `json:"root_tx_num"`
+	RootPosition                uint16 `json:"root_position"`
 }
 
 type ClaimShortIDValue struct {
@@ -1397,9 +1433,9 @@ type ClaimShortIDValue struct {
 
 func NewClaimShortIDKey(normalizedName, partialClaimId string) *ClaimShortIDKey {
 	return &ClaimShortIDKey{
-		Prefix:         []byte{ClaimShortIdPrefix},
-		NormalizedName: normalizedName,
-		PartialClaimId: partialClaimId,
+		Prefix:                      []byte{ClaimShortIdPrefix},
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(normalizedName),
+		LengthEncodedPartialClaimId: NewLengthEncodedPartialClaimId(partialClaimId),
 	}
 }
 
@@ -1489,11 +1525,11 @@ func ClaimShortIDKeyUnpack(key []byte) *ClaimShortIDKey {
 	nameLen := int(binary.BigEndian.Uint16(key[prefixLen:]))
 	partialClaimLen := int(uint8(key[prefixLen+2+nameLen]))
 	return &ClaimShortIDKey{
-		Prefix:         key[:prefixLen],
-		NormalizedName: string(key[prefixLen+2 : prefixLen+2+nameLen]),
-		PartialClaimId: string(key[prefixLen+2+nameLen+1 : prefixLen+2+nameLen+1+partialClaimLen]),
-		RootTxNum:      binary.BigEndian.Uint32(key[prefixLen+2+nameLen+1+partialClaimLen:]),
-		RootPosition:   binary.BigEndian.Uint16(key[prefixLen+2+nameLen+1+partialClaimLen+4:]),
+		Prefix:                      key[:prefixLen],
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(key[prefixLen+2 : prefixLen+2+nameLen])),
+		LengthEncodedPartialClaimId: NewLengthEncodedPartialClaimId(string(key[prefixLen+2+nameLen+1 : prefixLen+2+nameLen+1+partialClaimLen])),
+		RootTxNum:                   binary.BigEndian.Uint32(key[prefixLen+2+nameLen+1+partialClaimLen:]),
+		RootPosition:                binary.BigEndian.Uint16(key[prefixLen+2+nameLen+1+partialClaimLen+4:]),
 	}
 }
 
@@ -1505,8 +1541,8 @@ func ClaimShortIDValueUnpack(value []byte) *ClaimShortIDValue {
 }
 
 type ClaimToChannelKey struct {
-	Prefix    []byte `json:"prefix"`
-	ClaimHash []byte `json:"claim_hash"`
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 	TxNum     uint32 `json:"tx_num"`
 	Position  uint16 `json:"position"`
 }
@@ -1607,22 +1643,22 @@ func ClaimToChannelValueUnpack(value []byte) *ClaimToChannelValue {
 }
 
 type ChannelToClaimKey struct {
-	Prefix      []byte `json:"prefix"`
-	SigningHash []byte `json:"signing_hash"`
-	Name        string `json:"name"`
-	TxNum       uint32 `json:"tx_num"`
-	Position    uint16 `json:"position"`
+	Prefix            []byte `struct:"[1]byte" json:"prefix"`
+	SigningHash       []byte `struct:"[20]byte" json:"signing_hash"`
+	LengthEncodedName        // fields NameLen, Name
+	TxNum             uint32 `json:"tx_num"`
+	Position          uint16 `json:"position"`
 }
 
 type ChannelToClaimValue struct {
-	ClaimHash []byte `json:"claim_hash"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 func NewChannelToClaimKey(channelHash []byte, normalizedName string) *ChannelToClaimKey {
 	return &ChannelToClaimKey{
-		Prefix:      []byte{ChannelToClaim},
-		SigningHash: channelHash,
-		Name:        normalizedName,
+		Prefix:            []byte{ChannelToClaim},
+		SigningHash:       channelHash,
+		LengthEncodedName: NewLengthEncodedName(normalizedName),
 	}
 }
 
@@ -1710,11 +1746,11 @@ func ChannelToClaimKeyUnpack(key []byte) *ChannelToClaimKey {
 	prefixLen := 1
 	nameLen := int(binary.BigEndian.Uint16(key[prefixLen+20:]))
 	return &ChannelToClaimKey{
-		Prefix:      key[:prefixLen],
-		SigningHash: key[prefixLen : prefixLen+20],
-		Name:        string(key[prefixLen+22 : prefixLen+22+nameLen]),
-		TxNum:       binary.BigEndian.Uint32(key[prefixLen+22+nameLen:]),
-		Position:    binary.BigEndian.Uint16(key[prefixLen+22+nameLen+4:]),
+		Prefix:            key[:prefixLen],
+		SigningHash:       key[prefixLen : prefixLen+20],
+		LengthEncodedName: NewLengthEncodedName(string(key[prefixLen+22 : prefixLen+22+nameLen])),
+		TxNum:             binary.BigEndian.Uint32(key[prefixLen+22+nameLen:]),
+		Position:          binary.BigEndian.Uint16(key[prefixLen+22+nameLen+4:]),
 	}
 }
 
@@ -1725,8 +1761,8 @@ func ChannelToClaimValueUnpack(value []byte) *ChannelToClaimValue {
 }
 
 type ChannelCountKey struct {
-	Prefix      []byte `json:"prefix"`
-	ChannelHash []byte `json:"channel_hash"`
+	Prefix      []byte `struct:"[1]byte" json:"prefix"`
+	ChannelHash []byte `struct:"[20]byte" json:"channel_hash"`
 }
 
 type ChannelCountValue struct {
@@ -1810,8 +1846,8 @@ func ChannelCountValueUnpack(value []byte) *ChannelCountValue {
 }
 
 type SupportAmountKey struct {
-	Prefix    []byte `json:"prefix"`
-	ClaimHash []byte `json:"claim_hash"`
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 type SupportAmountValue struct {
@@ -1895,8 +1931,8 @@ func SupportAmountValueUnpack(value []byte) *SupportAmountValue {
 }
 
 type ClaimToSupportKey struct {
-	Prefix    []byte `json:"prefix"`
-	ClaimHash []byte `json:"claim_hash"`
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 	TxNum     uint32 `json:"tx_num"`
 	Position  uint16 `json:"position"`
 }
@@ -1988,13 +2024,13 @@ func ClaimToSupportValueUnpack(value []byte) *ClaimToSupportValue {
 }
 
 type SupportToClaimKey struct {
-	Prefix   []byte `json:"prefix"`
+	Prefix   []byte `struct:"[1]byte" json:"prefix"`
 	TxNum    uint32 `json:"tx_num"`
 	Position uint16 `json:"position"`
 }
 
 type SupportToClaimValue struct {
-	ClaimHash []byte `json:"claim_hash"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 func (k *SupportToClaimKey) PackKey() []byte {
@@ -2073,15 +2109,15 @@ func SupportToClaimValueUnpack(value []byte) *SupportToClaimValue {
 }
 
 type ClaimExpirationKey struct {
-	Prefix     []byte `json:"prefix"`
+	Prefix     []byte `struct:"[1]byte" json:"prefix"`
 	Expiration uint32 `json:"expiration"`
 	TxNum      uint32 `json:"tx_num"`
 	Position   uint16 `json:"position"`
 }
 
 type ClaimExpirationValue struct {
-	ClaimHash      []byte `json:"claim_hash"`
-	NormalizedName string `json:"normalized_name"`
+	ClaimHash                   []byte `struct:"[20]byte" json:"claim_hash"`
+	LengthEncodedNormalizedName        // fields NormalizedNameLen, NormalizedName
 }
 
 func (k *ClaimExpirationKey) PackKey() []byte {
@@ -2167,25 +2203,25 @@ func ClaimExpirationKeyUnpack(key []byte) *ClaimExpirationKey {
 func ClaimExpirationValueUnpack(value []byte) *ClaimExpirationValue {
 	nameLen := binary.BigEndian.Uint16(value[20:])
 	return &ClaimExpirationValue{
-		ClaimHash:      value[:20],
-		NormalizedName: string(value[22 : 22+nameLen]),
+		ClaimHash:                   value[:20],
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(value[22 : 22+nameLen])),
 	}
 }
 
 type ClaimTakeoverKey struct {
-	Prefix         []byte `json:"prefix"`
-	NormalizedName string `json:"normalized_name"`
+	Prefix                      []byte `struct:"[1]byte" json:"prefix"`
+	LengthEncodedNormalizedName        // fields NormalizedNameLen, NormalizedName
 }
 
 type ClaimTakeoverValue struct {
-	ClaimHash []byte `json:"claim_hash"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 	Height    uint32 `json:"height"`
 }
 
 func NewClaimTakeoverKey(normalizedName string) *ClaimTakeoverKey {
 	return &ClaimTakeoverKey{
-		Prefix:         []byte{ClaimTakeover},
-		NormalizedName: normalizedName,
+		Prefix:                      []byte{ClaimTakeover},
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(normalizedName),
 	}
 }
 
@@ -2262,8 +2298,8 @@ func ClaimTakeoverKeyUnpack(key []byte) *ClaimTakeoverKey {
 	prefixLen := 1
 	nameLen := binary.BigEndian.Uint16(key[prefixLen:])
 	return &ClaimTakeoverKey{
-		Prefix:         key[:prefixLen],
-		NormalizedName: string(key[prefixLen+2 : prefixLen+2+int(nameLen)]),
+		Prefix:                      key[:prefixLen],
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(key[prefixLen+2 : prefixLen+2+int(nameLen)])),
 	}
 }
 
@@ -2275,7 +2311,7 @@ func ClaimTakeoverValueUnpack(value []byte) *ClaimTakeoverValue {
 }
 
 type PendingActivationKey struct {
-	Prefix   []byte `json:"prefix"`
+	Prefix   []byte `struct:"[1]byte" json:"prefix"`
 	Height   uint32 `json:"height"`
 	TxoType  uint8  `json:"txo_type"`
 	TxNum    uint32 `json:"tx_num"`
@@ -2291,8 +2327,8 @@ func (k *PendingActivationKey) IsClaim() bool {
 }
 
 type PendingActivationValue struct {
-	ClaimHash      []byte `json:"claim_hash"`
-	NormalizedName string `json:"normalized_name"`
+	ClaimHash                   []byte `struct:"[20]byte" json:"claim_hash"`
+	LengthEncodedNormalizedName        // fields NormalizedNameLen, NormalizedName
 }
 
 func (k *PendingActivationKey) PackKey() []byte {
@@ -2384,22 +2420,22 @@ func PendingActivationKeyUnpack(key []byte) *PendingActivationKey {
 func PendingActivationValueUnpack(value []byte) *PendingActivationValue {
 	nameLen := binary.BigEndian.Uint16(value[20:])
 	return &PendingActivationValue{
-		ClaimHash:      value[:20],
-		NormalizedName: string(value[22 : 22+nameLen]),
+		ClaimHash:                   value[:20],
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(value[22 : 22+nameLen])),
 	}
 }
 
 type ActivationKey struct {
-	Prefix   []byte `json:"prefix"`
+	Prefix   []byte `struct:"[1]byte" json:"prefix"`
 	TxoType  uint8  `json:"txo_type"`
 	TxNum    uint32 `json:"tx_num"`
 	Position uint16 `json:"position"`
 }
 
 type ActivationValue struct {
-	Height         uint32 `json:"height"`
-	ClaimHash      []byte `json:"claim_hash"`
-	NormalizedName string `json:"normalized_name"`
+	Height                      uint32 `json:"height"`
+	ClaimHash                   []byte `struct:"[20]byte" json:"claim_hash"`
+	LengthEncodedNormalizedName        // fields NormalizedNameLen, NormalizedName
 }
 
 func NewActivationKey(txoType uint8, txNum uint32, position uint16) *ActivationKey {
@@ -2494,15 +2530,15 @@ func ActivationKeyUnpack(key []byte) *ActivationKey {
 func ActivationValueUnpack(value []byte) *ActivationValue {
 	nameLen := binary.BigEndian.Uint16(value[24:])
 	return &ActivationValue{
-		Height:         binary.BigEndian.Uint32(value),
-		ClaimHash:      value[4 : 20+4],
-		NormalizedName: string(value[26 : 26+nameLen]),
+		Height:                      binary.BigEndian.Uint32(value),
+		ClaimHash:                   value[4 : 20+4],
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(value[26 : 26+nameLen])),
 	}
 }
 
 type ActiveAmountKey struct {
-	Prefix           []byte `json:"prefix"`
-	ClaimHash        []byte `json:"claim_hash"`
+	Prefix           []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash        []byte `struct:"[20]byte" json:"claim_hash"`
 	TxoType          uint8  `json:"txo_type"`
 	ActivationHeight uint32 `json:"activation_height"`
 	TxNum            uint32 `json:"tx_num"`
@@ -2616,22 +2652,38 @@ func ActiveAmountValueUnpack(value []byte) *ActiveAmountValue {
 	}
 }
 
+type OnesComplementEffectiveAmount uint64
+
+func (amt *OnesComplementEffectiveAmount) SizeOf() int {
+	return 8
+}
+
+func (amt *OnesComplementEffectiveAmount) Pack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	binary.BigEndian.PutUint64(buf, OnesCompTwiddle64-uint64(*amt))
+	return buf[8:], nil
+}
+
+func (amt *OnesComplementEffectiveAmount) Unpack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	*amt = OnesComplementEffectiveAmount(OnesCompTwiddle64 - binary.BigEndian.Uint64(buf))
+	return buf[8:], nil
+}
+
 type EffectiveAmountKey struct {
-	Prefix          []byte `json:"prefix"`
-	NormalizedName  string `json:"normalized_name"`
-	EffectiveAmount uint64 `json:"effective_amount"`
-	TxNum           uint32 `json:"tx_num"`
-	Position        uint16 `json:"position"`
+	Prefix                      []byte                        `struct:"[1]byte" json:"prefix"`
+	LengthEncodedNormalizedName                               // fields NormalizedNameLen, NormalizedName
+	EffectiveAmount             OnesComplementEffectiveAmount `json:"effective_amount"`
+	TxNum                       uint32                        `json:"tx_num"`
+	Position                    uint16                        `json:"position"`
 }
 
 type EffectiveAmountValue struct {
-	ClaimHash []byte `json:"claim_hash"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 func NewEffectiveAmountKey(normalizedName string) *EffectiveAmountKey {
 	return &EffectiveAmountKey{
-		Prefix:         []byte{EffectiveAmount},
-		NormalizedName: normalizedName,
+		Prefix:                      []byte{EffectiveAmount},
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(normalizedName),
 	}
 }
 
@@ -2647,7 +2699,7 @@ func (k *EffectiveAmountKey) PackKey() []byte {
 
 	binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
 	copy(key[prefixLen+2:], []byte(k.NormalizedName))
-	binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle64-k.EffectiveAmount)
+	binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle64-uint64(k.EffectiveAmount))
 	binary.BigEndian.PutUint32(key[prefixLen+nameLenLen+8:], k.TxNum)
 	binary.BigEndian.PutUint16(key[prefixLen+nameLenLen+8+4:], k.Position)
 
@@ -2703,7 +2755,7 @@ func (k *EffectiveAmountKey) PartialPack(fields int) []byte {
 			binary.BigEndian.PutUint16(key[prefixLen:], uint16(nameLen))
 			copy(key[prefixLen+2:], []byte(k.NormalizedName))
 		case 2:
-			binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle64-k.EffectiveAmount)
+			binary.BigEndian.PutUint64(key[prefixLen+nameLenLen:], OnesCompTwiddle64-uint64(k.EffectiveAmount))
 		case 3:
 			binary.BigEndian.PutUint32(key[prefixLen+nameLenLen+8:], k.TxNum)
 		case 4:
@@ -2718,11 +2770,11 @@ func EffectiveAmountKeyUnpack(key []byte) *EffectiveAmountKey {
 	prefixLen := 1
 	nameLen := binary.BigEndian.Uint16(key[prefixLen:])
 	return &EffectiveAmountKey{
-		Prefix:          key[:prefixLen],
-		NormalizedName:  string(key[prefixLen+2 : prefixLen+2+int(nameLen)]),
-		EffectiveAmount: OnesCompTwiddle64 - binary.BigEndian.Uint64(key[prefixLen+2+int(nameLen):]),
-		TxNum:           binary.BigEndian.Uint32(key[prefixLen+2+int(nameLen)+8:]),
-		Position:        binary.BigEndian.Uint16(key[prefixLen+2+int(nameLen)+8+4:]),
+		Prefix:                      key[:prefixLen],
+		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(key[prefixLen+2 : prefixLen+2+int(nameLen)])),
+		EffectiveAmount:             OnesComplementEffectiveAmount(OnesCompTwiddle64 - binary.BigEndian.Uint64(key[prefixLen+2+int(nameLen):])),
+		TxNum:                       binary.BigEndian.Uint32(key[prefixLen+2+int(nameLen)+8:]),
+		Position:                    binary.BigEndian.Uint16(key[prefixLen+2+int(nameLen)+8+4:]),
 	}
 }
 
@@ -2733,12 +2785,12 @@ func EffectiveAmountValueUnpack(value []byte) *EffectiveAmountValue {
 }
 
 type RepostKey struct {
-	Prefix    []byte `json:"prefix"`
-	ClaimHash []byte `json:"claim_hash"`
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 type RepostValue struct {
-	RepostedClaimHash []byte `json:"reposted_claim_hash"`
+	RepostedClaimHash []byte `struct:"[20]byte" json:"reposted_claim_hash"`
 }
 
 func NewRepostKey(claimHash []byte) *RepostKey {
@@ -2820,14 +2872,14 @@ func RepostValueUnpack(value []byte) *RepostValue {
 }
 
 type RepostedKey struct {
-	Prefix            []byte `json:"prefix"`
-	RepostedClaimHash []byte `json:"reposted_claim_hash"`
+	Prefix            []byte `struct:"[1]byte" json:"prefix"`
+	RepostedClaimHash []byte `struct:"[20]byte" json:"reposted_claim_hash"`
 	TxNum             uint32 `json:"tx_num"`
 	Position          uint16 `json:"position"`
 }
 
 type RepostedValue struct {
-	ClaimHash []byte `json:"claim_hash"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 func NewRepostedKey(claimHash []byte) *RepostedKey {
@@ -2920,13 +2972,15 @@ func RepostedValueUnpack(value []byte) *RepostedValue {
 }
 
 type TouchedOrDeletedClaimKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height int32  `json:"height"`
 }
 
 type TouchedOrDeletedClaimValue struct {
-	TouchedClaims [][]byte `json:"touched_claims"`
-	DeletedClaims [][]byte `json:"deleted_claims"`
+	TouchedClaimsLen uint32   `struct:"sizeof=TouchedClaims"`
+	DeletedClaimsLen uint32   `struct:"sizeof=DeletedClaims"`
+	TouchedClaims    [][]byte `struct:"[][20]byte" json:"touched_claims"`
+	DeletedClaims    [][]byte `struct:"[][20]byte" json:"deleted_claims"`
 }
 
 func (v *TouchedOrDeletedClaimValue) String() string {
@@ -3068,8 +3122,10 @@ func TouchedOrDeletedClaimValueUnpack(value []byte) *TouchedOrDeletedClaimValue 
 		j += 20
 	}
 	return &TouchedOrDeletedClaimValue{
-		TouchedClaims: touchedClaims,
-		DeletedClaims: deletedClaims,
+		TouchedClaimsLen: touchedLen,
+		DeletedClaimsLen: deletedLen,
+		TouchedClaims:    touchedClaims,
+		DeletedClaims:    deletedClaims,
 	}
 }
 
