@@ -152,7 +152,7 @@ def get_draft_prerelease_vars(args) -> (bool, bool):
 
 def release(args):
     gh = get_github()
-    repo = gh.repository('lbryio', 'hub')
+    repo = gh.repository('lbryio', 'herald.go')
     try:
         version_file = repo.file_contents('version.txt')
         current_version = Version.from_content(version_file)
