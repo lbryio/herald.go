@@ -106,12 +106,20 @@ func testGenericOptions(options *dbpkg.IterOptions, filePath string, prefix byte
 				log.Println(err)
 			}
 
+			if numPartials != kv.Key.NumFields() {
+				t.Errorf("key reports %v fields but %v expected", kv.Key.NumFields(), numPartials)
+			}
 			for j := 1; j <= numPartials; j++ {
 				keyPartial, _ := options.Serializer.PackPartialKey(kv.Key, j)
 				// Check pack partial for sanity
-				if !bytes.HasPrefix(gotKey, keyPartial) {
-					// || (!bytes.HasSuffix(gotKey, []byte{0}) && bytes.Equal(gotKey, keyPartial))
-					t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
+				if j < numPartials {
+					if !bytes.HasPrefix(gotKey, keyPartial) || (len(keyPartial) >= len(gotKey)) {
+						t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
+					}
+				} else {
+					if !bytes.Equal(gotKey, keyPartial) {
+						t.Errorf("%+v should be equal to %+v\n", keyPartial, gotKey)
+					}
 				}
 			}
 
@@ -243,7 +251,7 @@ func TestTXOToClaim(t *testing.T) {
 
 func TestClaimShortID(t *testing.T) {
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimShortIdPrefix)
-	testGeneric(filePath, prefixes.ClaimShortIdPrefix, 3)(t)
+	testGeneric(filePath, prefixes.ClaimShortIdPrefix, 4)(t)
 }
 
 func TestClaimToChannel(t *testing.T) {
@@ -313,7 +321,7 @@ func TestClaimDiff(t *testing.T) {
 
 func TestUTXO(t *testing.T) {
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.UTXO)
-	testGeneric(filePath, prefixes.UTXO, 1)(t)
+	testGeneric(filePath, prefixes.UTXO, 3)(t)
 }
 
 func TestHashXUTXO(t *testing.T) {

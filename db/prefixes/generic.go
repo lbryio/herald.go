@@ -52,7 +52,7 @@ func (kv *BlockTxsValue) Pack(buf []byte, order binary.ByteOrder) ([]byte, error
 func (kv *BlockTxsValue) Unpack(buf []byte, order binary.ByteOrder) ([]byte, error) {
 	offset := 0
 	kv.TxHashes = make([]*chainhash.Hash, len(buf)/32)
-	for i, _ := range kv.TxHashes {
+	for i := range kv.TxHashes {
 		kv.TxHashes[i] = (*chainhash.Hash)(buf[offset:32])
 		offset += 32
 	}

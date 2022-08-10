@@ -3260,11 +3260,11 @@ func (kv *TrendingNotificationKey) PackKey() []byte {
 func (kv *TrendingNotificationKey) UnpackKey(buf []byte) {
 	// b'>L20s'
 	offset := 0
-	kv.Prefix = buf[offset:1]
+	kv.Prefix = buf[offset : offset+1]
 	offset += 1
 	kv.Height = binary.BigEndian.Uint32(buf[offset:])
 	offset += 4
-	kv.ClaimHash = buf[offset:20]
+	kv.ClaimHash = buf[offset : offset+20]
 	offset += 20
 }
 
@@ -3318,9 +3318,9 @@ func (kv *MempoolTxKey) Pack(fields int) []byte {
 func (kv *MempoolTxKey) UnpackKey(buf []byte) {
 	// b'>32s'
 	offset := 0
-	kv.Prefix = buf[offset:1]
+	kv.Prefix = buf[offset : offset+1]
 	offset += 1
-	kv.TxHash = buf[offset:32]
+	kv.TxHash = buf[offset : offset+32]
 	offset += 32
 }
 
@@ -3374,7 +3374,7 @@ func (kv *TouchedHashXKey) PackKey() []byte {
 func (kv *TouchedHashXKey) UnpackKey(buf []byte) {
 	// b'>L'
 	offset := 0
-	kv.Prefix = buf[offset:1]
+	kv.Prefix = buf[offset : offset+1]
 	offset += 1
 	kv.Height = binary.BigEndian.Uint32(buf[offset:])
 	offset += 4
@@ -3395,7 +3395,7 @@ func (kv *TouchedHashXValue) UnpackValue(buf []byte) {
 	// variable length bytes
 	n := len(buf)
 	for i, offset := 0, 0; offset+11 <= n; i, offset = i+1, offset+11 {
-		kv.TouchedHashXs[i] = buf[offset:11]
+		kv.TouchedHashXs[i] = buf[offset : offset+11]
 	}
 }
 
@@ -3432,9 +3432,9 @@ func (kv *HashXStatusKey) PackKey() []byte {
 func (kv *HashXStatusKey) UnpackKey(buf []byte) {
 	// b'>20s'
 	offset := 0
-	kv.Prefix = buf[offset:1]
+	kv.Prefix = buf[offset : offset+1]
 	offset += 1
-	kv.HashX = buf[offset:20]
+	kv.HashX = buf[offset : offset+20]
 	offset += 20
 }
 
@@ -3450,7 +3450,7 @@ func (kv *HashXStatusValue) PackValue() []byte {
 func (kv *HashXStatusValue) UnpackValue(buf []byte) {
 	// b'32s'
 	offset := 0
-	kv.Status = buf[offset:32]
+	kv.Status = buf[offset : offset+32]
 	offset += 32
 }
 
