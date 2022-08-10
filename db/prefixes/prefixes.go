@@ -60,6 +60,12 @@ const (
 	SupportAmount = 'a'
 	BlockTXs      = 'b'
 
+	TrendingNotifications = 'c'
+	MempoolTx             = 'd'
+	TouchedHashX          = 'e'
+	HashXStatus           = 'f'
+	HashXMempoolStatus    = 'g'
+
 	ActivateClaimTXOType    = 1
 	ActivatedSupportTXOType = 2
 
@@ -100,6 +106,11 @@ func GetPrefixes() [][]byte {
 		{ChannelCount},
 		{SupportAmount},
 		{BlockTXs},
+		{TrendingNotifications},
+		{MempoolTx},
+		{TouchedHashX},
+		{HashXStatus},
+		{HashXMempoolStatus},
 	}
 }
 
@@ -3223,6 +3234,243 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 	}
 }
 
+type TrendingNotificationKey struct {
+	Prefix    []byte `struct:"[1]byte"  json:"prefix"`
+	Height    uint32 `struct:"uint32"   json:"height"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
+}
+
+type TrendingNotificationValue struct {
+	PreviousAmount uint64 `struct:"uint64" json:"previous_amount"`
+	NewAmount      uint64 `struct:"uint64" json:"new_amount"`
+}
+
+func (kv *TrendingNotificationKey) NumFields() int {
+	return 2
+}
+
+func (kv *TrendingNotificationKey) PartialPack(fields int) []byte {
+	// b'>L20s'
+	n := len(kv.Prefix) + 4 + 20
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf, kv.Prefix[offset:])
+	if fields <= 0 {
+		return buf[:offset]
+	}
+	binary.BigEndian.PutUint32(buf[offset:], kv.Height)
+	offset += 4
+	if fields -= 1; fields <= 0 {
+		return buf[:offset]
+	}
+	offset += copy(buf[offset:], kv.ClaimHash[:20])
+	return buf[:offset]
+}
+
+func (kv *TrendingNotificationKey) PackKey() []byte {
+	return kv.PartialPack(kv.NumFields())
+}
+
+func (kv *TrendingNotificationKey) UnpackKey(buf []byte) {
+	// b'>L20s'
+	offset := 0
+	kv.Prefix = buf[offset:1]
+	offset += 1
+	kv.Height = binary.BigEndian.Uint32(buf[offset:])
+	offset += 4
+	kv.ClaimHash = buf[offset:20]
+	offset += 20
+}
+
+func (kv *TrendingNotificationValue) PackValue() []byte {
+	// b'>QQ'
+	n := 8 + 8
+	buf := make([]byte, n)
+	offset := 0
+	binary.BigEndian.PutUint64(buf[offset:], kv.PreviousAmount)
+	offset += 8
+	binary.BigEndian.PutUint64(buf[offset:], kv.NewAmount)
+	offset += 8
+	return buf
+}
+
+func (kv *TrendingNotificationValue) UnpackValue(buf []byte) {
+	// b'>QQ'
+	offset := 0
+	kv.PreviousAmount = binary.BigEndian.Uint64(buf[offset:])
+	offset += 8
+	kv.NewAmount = binary.BigEndian.Uint64(buf[offset:])
+	offset += 8
+}
+
+type MempoolTxKey struct {
+	Prefix []byte `struct:"[1]byte"  json:"prefix"`
+	TxHash []byte `struct:"[32]byte" json:"tx_hash"`
+}
+
+type MempoolTxValue struct {
+	RawTx []byte `struct-while:"!_eof" json:"raw_tx"`
+}
+
+func (kv *MempoolTxKey) NumFields() int {
+	return 1
+}
+
+func (kv *MempoolTxKey) Pack(fields int) []byte {
+	// b'>32s'
+	n := len(kv.Prefix) + 32
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf[offset:], kv.Prefix[:1])
+	if fields <= 0 {
+		return buf[:offset]
+	}
+	offset += copy(buf[offset:], kv.TxHash[:32])
+	return buf[:offset]
+}
+
+func (kv *MempoolTxKey) UnpackKey(buf []byte) {
+	// b'>32s'
+	offset := 0
+	kv.Prefix = buf[offset:1]
+	offset += 1
+	kv.TxHash = buf[offset:32]
+	offset += 32
+}
+
+func (kv *MempoolTxValue) PackValue() []byte {
+	// variable length bytes
+	n := len(kv.RawTx)
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf, kv.RawTx)
+	return buf
+}
+
+func (kv *MempoolTxValue) UnpackValue(buf []byte) {
+	// variable length bytes
+	offset := 0
+	kv.RawTx = buf[:]
+	offset += len(buf)
+}
+
+type TouchedHashXKey struct {
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
+	Height uint32 `struct:"uint32" json:"height"`
+}
+
+type TouchedHashXValue struct {
+	TouchedHashXs [][]byte `struct:"[][11]byte" struct-while:"!_eof" json:"touched_hashXs"`
+}
+
+func (kv *TouchedHashXKey) NumFields() int {
+	return 1
+}
+
+func (kv *TouchedHashXKey) PartialPack(fields int) []byte {
+	// b'>L'
+	n := len(kv.Prefix) + 4
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf[offset:], kv.Prefix[:1])
+	if fields <= 0 {
+		return buf[:offset]
+	}
+	binary.BigEndian.PutUint32(buf[offset:], kv.Height)
+	offset += 4
+	return buf[:offset]
+}
+
+func (kv *TouchedHashXKey) PackKey() []byte {
+	return kv.PartialPack(kv.NumFields())
+}
+
+func (kv *TouchedHashXKey) UnpackKey(buf []byte) {
+	// b'>L'
+	offset := 0
+	kv.Prefix = buf[offset:1]
+	offset += 1
+	kv.Height = binary.BigEndian.Uint32(buf[offset:])
+	offset += 4
+}
+
+func (kv *TouchedHashXValue) PackValue() []byte {
+	// variable length bytes
+	n := len(kv.TouchedHashXs) * 11
+	buf := make([]byte, n)
+	offset := 0
+	for i := range kv.TouchedHashXs {
+		offset += copy(buf[offset:], kv.TouchedHashXs[i][:11])
+	}
+	return buf
+}
+
+func (kv *TouchedHashXValue) UnpackValue(buf []byte) {
+	// variable length bytes
+	n := len(buf)
+	for i, offset := 0, 0; offset+11 <= n; i, offset = i+1, offset+11 {
+		kv.TouchedHashXs[i] = buf[offset:11]
+	}
+}
+
+type HashXStatusKey struct {
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
+	HashX  []byte `struct:"[20]byte" json:"hashX"`
+}
+
+type HashXStatusValue struct {
+	Status []byte `struct:"[32]byte" json:"status"`
+}
+
+func (kv *HashXStatusKey) NumFields() int {
+	return 1
+}
+
+func (kv *HashXStatusKey) PartialPack(fields int) []byte {
+	// b'>20s'
+	n := len(kv.Prefix) + 20
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf[offset:], kv.Prefix[:1])
+	if fields <= 0 {
+		return buf[:offset]
+	}
+	offset += copy(buf[offset:], kv.HashX[:20])
+	return buf[:offset]
+}
+
+func (kv *HashXStatusKey) PackKey() []byte {
+	return kv.PartialPack(kv.NumFields())
+}
+
+func (kv *HashXStatusKey) UnpackKey(buf []byte) {
+	// b'>20s'
+	offset := 0
+	kv.Prefix = buf[offset:1]
+	offset += 1
+	kv.HashX = buf[offset:20]
+	offset += 20
+}
+
+func (kv *HashXStatusValue) PackValue() []byte {
+	// b'32s'
+	n := 32
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf[offset:], kv.Status[:32])
+	return buf
+}
+
+func (kv *HashXStatusValue) UnpackValue(buf []byte) {
+	// b'32s'
+	offset := 0
+	kv.Status = buf[offset:32]
+	offset += 32
+}
+
+type HashXMempoolStatusKey = HashXStatusKey
+type HashXMempoolStatusValue = HashXStatusValue
+
 func UnpackGenericKey(key []byte) (BaseKey, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("key length zero")
@@ -3235,6 +3483,14 @@ func UnpackGenericKey(key []byte) (BaseKey, error) {
 	}
 	if t.newKeyUnpack != nil {
 		return t.newKeyUnpack(key).(BaseKey), nil
+	}
+	if t.newKey != nil {
+		k := t.newKey()
+		unpacker, ok := k.(KeyUnpacker)
+		if ok {
+			unpacker.UnpackKey(key)
+			return unpacker.(BaseKey), nil
+		}
 	}
 	return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
 }
@@ -3254,6 +3510,14 @@ func UnpackGenericValue(key []byte, value []byte) (BaseValue, error) {
 	}
 	if t.newValueUnpack != nil {
 		return t.newValueUnpack(value).(BaseValue), nil
+	}
+	if t.newValue != nil {
+		k := t.newValue()
+		unpacker, ok := k.(ValueUnpacker)
+		if ok {
+			unpacker.UnpackValue(value)
+			return unpacker.(BaseValue), nil
+		}
 	}
 	return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
 }

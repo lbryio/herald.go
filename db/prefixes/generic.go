@@ -448,6 +448,47 @@ var tableRegistry = map[byte]tableMeta{
 			return BlockTxsValueUnpack(buf)
 		},
 	},
+
+	TrendingNotifications: {
+		newKey: func() interface{} {
+			return &TrendingNotificationKey{Prefix: []byte{TrendingNotifications}}
+		},
+		newValue: func() interface{} {
+			return &TrendingNotificationValue{}
+		},
+	},
+	MempoolTx: {
+		newKey: func() interface{} {
+			return &MempoolTxKey{Prefix: []byte{MempoolTx}}
+		},
+		newValue: func() interface{} {
+			return &MempoolTxValue{}
+		},
+	},
+	TouchedHashX: {
+		newKey: func() interface{} {
+			return &TouchedHashXKey{Prefix: []byte{TouchedHashX}}
+		},
+		newValue: func() interface{} {
+			return &TouchedHashXValue{}
+		},
+	},
+	HashXStatus: {
+		newKey: func() interface{} {
+			return &HashXStatusKey{Prefix: []byte{HashXStatus}}
+		},
+		newValue: func() interface{} {
+			return &HashXStatusValue{}
+		},
+	},
+	HashXMempoolStatus: {
+		newKey: func() interface{} {
+			return &HashXMempoolStatusKey{Prefix: []byte{HashXMempoolStatus}}
+		},
+		newValue: func() interface{} {
+			return &HashXMempoolStatusValue{}
+		},
+	},
 }
 
 func genericNew(prefix []byte, key bool) (interface{}, error) {
