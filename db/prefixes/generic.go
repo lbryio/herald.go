@@ -251,9 +251,9 @@ var tableRegistry = map[byte]tableMeta{
 			return UndoValueUnpack(buf)
 		},
 	},
-	TouchedOrDeleted: {
+	ClaimDiff: {
 		newKey: func() interface{} {
-			return &TouchedOrDeletedClaimKey{Prefix: []byte{TouchedOrDeleted}}
+			return &TouchedOrDeletedClaimKey{Prefix: []byte{ClaimDiff}}
 		},
 		newValue: func() interface{} {
 			return &TouchedOrDeletedClaimValue{}
