@@ -10,7 +10,7 @@ This project will eventually subsume and replace the
 [herald](https://github.com/lbryio/hub/blob/master/docs/docker_examples/hub-compose.yml#L38)
 and the [lighthouse](https://github.com/lbryio/lighthouse) search provider.
 
-![](./diagram.png)
+![](https://raw.githubusercontent.com/lbryio/hub/master/docs/diagram.png)
 
 ## Installation
 
