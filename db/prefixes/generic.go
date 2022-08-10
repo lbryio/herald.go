@@ -18,6 +18,7 @@ type tableMeta struct {
 	newValue       func() interface{}
 	newKeyUnpack   func([]byte) interface{}
 	newValueUnpack func([]byte) interface{}
+	API            *SerializationAPI
 }
 
 var tableRegistry = map[byte]tableMeta{
@@ -555,4 +556,83 @@ func GenericUnpack(pfx []byte, key bool, buf []byte) (interface{}, error) {
 		panic(fmt.Sprintf("not handled: %v", err))
 	}
 	return kv, nil
+}
+
+func GetSerializationAPI(prefix []byte) *SerializationAPI {
+	t, ok := tableRegistry[prefix[0]]
+	if !ok {
+		panic(fmt.Sprintf("not handled: prefix=%v", prefix))
+	}
+	if t.API != nil {
+		return t.API
+	}
+	return ProductionAPI
+}
+
+type SerializationAPI struct {
+	PackKey        func(key BaseKey) ([]byte, error)
+	PackPartialKey func(key BaseKey, fields int) ([]byte, error)
+	PackValue      func(value BaseValue) ([]byte, error)
+	UnpackKey      func(key []byte) (BaseKey, error)
+	UnpackValue    func(prefix []byte, value []byte) (BaseValue, error)
+}
+
+var ProductionAPI = &SerializationAPI{
+	PackKey:        PackGenericKey,
+	PackPartialKey: PackPartialGenericKey,
+	PackValue:      PackGenericValue,
+	UnpackKey:      UnpackGenericKey,
+	UnpackValue:    UnpackGenericValue,
+}
+
+var RegressionAPI_1 = &SerializationAPI{
+	PackKey: func(key BaseKey) ([]byte, error) {
+		return GenericPack(key, -1)
+	},
+	PackPartialKey: func(key BaseKey, fields int) ([]byte, error) {
+		return GenericPack(key, fields)
+	},
+	PackValue: func(value BaseValue) ([]byte, error) {
+		return GenericPack(value, -1)
+	},
+	UnpackKey: func(key []byte) (BaseKey, error) {
+		return UnpackGenericKey(key)
+	},
+	UnpackValue: func(prefix []byte, value []byte) (BaseValue, error) {
+		return UnpackGenericValue(prefix, value)
+	},
+}
+
+var RegressionAPI_2 = &SerializationAPI{
+	PackKey:        PackGenericKey,
+	PackPartialKey: PackPartialGenericKey,
+	PackValue:      PackGenericValue,
+	UnpackKey: func(key []byte) (BaseKey, error) {
+		k, err := GenericUnpack(key, true, key)
+		return k.(BaseKey), err
+	},
+	UnpackValue: func(prefix []byte, value []byte) (BaseValue, error) {
+		k, err := GenericUnpack(prefix, false, value)
+		return k.(BaseValue), err
+	},
+}
+
+var RegressionAPI_3 = &SerializationAPI{
+	PackKey: func(key BaseKey) ([]byte, error) {
+		return GenericPack(key, -1)
+	},
+	PackPartialKey: func(key BaseKey, fields int) ([]byte, error) {
+		return GenericPack(key, fields)
+	},
+	PackValue: func(value BaseValue) ([]byte, error) {
+		return GenericPack(value, -1)
+	},
+	UnpackKey: func(key []byte) (BaseKey, error) {
+		k, err := GenericUnpack(key, true, key)
+		return k.(BaseKey), err
+	},
+	UnpackValue: func(prefix []byte, value []byte) (BaseValue, error) {
+		k, err := GenericUnpack(prefix, false, value)
+		return k.(BaseValue), err
+	},
 }

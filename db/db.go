@@ -850,8 +850,8 @@ func ReadPrefixN(db *grocksdb.DB, prefix []byte, n int) []*prefixes.PrefixRowKV 
 		value := it.Value()
 
 		res[i] = &prefixes.PrefixRowKV{
-			Key:   key.Data(),
-			Value: value.Data(),
+			RawKey:   key.Data(),
+			RawValue: value.Data(),
 		}
 
 		key.Free()
@@ -908,8 +908,8 @@ func readWriteRawNCF(db *grocksdb.DB, options *IterOptions, out string, n int, f
 		if i >= n {
 			return
 		}
-		key := kv.Key.([]byte)
-		value := kv.Value.([]byte)
+		key := kv.RawKey
+		value := kv.RawValue
 		keyHex := hex.EncodeToString(key)
 		valueHex := hex.EncodeToString(value)
 		//log.Println(keyHex)
@@ -947,8 +947,8 @@ func ReadWriteRawN(db *grocksdb.DB, options *IterOptions, out string, n int) {
 		if i >= n {
 			return
 		}
-		key := kv.Key.([]byte)
-		value := kv.Value.([]byte)
+		key := kv.RawKey
+		value := kv.RawValue
 		keyHex := hex.EncodeToString(key)
 		valueHex := hex.EncodeToString(value)
 		log.Println(keyHex)

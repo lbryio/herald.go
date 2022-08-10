@@ -62,6 +62,23 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.Colu
 
 func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T) {
 	return func(t *testing.T) {
+		APIs := []*prefixes.SerializationAPI{
+			prefixes.GetSerializationAPI([]byte{prefix}),
+			// Verify combinations of production vs. "restruct" implementations of
+			// serialization API (e.g production Pack() with "restruct" Unpack()).
+			prefixes.RegressionAPI_1,
+			prefixes.RegressionAPI_2,
+			prefixes.RegressionAPI_3,
+		}
+		for _, api := range APIs {
+			opts := dbpkg.NewIterateOptions().WithPrefix([]byte{prefix}).WithSerializer(api).WithIncludeValue(true)
+			testGenericOptions(opts, filePath, prefix, numPartials)(t)
+		}
+	}
+}
+
+func testGenericOptions(options *dbpkg.IterOptions, filePath string, prefix byte, numPartials int) func(*testing.T) {
+	return func(t *testing.T) {
 
 		wOpts := grocksdb.NewDefaultWriteOptions()
 		db, records, toDefer, handle := testInit(filePath)
@@ -79,26 +96,26 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 			db.PutCF(wOpts, handle, key, val)
 		}
 		// test prefix
-		options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefix}).WithIncludeValue(true)
 		options = options.WithCfHandle(handle)
 		ch := dbpkg.IterCF(db, options)
 		var i = 0
 		for kv := range ch {
 			// log.Println(kv.Key)
-			gotKey, err := prefixes.PackGenericKey(prefix, kv.Key)
+			gotKey, err := options.Serializer.PackKey(kv.Key)
 			if err != nil {
 				log.Println(err)
 			}
 
 			for j := 1; j <= numPartials; j++ {
-				keyPartial, _ := prefixes.PackPartialGenericKey(prefix, kv.Key, j)
+				keyPartial, _ := options.Serializer.PackPartialKey(kv.Key, j)
 				// Check pack partial for sanity
 				if !bytes.HasPrefix(gotKey, keyPartial) {
+					// || (!bytes.HasSuffix(gotKey, []byte{0}) && bytes.Equal(gotKey, keyPartial))
 					t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
 				}
 			}
 
-			got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			got, err := options.Serializer.PackValue(kv.Value)
 			if err != nil {
 				log.Println(err)
 			}
@@ -133,12 +150,12 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 		if err != nil {
 			log.Println(err)
 		}
-		options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+		options2 := dbpkg.NewIterateOptions().WithSerializer(options.Serializer).WithStart(start).WithStop(stop).WithIncludeValue(true)
 		options2 = options2.WithCfHandle(handle)
 		ch2 := dbpkg.IterCF(db, options2)
 		i = 0
 		for kv := range ch2 {
-			got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			got, err := options2.Serializer.PackValue(kv.Value)
 			if err != nil {
 				log.Println(err)
 			}
@@ -339,4 +356,16 @@ func TestUTXOKey_String(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestHashXStatus(t *testing.T) {
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.HashXStatus)
+	key := &prefixes.HashXStatusKey{}
+	testGeneric(filePath, prefixes.HashXStatus, key.NumFields())(t)
+}
+
+func TestHashXMempoolStatus(t *testing.T) {
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.HashXMempoolStatus)
+	key := &prefixes.HashXMempoolStatusKey{}
+	testGeneric(filePath, prefixes.HashXMempoolStatus, key.NumFields())(t)
 }
