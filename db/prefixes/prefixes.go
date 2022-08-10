@@ -3223,158 +3223,39 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 	}
 }
 
-// generic simulates a generic key packing / unpacking function for the prefixes
-func generic(voidstar interface{}, firstByte byte, function byte, functionName string) (interface{}, error) {
-	var data []byte
-	if function < 2 {
-		data = voidstar.([]byte)
-	}
-	switch uint16(firstByte) | uint16(function)<<8 {
-	case ClaimToSupport:
-		return ClaimToSupportKeyUnpack(data), nil
-	case ClaimToSupport | 1<<8:
-		return ClaimToSupportValueUnpack(data), nil
-	case SupportToClaim:
-		return SupportToClaimKeyUnpack(data), nil
-	case SupportToClaim | 1<<8:
-		return SupportToClaimValueUnpack(data), nil
-	case ClaimToTXO:
-		return ClaimToTXOKeyUnpack(data), nil
-	case ClaimToTXO | 1<<8:
-		return ClaimToTXOValueUnpack(data), nil
-		return TXOToClaimKeyUnpack(data), nil
-	case TXOToClaim | 1<<8:
-		return TXOToClaimValueUnpack(data), nil
-
-	case ClaimToChannel:
-		return ClaimToChannelKeyUnpack(data), nil
-	case ClaimToChannel | 1<<8:
-		return ClaimToChannelValueUnpack(data), nil
-	case ChannelToClaim:
-		return ChannelToClaimKeyUnpack(data), nil
-	case ChannelToClaim | 1<<8:
-		return ChannelToClaimValueUnpack(data), nil
-
-	case ClaimShortIdPrefix:
-		return ClaimShortIDKeyUnpack(data), nil
-	case ClaimShortIdPrefix | 1<<8:
-		return ClaimShortIDValueUnpack(data), nil
-	case EffectiveAmount:
-		return EffectiveAmountKeyUnpack(data), nil
-	case EffectiveAmount | 1<<8:
-		return EffectiveAmountValueUnpack(data), nil
-	case ClaimExpiration:
-		return ClaimExpirationKeyUnpack(data), nil
-	case ClaimExpiration | 1<<8:
-		return ClaimExpirationValueUnpack(data), nil
-
-	case ClaimTakeover:
-		return ClaimTakeoverKeyUnpack(data), nil
-	case ClaimTakeover | 1<<8:
-		return ClaimTakeoverValueUnpack(data), nil
-	case PendingActivation:
-		return PendingActivationKeyUnpack(data), nil
-	case PendingActivation | 1<<8:
-		return PendingActivationValueUnpack(data), nil
-	case ActivatedClaimAndSupport:
-		return ActivationKeyUnpack(data), nil
-	case ActivatedClaimAndSupport | 1<<8:
-		return ActivationValueUnpack(data), nil
-	case ActiveAmount:
-		return ActiveAmountKeyUnpack(data), nil
-	case ActiveAmount | 1<<8:
-		return ActiveAmountValueUnpack(data), nil
-	case Repost:
-		return RepostKeyUnpack(data), nil
-	case Repost | 1<<8:
-		return RepostValueUnpack(data), nil
-	case RepostedClaim:
-		return RepostedKeyUnpack(data), nil
-	case RepostedClaim | 1<<8:
-		return RepostedValueUnpack(data), nil
-
-	case Undo:
-		return UndoKeyUnpack(data), nil
-	case Undo | 1<<8:
-		return UndoValueUnpack(data), nil
-	case ClaimDiff:
-		return TouchedOrDeletedClaimKeyUnpack(data), nil
-	case ClaimDiff | 1<<8:
-		return TouchedOrDeletedClaimValueUnpack(data), nil
-
-	case Tx:
-		return TxKeyUnpack(data), nil
-	case Tx | 1<<8:
-		return TxValueUnpack(data), nil
-	case BlockHash:
-		return BlockHashKeyUnpack(data), nil
-	case BlockHash | 1<<8:
-		return BlockHashValueUnpack(data), nil
-	case Header:
-		return BlockHeaderKeyUnpack(data), nil
-	case Header | 1<<8:
-		return BlockHeaderValueUnpack(data), nil
-	case TxNum:
-		return TxNumKeyUnpack(data), nil
-	case TxNum | 1<<8:
-		return TxNumValueUnpack(data), nil
-
-	case TxCount:
-		return TxCountKeyUnpack(data), nil
-	case TxCount | 1<<8:
-		return TxCountValueUnpack(data), nil
-	case TxHash:
-		return TxHashKeyUnpack(data), nil
-	case TxHash | 1<<8:
-		return TxHashValueUnpack(data), nil
-	case UTXO:
-		return UTXOKeyUnpack(data), nil
-	case UTXO | 1<<8:
-		return UTXOValueUnpack(data), nil
-	case HashXUTXO:
-		return HashXUTXOKeyUnpack(data), nil
-	case HashXUTXO | 1<<8:
-		return HashXUTXOValueUnpack(data), nil
-	case HashXHistory:
-		return HashXHistoryKeyUnpack(data), nil
-	case HashXHistory | 1<<8:
-		return HashXHistoryValueUnpack(data), nil
-	case DBState:
-		return DBStateKeyUnpack(data), nil
-	case DBState | 1<<8:
-		return DBStateValueUnpack(data), nil
-
-	case ChannelCount:
-		return ChannelCountKeyUnpack(data), nil
-	case ChannelCount | 1<<8:
-		return ChannelCountValueUnpack(data), nil
-	case SupportAmount:
-		return SupportAmountKeyUnpack(data), nil
-	case SupportAmount | 1<<8:
-		return SupportAmountValueUnpack(data), nil
-	case BlockTXs:
-		return BlockTxsKeyUnpack(data), nil
-	case BlockTXs | 1<<8:
-		return BlockTxsValueUnpack(data), nil
-	}
-	return nil, fmt.Errorf("%s function for %v not implemented", functionName, firstByte)
-}
-
-func UnpackGenericKey(key []byte) (interface{}, error) {
+func UnpackGenericKey(key []byte) (BaseKey, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("key length zero")
 	}
-	return generic(key, key[0], 0, "unpack key")
+	// Look up the prefix metadata, and use the registered function(s)
+	// to create and unpack key of appropriate type.
+	t, ok := tableRegistry[key[0]]
+	if !ok {
+		return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
+	}
+	if t.newKeyUnpack != nil {
+		return t.newKeyUnpack(key).(BaseKey), nil
+	}
+	return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
 }
 
-func UnpackGenericValue(key, value []byte) (interface{}, error) {
+func UnpackGenericValue(key []byte, value []byte) (BaseValue, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("key length zero")
 	}
 	if len(value) == 0 {
 		return nil, fmt.Errorf("value length zero")
 	}
-	return generic(value, key[0], 1, "unpack value")
+	// Look up the prefix metadata, and use the registered function(s)
+	// to create and unpack value of appropriate type.
+	t, ok := tableRegistry[key[0]]
+	if !ok {
+		return nil, fmt.Errorf("unpack value function for %v not implemented", key[0])
+	}
+	if t.newValueUnpack != nil {
+		return t.newValueUnpack(value).(BaseValue), nil
+	}
+	return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
 }
 
 func PackPartialGenericKey(key BaseKey, fields int) ([]byte, error) {
