@@ -729,9 +729,9 @@ func TestIter(t *testing.T) {
 		// log.Println(kv.Key)
 		gotKey := kv.Key.(*prefixes.RepostedKey).PackKey()
 
-		keyPartial3 := prefixes.RepostedKeyPackPartial(kv.Key.(*prefixes.RepostedKey), 3)
-		keyPartial2 := prefixes.RepostedKeyPackPartial(kv.Key.(*prefixes.RepostedKey), 2)
-		keyPartial1 := prefixes.RepostedKeyPackPartial(kv.Key.(*prefixes.RepostedKey), 1)
+		keyPartial3 := kv.Key.(*prefixes.RepostedKey).PartialPack(3)
+		keyPartial2 := kv.Key.(*prefixes.RepostedKey).PartialPack(2)
+		keyPartial1 := kv.Key.(*prefixes.RepostedKey).PartialPack(1)
 
 		// Check pack partial for sanity
 		if !bytes.HasPrefix(gotKey, keyPartial3) {

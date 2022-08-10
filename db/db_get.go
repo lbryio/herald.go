@@ -94,7 +94,7 @@ func (db *ReadOnlyDBColumnFamily) GetStreamsAndChannelRepostedByChannelHashes(re
 
 	for _, reposterChannelHash := range reposterChannelHashes {
 		key := prefixes.NewChannelToClaimKeyWHash(reposterChannelHash)
-		rawKeyPrefix := prefixes.ChannelToClaimKeyPackPartial(key, 1)
+		rawKeyPrefix := key.PartialPack(1)
 		options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 		options = options.WithIncludeKey(false).WithIncludeValue(true)
 		ch := IterCF(db.DB, options)
@@ -167,7 +167,7 @@ func (db *ReadOnlyDBColumnFamily) GetShortClaimIdUrl(name string, normalizedName
 		partialClaimId := claimId[:j]
 		partialKey := prefixes.NewClaimShortIDKey(normalizedName, partialClaimId)
 		log.Printf("partialKey: %#v\n", partialKey)
-		keyPrefix := prefixes.ClaimShortIDKeyPackPartial(partialKey, 2)
+		keyPrefix := partialKey.PartialPack(2)
 		// Prefix and handle
 		options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
 		// Start and stop bounds
@@ -218,7 +218,7 @@ func (db *ReadOnlyDBColumnFamily) GetRepostedCount(claimHash []byte) (int, error
 	}
 
 	key := prefixes.NewRepostedKey(claimHash)
-	keyPrefix := prefixes.RepostedKeyPackPartial(key, 1)
+	keyPrefix := key.PartialPack(1)
 	// Prefix and handle
 	options := NewIterateOptions().WithPrefix(keyPrefix).WithCfHandle(handle)
 	// Start and stop bounds
@@ -267,8 +267,8 @@ func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint
 	startKey := prefixes.NewActiveAmountKey(claimHash, txoType, 0)
 	endKey := prefixes.NewActiveAmountKey(claimHash, txoType, height)
 
-	startKeyRaw := prefixes.ActiveAmountKeyPackPartial(startKey, 3)
-	endKeyRaw := prefixes.ActiveAmountKeyPackPartial(endKey, 3)
+	startKeyRaw := startKey.PartialPack(3)
+	endKeyRaw := endKey.PartialPack(3)
 	// Prefix and handle
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.ActiveAmount}).WithCfHandle(handle)
 	// Start and stop bounds
@@ -416,7 +416,7 @@ func (db *ReadOnlyDBColumnFamily) ControllingClaimIter() <-chan *prefixes.Prefix
 
 	key := prefixes.NewClaimTakeoverKey("")
 	var rawKeyPrefix []byte = nil
-	rawKeyPrefix = prefixes.ClaimTakeoverKeyPackPartial(key, 0)
+	rawKeyPrefix = key.PartialPack(0)
 	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)
@@ -527,7 +527,7 @@ func (db *ReadOnlyDBColumnFamily) EffectiveAmountNameIter(normalizedName string)
 
 	key := prefixes.NewEffectiveAmountKey(normalizedName)
 	var rawKeyPrefix []byte = nil
-	rawKeyPrefix = prefixes.EffectiveAmountKeyPackPartial(key, 1)
+	rawKeyPrefix = key.PartialPack(1)
 	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)
@@ -542,9 +542,9 @@ func (db *ReadOnlyDBColumnFamily) ClaimShortIdIter(normalizedName string, claimI
 	key := prefixes.NewClaimShortIDKey(normalizedName, claimId)
 	var rawKeyPrefix []byte = nil
 	if claimId != "" {
-		rawKeyPrefix = prefixes.ClaimShortIDKeyPackPartial(key, 2)
+		rawKeyPrefix = key.PartialPack(2)
 	} else {
-		rawKeyPrefix = prefixes.ClaimShortIDKeyPackPartial(key, 1)
+		rawKeyPrefix = key.PartialPack(1)
 	}
 	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
