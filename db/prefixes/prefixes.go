@@ -105,8 +105,28 @@ func GetPrefixes() [][]byte {
 
 // PrefixRowKV is a generic key/value pair for a prefix.
 type PrefixRowKV struct {
-	Key   interface{}
-	Value interface{}
+	Key      BaseKey
+	Value    BaseValue
+	RawKey   []byte
+	RawValue []byte
+}
+
+type BaseKey interface {
+	NumFields() int
+	PartialPack(fields int) []byte
+	PackKey() []byte
+}
+
+type BaseValue interface {
+	PackValue() []byte
+}
+
+type KeyUnpacker interface {
+	UnpackKey(buf []byte)
+}
+
+type ValueUnpacker interface {
+	UnpackValue(buf []byte)
 }
 
 type DBStateKey struct {
@@ -185,19 +205,11 @@ func (v *DBStateValue) PackValue() []byte {
 	return value
 }
 
-func DBStateKeyPackPartialKey(key *DBStateKey) func(int) []byte {
-	return func(fields int) []byte {
-		return DBStateKeyPackPartial(key, fields)
-	}
+func (kv *DBStateKey) NumFields() int {
+	return 0
 }
 
-func DBStateKeyPackPartialfields(fields int) func(*DBStateKey) []byte {
-	return func(u *DBStateKey) []byte {
-		return DBStateKeyPackPartial(u, fields)
-	}
-}
-
-func DBStateKeyPackPartial(k *DBStateKey, fields int) []byte {
+func (k *DBStateKey) PartialPack(fields int) []byte {
 	prefixLen := 1
 	var n = prefixLen
 
@@ -262,19 +274,11 @@ func (v *UndoValue) PackValue() []byte {
 	return value
 }
 
-func UndoKeyPackPartialKey(key *UndoKey) func(int) []byte {
-	return func(fields int) []byte {
-		return UndoKeyPackPartial(key, fields)
-	}
+func (kv *UndoKey) NumFields() int {
+	return 1
 }
 
-func UndoKeyPackPartialfields(fields int) func(*UndoKey) []byte {
-	return func(u *UndoKey) []byte {
-		return UndoKeyPackPartial(u, fields)
-	}
-}
-
-func UndoKeyPackPartial(k *UndoKey, fields int) []byte {
+func (k *UndoKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -386,23 +390,13 @@ func (v *HashXUTXOValue) PackValue() []byte {
 	return value
 }
 
-// HashXUTXOKeyPackPartialKey creates a pack partial key function for n fields.
-func HashXUTXOKeyPackPartialKey(key *HashXUTXOKey) func(int) []byte {
-	return func(fields int) []byte {
-		return HashXUTXOKeyPackPartial(key, fields)
-	}
-}
-
-// HashXUTXOKeyPackPartialfields creates a pack partial key function for n fields.
-func HashXUTXOKeyPackPartialfields(fields int) func(*HashXUTXOKey) []byte {
-	return func(u *HashXUTXOKey) []byte {
-		return HashXUTXOKeyPackPartial(u, fields)
-	}
+func (kv *HashXUTXOKey) NumFields() int {
+	return 3
 }
 
 // HashXUTXOKeyPackPartial packs a variable number of fields into a byte
 // array
-func HashXUTXOKeyPackPartial(k *HashXUTXOKey, fields int) []byte {
+func (k *HashXUTXOKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -501,23 +495,13 @@ func (v *HashXHistoryValue) PackValue() []byte {
 	return value
 }
 
-// HashXHistoryKeyPackPartialKey creates a pack partial key function for n fields.
-func HashXHistoryKeyPackPartialKey(key *HashXHistoryKey) func(int) []byte {
-	return func(fields int) []byte {
-		return HashXHistoryKeyPackPartial(key, fields)
-	}
-}
-
-// HashXHistoryKeyPackPartialfields creates a pack partial key function for n fields.
-func HashXHistoryKeyPackPartialfields(fields int) func(*HashXHistoryKey) []byte {
-	return func(u *HashXHistoryKey) []byte {
-		return HashXHistoryKeyPackPartial(u, fields)
-	}
+func (kv *HashXHistoryKey) NumFields() int {
+	return 2
 }
 
 // HashXHistoryKeyPackPartial packs a variable number of fields into a byte
 // array
-func HashXHistoryKeyPackPartial(k *HashXHistoryKey, fields int) []byte {
+func (k *HashXHistoryKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 2 {
@@ -608,19 +592,11 @@ func (v *BlockHashValue) PackValue() []byte {
 	return value
 }
 
-func BlockHashKeyPackPartialKey(key *BlockHashKey) func(int) []byte {
-	return func(fields int) []byte {
-		return BlockHashKeyPackPartial(key, fields)
-	}
+func (kv *BlockHashKey) NumFields() int {
+	return 1
 }
 
-func BlockHashKeyPackPartialfields(fields int) func(*BlockHashKey) []byte {
-	return func(u *BlockHashKey) []byte {
-		return BlockHashKeyPackPartial(u, fields)
-	}
-}
-
-func BlockHashKeyPackPartial(k *BlockHashKey, fields int) []byte {
+func (k *BlockHashKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -716,19 +692,11 @@ func (v *BlockTxsValue) PackValue() []byte {
 	return value
 }
 
-func BlockTxsKeyPackPartialKey(key *BlockTxsKey) func(int) []byte {
-	return func(fields int) []byte {
-		return BlockTxsKeyPackPartial(key, fields)
-	}
+func (kv *BlockTxsKey) NumFields() int {
+	return 1
 }
 
-func BlockTxsKeyPackPartialfields(fields int) func(*BlockTxsKey) []byte {
-	return func(u *BlockTxsKey) []byte {
-		return BlockTxsKeyPackPartial(u, fields)
-	}
-}
-
-func BlockTxsKeyPackPartial(k *BlockTxsKey, fields int) []byte {
+func (k *BlockTxsKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -814,19 +782,11 @@ func (v *TxCountValue) PackValue() []byte {
 	return value
 }
 
-func TxCountKeyPackPartialKey(key *TxCountKey) func(int) []byte {
-	return func(fields int) []byte {
-		return TxCountKeyPackPartial(key, fields)
-	}
+func (kv *TxCountKey) NumFields() int {
+	return 1
 }
 
-func TxCountKeyPackPartialfields(fields int) func(*TxCountKey) []byte {
-	return func(u *TxCountKey) []byte {
-		return TxCountKeyPackPartial(u, fields)
-	}
-}
-
-func TxCountKeyPackPartial(k *TxCountKey, fields int) []byte {
+func (k *TxCountKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -908,19 +868,11 @@ func (v *TxHashValue) PackValue() []byte {
 	return value
 }
 
-func TxHashKeyPackPartialKey(key *TxHashKey) func(int) []byte {
-	return func(fields int) []byte {
-		return TxHashKeyPackPartial(key, fields)
-	}
+func (kv *TxHashKey) NumFields() int {
+	return 1
 }
 
-func TxHashKeyPackPartialfields(fields int) func(*TxHashKey) []byte {
-	return func(u *TxHashKey) []byte {
-		return TxHashKeyPackPartial(u, fields)
-	}
-}
-
-func TxHashKeyPackPartial(k *TxHashKey, fields int) []byte {
+func (k *TxHashKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -994,19 +946,11 @@ func (v *TxNumValue) PackValue() []byte {
 	return value
 }
 
-func TxNumKeyPackPartialKey(key *TxNumKey) func(int) []byte {
-	return func(fields int) []byte {
-		return TxNumKeyPackPartial(key, fields)
-	}
+func (kv *TxNumKey) NumFields() int {
+	return 1
 }
 
-func TxNumKeyPackPartialfields(fields int) func(*TxNumKey) []byte {
-	return func(u *TxNumKey) []byte {
-		return TxNumKeyPackPartial(u, fields)
-	}
-}
-
-func TxNumKeyPackPartial(k *TxNumKey, fields int) []byte {
+func (k *TxNumKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -1080,19 +1024,11 @@ func (v *TxValue) PackValue() []byte {
 	return value
 }
 
-func TxKeyPackPartialKey(key *TxKey) func(int) []byte {
-	return func(fields int) []byte {
-		return TxKeyPackPartial(key, fields)
-	}
+func (kv *TxKey) NumFields() int {
+	return 1
 }
 
-func TxKeyPackPartialfields(fields int) func(*TxKey) []byte {
-	return func(u *TxKey) []byte {
-		return TxKeyPackPartial(u, fields)
-	}
-}
-
-func TxKeyPackPartial(k *TxKey, fields int) []byte {
+func (k *TxKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -1140,12 +1076,12 @@ func TxValueUnpack(value []byte) *TxValue {
 }
 
 type BlockHeaderKey struct {
-	Prefix []byte `json:"prefix"`
+	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height uint32 `json:"height"`
 }
 
 type BlockHeaderValue struct {
-	Header []byte `json:"header"`
+	Header []byte `struct:"[112]byte" json:"header"`
 }
 
 func (k *BlockHeaderValue) Equals(v *BlockHeaderValue) bool {
@@ -1177,19 +1113,11 @@ func (v *BlockHeaderValue) PackValue() []byte {
 	return value
 }
 
-func BlockHeaderKeyPackPartialKey(key *BlockHeaderKey) func(int) []byte {
-	return func(fields int) []byte {
-		return BlockHeaderKeyPackPartial(key, fields)
-	}
+func (kv *BlockHeaderKey) NumFields() int {
+	return 1
 }
 
-func BlockHeaderKeyPackPartialfields(fields int) func(*BlockHeaderKey) []byte {
-	return func(u *BlockHeaderKey) []byte {
-		return BlockHeaderKeyPackPartial(u, fields)
-	}
-}
-
-func BlockHeaderKeyPackPartial(k *BlockHeaderKey, fields int) []byte {
+func (k *BlockHeaderKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -1295,19 +1223,11 @@ func (v *ClaimToTXOValue) PackValue() []byte {
 	return value
 }
 
-func ClaimToTXOKeyPackPartialKey(key *ClaimToTXOKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ClaimToTXOKeyPackPartial(key, fields)
-	}
+func (kv *ClaimToTXOKey) NumFields() int {
+	return 1
 }
 
-func ClaimToTXOKeyPackPartialfields(fields int) func(*ClaimToTXOKey) []byte {
-	return func(u *ClaimToTXOKey) []byte {
-		return ClaimToTXOKeyPackPartial(u, fields)
-	}
-}
-
-func ClaimToTXOKeyPackPartial(k *ClaimToTXOKey, fields int) []byte {
+func (k *ClaimToTXOKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -1404,19 +1324,11 @@ func (v *TXOToClaimValue) PackValue() []byte {
 	return value
 }
 
-func TXOToClaimKeyPackPartialKey(key *TXOToClaimKey) func(int) []byte {
-	return func(fields int) []byte {
-		return TXOToClaimKeyPackPartial(key, fields)
-	}
+func (kv *TXOToClaimKey) NumFields() int {
+	return 2
 }
 
-func TXOToClaimKeyPackPartialfields(fields int) func(*TXOToClaimKey) []byte {
-	return func(u *TXOToClaimKey) []byte {
-		return TXOToClaimKeyPackPartial(u, fields)
-	}
-}
-
-func TXOToClaimKeyPackPartial(k *TXOToClaimKey, fields int) []byte {
+func (k *TXOToClaimKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 2 {
@@ -1517,19 +1429,11 @@ func (v *ClaimShortIDValue) PackValue() []byte {
 	return value
 }
 
-func ClaimShortIDKeyPackPartialKey(key *ClaimShortIDKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ClaimShortIDKeyPackPartial(key, fields)
-	}
+func (kv *ClaimShortIDKey) NumFields() int {
+	return 4
 }
 
-func ClaimShortIDKeyPackPartialfields(fields int) func(*ClaimShortIDKey) []byte {
-	return func(u *ClaimShortIDKey) []byte {
-		return ClaimShortIDKeyPackPartial(u, fields)
-	}
-}
-
-func ClaimShortIDKeyPackPartial(k *ClaimShortIDKey, fields int) []byte {
+func (k *ClaimShortIDKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 4 {
@@ -1640,19 +1544,11 @@ func (v *ClaimToChannelValue) PackValue() []byte {
 	return value
 }
 
-func ClaimToChannelKeyPackPartialKey(key *ClaimToChannelKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ClaimToChannelKeyPackPartial(key, fields)
-	}
+func (kv *ClaimToChannelKey) NumFields() int {
+	return 3
 }
 
-func ClaimToChannelKeyPackPartialfields(fields int) func(*ClaimToChannelKey) []byte {
-	return func(u *ClaimToChannelKey) []byte {
-		return ClaimToChannelKeyPackPartial(u, fields)
-	}
-}
-
-func ClaimToChannelKeyPackPartial(k *ClaimToChannelKey, fields int) []byte {
+func (k *ClaimToChannelKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -1759,19 +1655,11 @@ func (v *ChannelToClaimValue) PackValue() []byte {
 	return value
 }
 
-func ChannelToClaimKeyPackPartialKey(key *ChannelToClaimKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ChannelToClaimKeyPackPartial(key, fields)
-	}
+func (kv *ChannelToClaimKey) NumFields() int {
+	return 4
 }
 
-func ChannelToClaimKeyPackPartialfields(fields int) func(*ChannelToClaimKey) []byte {
-	return func(u *ChannelToClaimKey) []byte {
-		return ChannelToClaimKeyPackPartial(u, fields)
-	}
-}
-
-func ChannelToClaimKeyPackPartial(k *ChannelToClaimKey, fields int) []byte {
+func (k *ChannelToClaimKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 4 {
@@ -1870,19 +1758,11 @@ func (v *ChannelCountValue) PackValue() []byte {
 	return value
 }
 
-func ChannelCountKeyPackPartialKey(key *ChannelCountKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ChannelCountKeyPackPartial(key, fields)
-	}
+func (kv *ChannelCountKey) NumFields() int {
+	return 1
 }
 
-func ChannelCountKeyPackPartialfields(fields int) func(*ChannelCountKey) []byte {
-	return func(u *ChannelCountKey) []byte {
-		return ChannelCountKeyPackPartial(u, fields)
-	}
-}
-
-func ChannelCountKeyPackPartial(k *ChannelCountKey, fields int) []byte {
+func (k *ChannelCountKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -1963,19 +1843,11 @@ func (v *SupportAmountValue) PackValue() []byte {
 	return value
 }
 
-func SupportAmountKeyPackPartialKey(key *SupportAmountKey) func(int) []byte {
-	return func(fields int) []byte {
-		return SupportAmountKeyPackPartial(key, fields)
-	}
+func (kv *SupportAmountKey) NumFields() int {
+	return 1
 }
 
-func SupportAmountKeyPackPartialfields(fields int) func(*SupportAmountKey) []byte {
-	return func(u *SupportAmountKey) []byte {
-		return SupportAmountKeyPackPartial(u, fields)
-	}
-}
-
-func SupportAmountKeyPackPartial(k *SupportAmountKey, fields int) []byte {
+func (k *SupportAmountKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -2053,19 +1925,11 @@ func (v *ClaimToSupportValue) PackValue() []byte {
 	return value
 }
 
-func ClaimToSupportKeyPackPartialKey(key *ClaimToSupportKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ClaimToSupportKeyPackPartial(key, fields)
-	}
+func (kv *ClaimToSupportKey) NumFields() int {
+	return 3
 }
 
-func ClaimToSupportKeyPackPartialfields(fields int) func(*ClaimToSupportKey) []byte {
-	return func(u *ClaimToSupportKey) []byte {
-		return ClaimToSupportKeyPackPartial(u, fields)
-	}
-}
-
-func ClaimToSupportKeyPackPartial(k *ClaimToSupportKey, fields int) []byte {
+func (k *ClaimToSupportKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -2152,19 +2016,11 @@ func (v *SupportToClaimValue) PackValue() []byte {
 	return value
 }
 
-func SupportToClaimKeyPackPartialKey(key *SupportToClaimKey) func(int) []byte {
-	return func(fields int) []byte {
-		return SupportToClaimKeyPackPartial(key, fields)
-	}
+func (kv *SupportToClaimKey) NumFields() int {
+	return 2
 }
 
-func SupportToClaimKeyPackPartialfields(fields int) func(*SupportToClaimKey) []byte {
-	return func(u *SupportToClaimKey) []byte {
-		return SupportToClaimKeyPackPartial(u, fields)
-	}
-}
-
-func SupportToClaimKeyPackPartial(k *SupportToClaimKey, fields int) []byte {
+func (k *SupportToClaimKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 2 {
@@ -2252,19 +2108,11 @@ func (v *ClaimExpirationValue) PackValue() []byte {
 	return value
 }
 
-func ClaimExpirationKeyPackPartialKey(key *ClaimExpirationKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ClaimExpirationKeyPackPartial(key, fields)
-	}
+func (kv *ClaimExpirationKey) NumFields() int {
+	return 3
 }
 
-func ClaimExpirationKeyPackPartialfields(fields int) func(*ClaimExpirationKey) []byte {
-	return func(u *ClaimExpirationKey) []byte {
-		return ClaimExpirationKeyPackPartial(u, fields)
-	}
-}
-
-func ClaimExpirationKeyPackPartial(k *ClaimExpirationKey, fields int) []byte {
+func (k *ClaimExpirationKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -2371,19 +2219,11 @@ func (v *ClaimTakeoverValue) PackValue() []byte {
 	return value
 }
 
-func ClaimTakeoverKeyPackPartialKey(key *ClaimTakeoverKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ClaimTakeoverKeyPackPartial(key, fields)
-	}
+func (kv *ClaimTakeoverKey) NumFields() int {
+	return 1
 }
 
-func ClaimTakeoverKeyPackPartialfields(fields int) func(*ClaimTakeoverKey) []byte {
-	return func(u *ClaimTakeoverKey) []byte {
-		return ClaimTakeoverKeyPackPartial(u, fields)
-	}
-}
-
-func ClaimTakeoverKeyPackPartial(k *ClaimTakeoverKey, fields int) []byte {
+func (k *ClaimTakeoverKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -2480,19 +2320,11 @@ func (v *PendingActivationValue) PackValue() []byte {
 	return value
 }
 
-func PendingActivationKeyPackPartialKey(key *PendingActivationKey) func(int) []byte {
-	return func(fields int) []byte {
-		return PendingActivationKeyPackPartial(key, fields)
-	}
+func (kv *PendingActivationKey) NumFields() int {
+	return 4
 }
 
-func PendingActivationKeyPackPartialfields(fields int) func(*PendingActivationKey) []byte {
-	return func(u *PendingActivationKey) []byte {
-		return PendingActivationKeyPackPartial(u, fields)
-	}
-}
-
-func PendingActivationKeyPackPartial(k *PendingActivationKey, fields int) []byte {
+func (k *PendingActivationKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 4 {
@@ -2604,19 +2436,11 @@ func (v *ActivationValue) PackValue() []byte {
 	return value
 }
 
-func ActivationKeyPackPartialKey(key *ActivationKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ActivationKeyPackPartial(key, fields)
-	}
+func (kv *ActivationKey) NumFields() int {
+	return 3
 }
 
-func ActivationKeyPackPartialfields(fields int) func(*ActivationKey) []byte {
-	return func(u *ActivationKey) []byte {
-		return ActivationKeyPackPartial(u, fields)
-	}
-}
-
-func ActivationKeyPackPartial(k *ActivationKey, fields int) []byte {
+func (k *ActivationKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -2721,19 +2545,11 @@ func (v *ActiveAmountValue) PackValue() []byte {
 	return value
 }
 
-func ActiveAmountKeyPackPartialKey(key *ActiveAmountKey) func(int) []byte {
-	return func(fields int) []byte {
-		return ActiveAmountKeyPackPartial(key, fields)
-	}
+func (kv *ActiveAmountKey) NumFields() int {
+	return 5
 }
 
-func ActiveAmountKeyPackPartialfields(fields int) func(*ActiveAmountKey) []byte {
-	return func(u *ActiveAmountKey) []byte {
-		return ActiveAmountKeyPackPartial(u, fields)
-	}
-}
-
-func ActiveAmountKeyPackPartial(k *ActiveAmountKey, fields int) []byte {
+func (k *ActiveAmountKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 5 {
@@ -2846,19 +2662,11 @@ func (v *EffectiveAmountValue) PackValue() []byte {
 	return value
 }
 
-func EffectiveAmountKeyPackPartialKey(key *EffectiveAmountKey) func(int) []byte {
-	return func(fields int) []byte {
-		return EffectiveAmountKeyPackPartial(key, fields)
-	}
+func (kv *EffectiveAmountKey) NumFields() int {
+	return 4
 }
 
-func EffectiveAmountKeyPackPartialfields(fields int) func(*EffectiveAmountKey) []byte {
-	return func(u *EffectiveAmountKey) []byte {
-		return EffectiveAmountKeyPackPartial(u, fields)
-	}
-}
-
-func EffectiveAmountKeyPackPartial(k *EffectiveAmountKey, fields int) []byte {
+func (k *EffectiveAmountKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	nameLen := len(k.NormalizedName)
@@ -2960,19 +2768,11 @@ func (v *RepostValue) PackValue() []byte {
 	return value
 }
 
-func RepostKeyPackPartialKey(key *RepostKey) func(int) []byte {
-	return func(fields int) []byte {
-		return RepostKeyPackPartial(key, fields)
-	}
+func (kv *RepostKey) NumFields() int {
+	return 1
 }
 
-func RepostKeyPackPartialfields(fields int) func(*RepostKey) []byte {
-	return func(u *RepostKey) []byte {
-		return RepostKeyPackPartial(u, fields)
-	}
-}
-
-func RepostKeyPackPartial(k *RepostKey, fields int) []byte {
+func (k *RepostKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -3058,19 +2858,11 @@ func (v *RepostedValue) PackValue() []byte {
 	return value
 }
 
-func RepostedKeyPackPartialKey(key *RepostedKey) func(int) []byte {
-	return func(fields int) []byte {
-		return RepostedKeyPackPartial(key, fields)
-	}
+func (kv *RepostedKey) NumFields() int {
+	return 3
 }
 
-func RepostedKeyPackPartialfields(fields int) func(*RepostedKey) []byte {
-	return func(u *RepostedKey) []byte {
-		return RepostedKeyPackPartial(u, fields)
-	}
-}
-
-func RepostedKeyPackPartial(k *RepostedKey, fields int) []byte {
+func (k *RepostedKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -3216,19 +3008,11 @@ func (v *TouchedOrDeletedClaimValue) PackValue() []byte {
 	return value
 }
 
-func TouchedOrDeletedClaimKeyPackPartialKey(key *TouchedOrDeletedClaimKey) func(int) []byte {
-	return func(fields int) []byte {
-		return TouchedOrDeletedClaimKeyPackPartial(key, fields)
-	}
+func (kv *TouchedOrDeletedClaimKey) NumFields() int {
+	return 1
 }
 
-func TouchedOrDeletedClaimPackPartialfields(fields int) func(*TouchedOrDeletedClaimKey) []byte {
-	return func(u *TouchedOrDeletedClaimKey) []byte {
-		return TouchedOrDeletedClaimKeyPackPartial(u, fields)
-	}
-}
-
-func TouchedOrDeletedClaimKeyPackPartial(k *TouchedOrDeletedClaimKey, fields int) []byte {
+func (k *TouchedOrDeletedClaimKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 1 {
@@ -3319,21 +3103,13 @@ func (k *UTXOValue) PackValue() []byte {
 	return value
 }
 
-func UTXOKeyPackPartialKey(key *UTXOKey) func(int) []byte {
-	return func(fields int) []byte {
-		return UTXOKeyPackPartial(key, fields)
-	}
-}
-
-func UTXOKeyPackPartialfields(fields int) func(*UTXOKey) []byte {
-	return func(u *UTXOKey) []byte {
-		return UTXOKeyPackPartial(u, fields)
-	}
+func (kv *UTXOKey) NumFields() int {
+	return 3
 }
 
 // UTXOKeyPackPartial packs a variable number of fields for a UTXOKey into
 // a byte array.
-func UTXOKeyPackPartial(k *UTXOKey, fields int) []byte {
+func (k *UTXOKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	if fields > 3 {
@@ -3402,311 +3178,128 @@ func generic(voidstar interface{}, firstByte byte, function byte, functionName s
 		return ClaimToSupportKeyUnpack(data), nil
 	case ClaimToSupport | 1<<8:
 		return ClaimToSupportValueUnpack(data), nil
-	case ClaimToSupport | 2<<8:
-		return voidstar.(*ClaimToSupportKey).PackKey(), nil
-	case ClaimToSupport | 3<<8:
-		return voidstar.(*ClaimToSupportValue).PackValue(), nil
-	case ClaimToSupport | 4<<8:
-		return ClaimToSupportKeyPackPartialKey(voidstar.(*ClaimToSupportKey)), nil
 	case SupportToClaim:
 		return SupportToClaimKeyUnpack(data), nil
 	case SupportToClaim | 1<<8:
 		return SupportToClaimValueUnpack(data), nil
-	case SupportToClaim | 2<<8:
-		return voidstar.(*SupportToClaimKey).PackKey(), nil
-	case SupportToClaim | 3<<8:
-		return voidstar.(*SupportToClaimValue).PackValue(), nil
-	case SupportToClaim | 4<<8:
-		return SupportToClaimKeyPackPartialKey(voidstar.(*SupportToClaimKey)), nil
 	case ClaimToTXO:
 		return ClaimToTXOKeyUnpack(data), nil
 	case ClaimToTXO | 1<<8:
 		return ClaimToTXOValueUnpack(data), nil
-	case ClaimToTXO | 2<<8:
-		return voidstar.(*ClaimToTXOKey).PackKey(), nil
-	case ClaimToTXO | 3<<8:
-		return voidstar.(*ClaimToTXOValue).PackValue(), nil
-	case ClaimToTXO | 4<<8:
-		return ClaimToTXOKeyPackPartialKey(voidstar.(*ClaimToTXOKey)), nil
-	case TXOToClaim:
 		return TXOToClaimKeyUnpack(data), nil
 	case TXOToClaim | 1<<8:
 		return TXOToClaimValueUnpack(data), nil
-	case TXOToClaim | 2<<8:
-		return voidstar.(*TXOToClaimKey).PackKey(), nil
-	case TXOToClaim | 3<<8:
-		return voidstar.(*TXOToClaimValue).PackValue(), nil
-	case TXOToClaim | 4<<8:
-		return TXOToClaimKeyPackPartialKey(voidstar.(*TXOToClaimKey)), nil
 
 	case ClaimToChannel:
 		return ClaimToChannelKeyUnpack(data), nil
 	case ClaimToChannel | 1<<8:
 		return ClaimToChannelValueUnpack(data), nil
-	case ClaimToChannel | 2<<8:
-		return voidstar.(*ClaimToChannelKey).PackKey(), nil
-	case ClaimToChannel | 3<<8:
-		return voidstar.(*ClaimToChannelValue).PackValue(), nil
-	case ClaimToChannel | 4<<8:
-		return ClaimToChannelKeyPackPartialKey(voidstar.(*ClaimToChannelKey)), nil
 	case ChannelToClaim:
 		return ChannelToClaimKeyUnpack(data), nil
 	case ChannelToClaim | 1<<8:
 		return ChannelToClaimValueUnpack(data), nil
-	case ChannelToClaim | 2<<8:
-		return voidstar.(*ChannelToClaimKey).PackKey(), nil
-	case ChannelToClaim | 3<<8:
-		return voidstar.(*ChannelToClaimValue).PackValue(), nil
-	case ChannelToClaim | 4<<8:
-		return ChannelToClaimKeyPackPartialKey(voidstar.(*ChannelToClaimKey)), nil
 
 	case ClaimShortIdPrefix:
 		return ClaimShortIDKeyUnpack(data), nil
 	case ClaimShortIdPrefix | 1<<8:
 		return ClaimShortIDValueUnpack(data), nil
-	case ClaimShortIdPrefix | 2<<8:
-		return voidstar.(*ClaimShortIDKey).PackKey(), nil
-	case ClaimShortIdPrefix | 3<<8:
-		return voidstar.(*ClaimShortIDValue).PackValue(), nil
-	case ClaimShortIdPrefix | 4<<8:
-		return ClaimShortIDKeyPackPartialKey(voidstar.(*ClaimShortIDKey)), nil
 	case EffectiveAmount:
 		return EffectiveAmountKeyUnpack(data), nil
 	case EffectiveAmount | 1<<8:
 		return EffectiveAmountValueUnpack(data), nil
-	case EffectiveAmount | 2<<8:
-		return voidstar.(*EffectiveAmountKey).PackKey(), nil
-	case EffectiveAmount | 3<<8:
-		return voidstar.(*EffectiveAmountValue).PackValue(), nil
-	case EffectiveAmount | 4<<8:
-		return EffectiveAmountKeyPackPartialKey(voidstar.(*EffectiveAmountKey)), nil
 	case ClaimExpiration:
 		return ClaimExpirationKeyUnpack(data), nil
 	case ClaimExpiration | 1<<8:
 		return ClaimExpirationValueUnpack(data), nil
-	case ClaimExpiration | 2<<8:
-		return voidstar.(*ClaimExpirationKey).PackKey(), nil
-	case ClaimExpiration | 3<<8:
-		return voidstar.(*ClaimExpirationValue).PackValue(), nil
-	case ClaimExpiration | 4<<8:
-		return ClaimExpirationKeyPackPartialKey(voidstar.(*ClaimExpirationKey)), nil
 
 	case ClaimTakeover:
 		return ClaimTakeoverKeyUnpack(data), nil
 	case ClaimTakeover | 1<<8:
 		return ClaimTakeoverValueUnpack(data), nil
-	case ClaimTakeover | 2<<8:
-		return voidstar.(*ClaimTakeoverKey).PackKey(), nil
-	case ClaimTakeover | 3<<8:
-		return voidstar.(*ClaimTakeoverValue).PackValue(), nil
-	case ClaimTakeover | 4<<8:
-		return ClaimTakeoverKeyPackPartialKey(voidstar.(*ClaimTakeoverKey)), nil
 	case PendingActivation:
 		return PendingActivationKeyUnpack(data), nil
 	case PendingActivation | 1<<8:
 		return PendingActivationValueUnpack(data), nil
-	case PendingActivation | 2<<8:
-		return voidstar.(*PendingActivationKey).PackKey(), nil
-	case PendingActivation | 3<<8:
-		return voidstar.(*PendingActivationValue).PackValue(), nil
-	case PendingActivation | 4<<8:
-		return PendingActivationKeyPackPartialKey(voidstar.(*PendingActivationKey)), nil
 	case ActivatedClaimAndSupport:
 		return ActivationKeyUnpack(data), nil
 	case ActivatedClaimAndSupport | 1<<8:
 		return ActivationValueUnpack(data), nil
-	case ActivatedClaimAndSupport | 2<<8:
-		return voidstar.(*ActivationKey).PackKey(), nil
-	case ActivatedClaimAndSupport | 3<<8:
-		return voidstar.(*ActivationValue).PackValue(), nil
-	case ActivatedClaimAndSupport | 4<<8:
-		return ActivationKeyPackPartialKey(voidstar.(*ActivationKey)), nil
 	case ActiveAmount:
 		return ActiveAmountKeyUnpack(data), nil
 	case ActiveAmount | 1<<8:
 		return ActiveAmountValueUnpack(data), nil
-	case ActiveAmount | 2<<8:
-		return voidstar.(*ActiveAmountKey).PackKey(), nil
-	case ActiveAmount | 3<<8:
-		return voidstar.(*ActiveAmountValue).PackValue(), nil
-	case ActiveAmount | 4<<8:
-		return ActiveAmountKeyPackPartialKey(voidstar.(*ActiveAmountKey)), nil
-
 	case Repost:
 		return RepostKeyUnpack(data), nil
 	case Repost | 1<<8:
 		return RepostValueUnpack(data), nil
-	case Repost | 2<<8:
-		return voidstar.(*RepostKey).PackKey(), nil
-	case Repost | 3<<8:
-		return voidstar.(*RepostValue).PackValue(), nil
-	case Repost | 4<<8:
-		return RepostKeyPackPartialKey(voidstar.(*RepostKey)), nil
 	case RepostedClaim:
 		return RepostedKeyUnpack(data), nil
 	case RepostedClaim | 1<<8:
 		return RepostedValueUnpack(data), nil
-	case RepostedClaim | 2<<8:
-		return voidstar.(*RepostedKey).PackKey(), nil
-	case RepostedClaim | 3<<8:
-		return voidstar.(*RepostedValue).PackValue(), nil
-	case RepostedClaim | 4<<8:
-		return RepostedKeyPackPartialKey(voidstar.(*RepostedKey)), nil
 
 	case Undo:
 		return UndoKeyUnpack(data), nil
 	case Undo | 1<<8:
 		return UndoValueUnpack(data), nil
-	case Undo | 2<<8:
-		return voidstar.(*UndoKey).PackKey(), nil
-	case Undo | 3<<8:
-		return voidstar.(*UndoValue).PackValue(), nil
-	case Undo | 4<<8:
-		return UndoKeyPackPartialKey(voidstar.(*UndoKey)), nil
 	case ClaimDiff:
 		return TouchedOrDeletedClaimKeyUnpack(data), nil
 	case ClaimDiff | 1<<8:
 		return TouchedOrDeletedClaimValueUnpack(data), nil
-	case ClaimDiff | 2<<8:
-		return voidstar.(*TouchedOrDeletedClaimKey).PackKey(), nil
-	case ClaimDiff | 3<<8:
-		return voidstar.(*TouchedOrDeletedClaimValue).PackValue(), nil
-	case ClaimDiff | 4<<8:
-		return TouchedOrDeletedClaimKeyPackPartialKey(voidstar.(*TouchedOrDeletedClaimKey)), nil
 
 	case Tx:
 		return TxKeyUnpack(data), nil
 	case Tx | 1<<8:
 		return TxValueUnpack(data), nil
-	case Tx | 2<<8:
-		return voidstar.(*TxKey).PackKey(), nil
-	case Tx | 3<<8:
-		return voidstar.(*TxValue).PackValue(), nil
-	case Tx | 4<<8:
-		return TxKeyPackPartialKey(voidstar.(*TxKey)), nil
 	case BlockHash:
 		return BlockHashKeyUnpack(data), nil
 	case BlockHash | 1<<8:
 		return BlockHashValueUnpack(data), nil
-	case BlockHash | 2<<8:
-		return voidstar.(*BlockHashKey).PackKey(), nil
-	case BlockHash | 3<<8:
-		return voidstar.(*BlockHashValue).PackValue(), nil
-	case BlockHash | 4<<8:
-		return BlockHashKeyPackPartialKey(voidstar.(*BlockHashKey)), nil
 	case Header:
 		return BlockHeaderKeyUnpack(data), nil
 	case Header | 1<<8:
 		return BlockHeaderValueUnpack(data), nil
-	case Header | 2<<8:
-		return voidstar.(*BlockHeaderKey).PackKey(), nil
-	case Header | 3<<8:
-		return voidstar.(*BlockHeaderValue).PackValue(), nil
-	case Header | 4<<8:
-		return BlockHeaderKeyPackPartialKey(voidstar.(*BlockHeaderKey)), nil
 	case TxNum:
 		return TxNumKeyUnpack(data), nil
 	case TxNum | 1<<8:
 		return TxNumValueUnpack(data), nil
-	case TxNum | 2<<8:
-		return voidstar.(*TxNumKey).PackKey(), nil
-	case TxNum | 3<<8:
-		return voidstar.(*TxNumValue).PackValue(), nil
-	case TxNum | 4<<8:
-		return TxNumKeyPackPartialKey(voidstar.(*TxNumKey)), nil
 
 	case TxCount:
 		return TxCountKeyUnpack(data), nil
 	case TxCount | 1<<8:
 		return TxCountValueUnpack(data), nil
-	case TxCount | 2<<8:
-		return voidstar.(*TxCountKey).PackKey(), nil
-	case TxCount | 3<<8:
-		return voidstar.(*TxCountValue).PackValue(), nil
-	case TxCount | 4<<8:
-		return TxCountKeyPackPartialKey(voidstar.(*TxCountKey)), nil
 	case TxHash:
 		return TxHashKeyUnpack(data), nil
 	case TxHash | 1<<8:
 		return TxHashValueUnpack(data), nil
-	case TxHash | 2<<8:
-		return voidstar.(*TxHashKey).PackKey(), nil
-	case TxHash | 3<<8:
-		return voidstar.(*TxHashValue).PackValue(), nil
-	case TxHash | 4<<8:
-		return TxHashKeyPackPartialKey(voidstar.(*TxHashKey)), nil
 	case UTXO:
 		return UTXOKeyUnpack(data), nil
 	case UTXO | 1<<8:
 		return UTXOValueUnpack(data), nil
-	case UTXO | 2<<8:
-		return voidstar.(*UTXOKey).PackKey(), nil
-	case UTXO | 3<<8:
-		return voidstar.(*UTXOValue).PackValue(), nil
-	case UTXO | 4<<8:
-		return UTXOKeyPackPartialKey(voidstar.(*UTXOKey)), nil
 	case HashXUTXO:
 		return HashXUTXOKeyUnpack(data), nil
 	case HashXUTXO | 1<<8:
 		return HashXUTXOValueUnpack(data), nil
-	case HashXUTXO | 2<<8:
-		return voidstar.(*HashXUTXOKey).PackKey(), nil
-	case HashXUTXO | 3<<8:
-		return voidstar.(*HashXUTXOValue).PackValue(), nil
-	case HashXUTXO | 4<<8:
-		return HashXUTXOKeyPackPartialKey(voidstar.(*HashXUTXOKey)), nil
 	case HashXHistory:
 		return HashXHistoryKeyUnpack(data), nil
 	case HashXHistory | 1<<8:
 		return HashXHistoryValueUnpack(data), nil
-	case HashXHistory | 2<<8:
-		return voidstar.(*HashXHistoryKey).PackKey(), nil
-	case HashXHistory | 3<<8:
-		return voidstar.(*HashXHistoryValue).PackValue(), nil
-	case HashXHistory | 4<<8:
-		return HashXHistoryKeyPackPartialKey(voidstar.(*HashXHistoryKey)), nil
 	case DBState:
 		return DBStateKeyUnpack(data), nil
 	case DBState | 1<<8:
 		return DBStateValueUnpack(data), nil
-	case DBState | 2<<8:
-		return voidstar.(*DBStateKey).PackKey(), nil
-	case DBState | 3<<8:
-		return voidstar.(*DBStateValue).PackValue(), nil
-	case DBState | 4<<8:
-		return DBStateKeyPackPartialKey(voidstar.(*DBStateKey)), nil
 
 	case ChannelCount:
 		return ChannelCountKeyUnpack(data), nil
 	case ChannelCount | 1<<8:
 		return ChannelCountValueUnpack(data), nil
-	case ChannelCount | 2<<8:
-		return voidstar.(*ChannelCountKey).PackKey(), nil
-	case ChannelCount | 3<<8:
-		return voidstar.(*ChannelCountValue).PackValue(), nil
-	case ChannelCount | 4<<8:
-		return ChannelCountKeyPackPartialKey(voidstar.(*ChannelCountKey)), nil
 	case SupportAmount:
 		return SupportAmountKeyUnpack(data), nil
 	case SupportAmount | 1<<8:
 		return SupportAmountValueUnpack(data), nil
-	case SupportAmount | 2<<8:
-		return voidstar.(*SupportAmountKey).PackKey(), nil
-	case SupportAmount | 3<<8:
-		return voidstar.(*SupportAmountValue).PackValue(), nil
-	case SupportAmount | 4<<8:
-		return SupportAmountKeyPackPartialKey(voidstar.(*SupportAmountKey)), nil
 	case BlockTXs:
 		return BlockTxsKeyUnpack(data), nil
 	case BlockTXs | 1<<8:
 		return BlockTxsValueUnpack(data), nil
-	case BlockTXs | 2<<8:
-		return voidstar.(*BlockTxsKey).PackKey(), nil
-	case BlockTXs | 3<<8:
-		return voidstar.(*BlockTxsValue).PackValue(), nil
-	case BlockTXs | 4<<8:
-		return BlockTxsKeyPackPartialKey(voidstar.(*BlockTxsKey)), nil
-
 	}
 	return nil, fmt.Errorf("%s function for %v not implemented", functionName, firstByte)
 }
@@ -3728,27 +3321,23 @@ func UnpackGenericValue(key, value []byte) (interface{}, error) {
 	return generic(value, key[0], 1, "unpack value")
 }
 
-func PackPartialGenericKey(prefix byte, key interface{}, fields int) ([]byte, error) {
+func PackPartialGenericKey(key BaseKey, fields int) ([]byte, error) {
 	if key == nil {
 		return nil, fmt.Errorf("key length zero")
 	}
-	genericRes, err := generic(key, prefix, 4, "pack partial key")
-	res := genericRes.(func(int) []byte)(fields)
-	return res, err
+	return key.PartialPack(fields), nil
 }
 
-func PackGenericKey(prefix byte, key interface{}) ([]byte, error) {
+func PackGenericKey(key BaseKey) ([]byte, error) {
 	if key == nil {
 		return nil, fmt.Errorf("key length zero")
 	}
-	genericRes, err := generic(key, prefix, 2, "pack key")
-	return genericRes.([]byte), err
+	return key.PackKey(), nil
 }
 
-func PackGenericValue(prefix byte, value interface{}) ([]byte, error) {
+func PackGenericValue(value BaseValue) ([]byte, error) {
 	if value == nil {
 		return nil, fmt.Errorf("value length zero")
 	}
-	genericRes, err := generic(value, prefix, 3, "pack value")
-	return genericRes.([]byte), err
+	return value.PackValue(), nil
 }
