@@ -3222,13 +3222,13 @@ func UTXOValueUnpack(value []byte) *UTXOValue {
 
 type TrendingNotificationKey struct {
 	Prefix    []byte `struct:"[1]byte"  json:"prefix"`
-	Height    uint32 `struct:"uint32"   json:"height"`
+	Height    uint32 `json:"height"`
 	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
 type TrendingNotificationValue struct {
-	PreviousAmount uint64 `struct:"uint64" json:"previous_amount"`
-	NewAmount      uint64 `struct:"uint64" json:"new_amount"`
+	PreviousAmount uint64 `json:"previous_amount"`
+	NewAmount      uint64 `json:"new_amount"`
 }
 
 func (kv *TrendingNotificationKey) NumFields() int {
@@ -3302,7 +3302,7 @@ func (kv *MempoolTxKey) NumFields() int {
 	return 1
 }
 
-func (kv *MempoolTxKey) Pack(fields int) []byte {
+func (kv *MempoolTxKey) PartialPack(fields int) []byte {
 	// b'>32s'
 	n := len(kv.Prefix) + 32
 	buf := make([]byte, n)
@@ -3313,6 +3313,10 @@ func (kv *MempoolTxKey) Pack(fields int) []byte {
 	}
 	offset += copy(buf[offset:], kv.TxHash[:32])
 	return buf[:offset]
+}
+
+func (kv *MempoolTxKey) PackKey() []byte {
+	return kv.PartialPack(kv.NumFields())
 }
 
 func (kv *MempoolTxKey) UnpackKey(buf []byte) {
@@ -3342,7 +3346,7 @@ func (kv *MempoolTxValue) UnpackValue(buf []byte) {
 
 type TouchedHashXKey struct {
 	Prefix []byte `struct:"[1]byte" json:"prefix"`
-	Height uint32 `struct:"uint32" json:"height"`
+	Height uint32 `json:"height"`
 }
 
 type TouchedHashXValue struct {
@@ -3394,6 +3398,7 @@ func (kv *TouchedHashXValue) PackValue() []byte {
 func (kv *TouchedHashXValue) UnpackValue(buf []byte) {
 	// variable length bytes
 	n := len(buf)
+	kv.TouchedHashXs = make([][]byte, n/11)
 	for i, offset := 0, 0; offset+11 <= n; i, offset = i+1, offset+11 {
 		kv.TouchedHashXs[i] = buf[offset : offset+11]
 	}
