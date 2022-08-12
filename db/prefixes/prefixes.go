@@ -3468,14 +3468,16 @@ func UnpackGenericKey(key []byte) (BaseKey, error) {
 	}
 	// Look up the prefix metadata, and use the registered function(s)
 	// to create and unpack key of appropriate type.
-	t, ok := tableRegistry[key[0]]
+	t, ok := prefixRegistry[key[0]]
 	if !ok {
 		return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
 	}
 	if t.newKeyUnpack != nil {
+		// Type provides <Type>KeyUnpack() function.
 		return t.newKeyUnpack(key).(BaseKey), nil
 	}
 	if t.newKey != nil {
+		// Type provides a new<Type> function.
 		k := t.newKey()
 		unpacker, ok := k.(KeyUnpacker)
 		if ok {
@@ -3486,7 +3488,7 @@ func UnpackGenericKey(key []byte) (BaseKey, error) {
 	return nil, fmt.Errorf("unpack key function for %v not implemented", key[0])
 }
 
-func UnpackGenericValue(key []byte, value []byte) (BaseValue, error) {
+func UnpackGenericValue(key, value []byte) (BaseValue, error) {
 	if len(key) == 0 {
 		return nil, fmt.Errorf("key length zero")
 	}
@@ -3495,14 +3497,16 @@ func UnpackGenericValue(key []byte, value []byte) (BaseValue, error) {
 	}
 	// Look up the prefix metadata, and use the registered function(s)
 	// to create and unpack value of appropriate type.
-	t, ok := tableRegistry[key[0]]
+	t, ok := prefixRegistry[key[0]]
 	if !ok {
 		return nil, fmt.Errorf("unpack value function for %v not implemented", key[0])
 	}
 	if t.newValueUnpack != nil {
+		// Type provides <Type>ValueUnpack() function.
 		return t.newValueUnpack(value).(BaseValue), nil
 	}
 	if t.newValue != nil {
+		// Type provides a new<Type> function.
 		k := t.newValue()
 		unpacker, ok := k.(ValueUnpacker)
 		if ok {
@@ -3515,21 +3519,503 @@ func UnpackGenericValue(key []byte, value []byte) (BaseValue, error) {
 
 func PackPartialGenericKey(key BaseKey, fields int) ([]byte, error) {
 	if key == nil {
-		return nil, fmt.Errorf("key length zero")
+		return nil, fmt.Errorf("key is nil")
 	}
 	return key.PartialPack(fields), nil
 }
 
 func PackGenericKey(key BaseKey) ([]byte, error) {
 	if key == nil {
-		return nil, fmt.Errorf("key length zero")
+		return nil, fmt.Errorf("key is nil")
 	}
 	return key.PackKey(), nil
 }
 
 func PackGenericValue(value BaseValue) ([]byte, error) {
 	if value == nil {
-		return nil, fmt.Errorf("value length zero")
+		return nil, fmt.Errorf("value is nil")
 	}
 	return value.PackValue(), nil
+}
+
+// Metadata associated with each prefix/table. Currently used to
+// implement generic unpacking.
+
+type prefixMeta struct {
+	newKey         func() interface{}
+	newValue       func() interface{}
+	newKeyUnpack   func([]byte) interface{}
+	newValueUnpack func([]byte) interface{}
+	API            *SerializationAPI
+}
+
+var prefixRegistry = map[byte]prefixMeta{
+	ClaimToSupport: {
+		newKey: func() interface{} {
+			return &ClaimToSupportKey{Prefix: []byte{ClaimToSupport}}
+		},
+		newValue: func() interface{} {
+			return &ClaimToSupportValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ClaimToSupportKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ClaimToSupportValueUnpack(buf)
+		},
+	},
+	SupportToClaim: {
+		newKey: func() interface{} {
+			return &SupportToClaimKey{Prefix: []byte{SupportToClaim}}
+		},
+		newValue: func() interface{} {
+			return &SupportToClaimValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return SupportToClaimKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return SupportToClaimValueUnpack(buf)
+		},
+	},
+
+	ClaimToTXO: {
+		newKey: func() interface{} {
+			return &ClaimToTXOKey{Prefix: []byte{ClaimToTXO}}
+		},
+		newValue: func() interface{} {
+			return &ClaimToTXOValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ClaimToTXOKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ClaimToTXOValueUnpack(buf)
+		},
+	},
+	TXOToClaim: {
+		newKey: func() interface{} {
+			return &TXOToClaimKey{Prefix: []byte{TXOToClaim}}
+		},
+		newValue: func() interface{} {
+			return &TXOToClaimValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return TXOToClaimKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return TXOToClaimValueUnpack(buf)
+		},
+	},
+
+	ClaimToChannel: {
+		newKey: func() interface{} {
+			return &ClaimToChannelKey{Prefix: []byte{ClaimToChannel}}
+		},
+		newValue: func() interface{} {
+			return &ClaimToChannelValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ClaimToChannelKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ClaimToChannelValueUnpack(buf)
+		},
+	},
+	ChannelToClaim: {
+		newKey: func() interface{} {
+			return &ChannelToClaimKey{Prefix: []byte{ChannelToClaim}}
+		},
+		newValue: func() interface{} {
+			return &ChannelToClaimValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ChannelToClaimKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ChannelToClaimValueUnpack(buf)
+		},
+	},
+
+	ClaimShortIdPrefix: {
+		newKey: func() interface{} {
+			return &ClaimShortIDKey{Prefix: []byte{ClaimShortIdPrefix}}
+		},
+		newValue: func() interface{} {
+			return &ClaimShortIDValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ClaimShortIDKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ClaimShortIDValueUnpack(buf)
+		},
+	},
+	EffectiveAmount: {
+		newKey: func() interface{} {
+			return &EffectiveAmountKey{Prefix: []byte{EffectiveAmount}}
+		},
+		newValue: func() interface{} {
+			return &EffectiveAmountValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return EffectiveAmountKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return EffectiveAmountValueUnpack(buf)
+		},
+	},
+	ClaimExpiration: {
+		newKey: func() interface{} {
+			return &ClaimExpirationKey{Prefix: []byte{ClaimExpiration}}
+		},
+		newValue: func() interface{} {
+			return &ClaimExpirationValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ClaimExpirationKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ClaimExpirationValueUnpack(buf)
+		},
+	},
+
+	ClaimTakeover: {
+		newKey: func() interface{} {
+			return &ClaimTakeoverKey{Prefix: []byte{ClaimTakeover}}
+		},
+		newValue: func() interface{} {
+			return &ClaimTakeoverValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ClaimTakeoverKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ClaimTakeoverValueUnpack(buf)
+		},
+	},
+	PendingActivation: {
+		newKey: func() interface{} {
+			return &PendingActivationKey{Prefix: []byte{PendingActivation}}
+		},
+		newValue: func() interface{} {
+			return &PendingActivationValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return PendingActivationKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return PendingActivationValueUnpack(buf)
+		},
+	},
+	ActivatedClaimAndSupport: {
+		newKey: func() interface{} {
+			return &ActivationKey{Prefix: []byte{ActivatedClaimAndSupport}}
+		},
+		newValue: func() interface{} {
+			return &ActivationValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ActivationKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ActivationValueUnpack(buf)
+		},
+	},
+	ActiveAmount: {
+		newKey: func() interface{} {
+			return &ActiveAmountKey{Prefix: []byte{ActiveAmount}}
+		},
+		newValue: func() interface{} {
+			return &ActiveAmountValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ActiveAmountKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ActiveAmountValueUnpack(buf)
+		},
+	},
+
+	Repost: {
+		newKey: func() interface{} {
+			return &RepostKey{Prefix: []byte{Repost}}
+		},
+		newValue: func() interface{} {
+			return &RepostValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return RepostKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return RepostValueUnpack(buf)
+		},
+	},
+	RepostedClaim: {
+		newKey: func() interface{} {
+			return &RepostedKey{Prefix: []byte{RepostedClaim}}
+		},
+		newValue: func() interface{} {
+			return &RepostedValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return RepostedKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return RepostedValueUnpack(buf)
+		},
+	},
+
+	Undo: {
+		newKey: func() interface{} {
+			return &UndoKey{Prefix: []byte{Undo}}
+		},
+		newValue: func() interface{} {
+			return &UndoValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return UndoKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return UndoValueUnpack(buf)
+		},
+	},
+	ClaimDiff: {
+		newKey: func() interface{} {
+			return &TouchedOrDeletedClaimKey{Prefix: []byte{ClaimDiff}}
+		},
+		newValue: func() interface{} {
+			return &TouchedOrDeletedClaimValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return TouchedOrDeletedClaimKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return TouchedOrDeletedClaimValueUnpack(buf)
+		},
+	},
+
+	Tx: {
+		newKey: func() interface{} {
+			return &TxKey{Prefix: []byte{Tx}}
+		},
+		newValue: func() interface{} {
+			return &TxValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return TxKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return TxValueUnpack(buf)
+		},
+	},
+	BlockHash: {
+		newKey: func() interface{} {
+			return &BlockHashKey{Prefix: []byte{BlockHash}}
+		},
+		newValue: func() interface{} {
+			return &BlockHashValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return BlockHashKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return BlockHashValueUnpack(buf)
+		},
+	},
+	Header: {
+		newKey: func() interface{} {
+			return &BlockHeaderKey{Prefix: []byte{Header}}
+		},
+		newValue: func() interface{} {
+			return &BlockHeaderValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return BlockHeaderKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return BlockHeaderValueUnpack(buf)
+		},
+	},
+	TxNum: {
+		newKey: func() interface{} {
+			return &TxNumKey{Prefix: []byte{TxNum}}
+		},
+		newValue: func() interface{} {
+			return &TxNumValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return TxNumKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return TxNumValueUnpack(buf)
+		},
+	},
+	TxCount: {
+		newKey: func() interface{} {
+			return &TxCountKey{Prefix: []byte{TxCount}}
+		},
+		newValue: func() interface{} {
+			return &TxCountValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return TxCountKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return TxCountValueUnpack(buf)
+		},
+	},
+	TxHash: {
+		newKey: func() interface{} {
+			return &TxHashKey{Prefix: []byte{TxHash}}
+		},
+		newValue: func() interface{} {
+			return &TxHashValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return TxHashKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return TxHashValueUnpack(buf)
+		},
+	},
+	UTXO: {
+		newKey: func() interface{} {
+			return &UTXOKey{Prefix: []byte{UTXO}}
+		},
+		newValue: func() interface{} {
+			return &UTXOValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return UTXOKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return UTXOValueUnpack(buf)
+		},
+	},
+	HashXUTXO: {
+		newKey: func() interface{} {
+			return &HashXUTXOKey{Prefix: []byte{HashXUTXO}}
+		},
+		newValue: func() interface{} {
+			return &HashXUTXOValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return HashXUTXOKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return HashXUTXOValueUnpack(buf)
+		},
+	},
+	HashXHistory: {
+		newKey: func() interface{} {
+			return &HashXHistoryKey{Prefix: []byte{HashXHistory}}
+		},
+		newValue: func() interface{} {
+			return &HashXHistoryValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return HashXHistoryKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return HashXHistoryValueUnpack(buf)
+		},
+	},
+	DBState: {
+		newKey: func() interface{} {
+			return &DBStateKey{Prefix: []byte{DBState}}
+		},
+		newValue: func() interface{} {
+			return &DBStateValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return DBStateKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return DBStateValueUnpack(buf)
+		},
+	},
+	ChannelCount: {
+		newKey: func() interface{} {
+			return &ChannelCountKey{Prefix: []byte{ChannelCount}}
+		},
+		newValue: func() interface{} {
+			return &ChannelCountValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return ChannelCountKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return ChannelCountValueUnpack(buf)
+		},
+	},
+	SupportAmount: {
+		newKey: func() interface{} {
+			return &SupportAmountKey{Prefix: []byte{SupportAmount}}
+		},
+		newValue: func() interface{} {
+			return &SupportAmountValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return SupportAmountKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return SupportAmountValueUnpack(buf)
+		},
+	},
+	BlockTXs: {
+		newKey: func() interface{} {
+			return &BlockTxsKey{Prefix: []byte{BlockTXs}}
+		},
+		newValue: func() interface{} {
+			return &BlockTxsValue{}
+		},
+		newKeyUnpack: func(buf []byte) interface{} {
+			return BlockTxsKeyUnpack(buf)
+		},
+		newValueUnpack: func(buf []byte) interface{} {
+			return BlockTxsValueUnpack(buf)
+		},
+	},
+
+	TrendingNotifications: {
+		newKey: func() interface{} {
+			return &TrendingNotificationKey{Prefix: []byte{TrendingNotifications}}
+		},
+		newValue: func() interface{} {
+			return &TrendingNotificationValue{}
+		},
+	},
+	MempoolTx: {
+		newKey: func() interface{} {
+			return &MempoolTxKey{Prefix: []byte{MempoolTx}}
+		},
+		newValue: func() interface{} {
+			return &MempoolTxValue{}
+		},
+	},
+	TouchedHashX: {
+		newKey: func() interface{} {
+			return &TouchedHashXKey{Prefix: []byte{TouchedHashX}}
+		},
+		newValue: func() interface{} {
+			return &TouchedHashXValue{}
+		},
+	},
+	HashXStatus: {
+		newKey: func() interface{} {
+			return &HashXStatusKey{Prefix: []byte{HashXStatus}}
+		},
+		newValue: func() interface{} {
+			return &HashXStatusValue{}
+		},
+	},
+	HashXMempoolStatus: {
+		newKey: func() interface{} {
+			return &HashXMempoolStatusKey{Prefix: []byte{HashXMempoolStatus}}
+		},
+		newValue: func() interface{} {
+			return &HashXMempoolStatusValue{}
+		},
+	},
 }
