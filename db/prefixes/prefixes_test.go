@@ -18,6 +18,14 @@ import (
 	"github.com/linxGnu/grocksdb"
 )
 
+func TestPrefixRegistry(t *testing.T) {
+	for _, prefix := range prefixes.GetPrefixes() {
+		if prefixes.GetSerializationAPI(prefix) == nil {
+			t.Errorf("prefix %c not registered", prefix)
+		}
+	}
+}
+
 func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.ColumnFamilyHandle) {
 	log.Println(filePath)
 	file, err := os.Open(filePath)
