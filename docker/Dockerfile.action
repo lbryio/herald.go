@@ -1,4 +1,4 @@
-FROM jeffreypicard/hub-github-env
+FROM jeffreypicard/hub-github-env:dev
 
 COPY scripts/build_and_test.sh /build_and_test.sh
 # COPY . /hub
