@@ -19,7 +19,10 @@ require (
 	gopkg.in/karalabe/cookiejar.v1 v1.0.0-20141109175019-e1490cae028c
 )
 
-require golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
+require (
+	github.com/go-restruct/restruct v1.2.0-alpha // indirect
+	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect

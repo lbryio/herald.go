@@ -24,6 +24,7 @@ type IterOptions struct {
 	RawValue     bool
 	CfHandle     *grocksdb.ColumnFamilyHandle
 	It           *grocksdb.Iterator
+	Serializer   *prefixes.SerializationAPI
 }
 
 // NewIterateOptions creates a defualt options structure for a db iterator.
@@ -41,6 +42,7 @@ func NewIterateOptions() *IterOptions {
 		RawValue:     false,
 		CfHandle:     nil,
 		It:           nil,
+		Serializer:   prefixes.ProductionAPI,
 	}
 }
 
@@ -99,6 +101,11 @@ func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
 	return o
 }
 
+func (o *IterOptions) WithSerializer(serializer *prefixes.SerializationAPI) *IterOptions {
+	o.Serializer = serializer
+	return o
+}
+
 // ReadRow reads a row from the db, returns nil when no more rows are available.
 func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 	it := opts.It
@@ -117,8 +124,10 @@ func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 	valueData := value.Data()
 	valueLen := len(valueData)
 
-	var outKey interface{} = nil
-	var outValue interface{} = nil
+	var outKey prefixes.BaseKey = nil
+	var outValue prefixes.BaseValue = nil
+	var rawOutKey []byte = nil
+	var rawOutValue []byte = nil
 	var err error = nil
 
 	log.Trace("keyData:", keyData)
@@ -136,12 +145,12 @@ func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 	newKeyData := make([]byte, keyLen)
 	copy(newKeyData, keyData)
 	if opts.IncludeKey && !opts.RawKey {
-		outKey, err = prefixes.UnpackGenericKey(newKeyData)
+		outKey, err = opts.Serializer.UnpackKey(newKeyData)
 		if err != nil {
 			log.Error(err)
 		}
 	} else if opts.IncludeKey {
-		outKey = newKeyData
+		rawOutKey = newKeyData
 	}
 
 	// Value could be quite large, so this setting could be important
@@ -150,18 +159,20 @@ func (opts *IterOptions) ReadRow(prevKey *[]byte) *prefixes.PrefixRowKV {
 		newValueData := make([]byte, valueLen)
 		copy(newValueData, valueData)
 		if !opts.RawValue {
-			outValue, err = prefixes.UnpackGenericValue(newKeyData, newValueData)
+			outValue, err = opts.Serializer.UnpackValue(newKeyData, newValueData)
 			if err != nil {
 				log.Error(err)
 			}
 		} else {
-			outValue = newValueData
+			rawOutValue = newValueData
 		}
 	}
 
 	kv := &prefixes.PrefixRowKV{
-		Key:   outKey,
-		Value: outValue,
+		Key:      outKey,
+		Value:    outValue,
+		RawKey:   rawOutKey,
+		RawValue: rawOutValue,
 	}
 	*prevKey = newKeyData
 

@@ -323,7 +323,7 @@ func (db *ReadOnlyDBColumnFamily) ResolveClaimInChannel(channelHash []byte, norm
 	}
 
 	key := prefixes.NewChannelToClaimKey(channelHash, normalizedName)
-	rawKeyPrefix := prefixes.ChannelToClaimKeyPackPartial(key, 2)
+	rawKeyPrefix := key.PartialPack(2)
 	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)

@@ -2,17 +2,29 @@ package prefixes_test
 
 import (
 	"bytes"
+	"crypto/rand"
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
 	"log"
+	"math"
+	"math/big"
 	"os"
+	"sort"
 	"testing"
 
 	dbpkg "github.com/lbryio/herald.go/db"
 	prefixes "github.com/lbryio/herald.go/db/prefixes"
 	"github.com/linxGnu/grocksdb"
 )
+
+func TestPrefixRegistry(t *testing.T) {
+	for _, prefix := range prefixes.GetPrefixes() {
+		if prefixes.GetSerializationAPI(prefix) == nil {
+			t.Errorf("prefix %c not registered", prefix)
+		}
+	}
+}
 
 func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.ColumnFamilyHandle) {
 	log.Println(filePath)
@@ -28,12 +40,25 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.Colu
 	columnFamily := records[0][0]
 	records = records[1:]
 
+	cleanupFiles := func() {
+		err = os.RemoveAll("./tmp")
+		if err != nil {
+			log.Println(err)
+		}
+	}
+
 	// wOpts := grocksdb.NewDefaultWriteOptions()
 	opts := grocksdb.NewDefaultOptions()
 	opts.SetCreateIfMissing(true)
 	db, err := grocksdb.OpenDb(opts, "tmp")
 	if err != nil {
 		log.Println(err)
+		// Garbage might have been left behind by a prior crash.
+		cleanupFiles()
+		db, err = grocksdb.OpenDb(opts, "tmp")
+		if err != nil {
+			log.Println(err)
+		}
 	}
 	handle, err := db.CreateColumnFamily(opts, columnFamily)
 	if err != nil {
@@ -41,16 +66,30 @@ func testInit(filePath string) (*grocksdb.DB, [][]string, func(), *grocksdb.Colu
 	}
 	toDefer := func() {
 		db.Close()
-		err = os.RemoveAll("./tmp")
-		if err != nil {
-			log.Println(err)
-		}
+		cleanupFiles()
 	}
 
 	return db, records, toDefer, handle
 }
 
 func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T) {
+	return func(t *testing.T) {
+		APIs := []*prefixes.SerializationAPI{
+			prefixes.GetSerializationAPI([]byte{prefix}),
+			// Verify combinations of production vs. "restruct" implementations of
+			// serialization API (e.g production Pack() with "restruct" Unpack()).
+			prefixes.RegressionAPI_1,
+			prefixes.RegressionAPI_2,
+			prefixes.RegressionAPI_3,
+		}
+		for _, api := range APIs {
+			opts := dbpkg.NewIterateOptions().WithPrefix([]byte{prefix}).WithSerializer(api).WithIncludeValue(true)
+			testGenericOptions(opts, filePath, prefix, numPartials)(t)
+		}
+	}
+}
+
+func testGenericOptions(options *dbpkg.IterOptions, filePath string, prefix byte, numPartials int) func(*testing.T) {
 	return func(t *testing.T) {
 
 		wOpts := grocksdb.NewDefaultWriteOptions()
@@ -69,26 +108,34 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 			db.PutCF(wOpts, handle, key, val)
 		}
 		// test prefix
-		options := dbpkg.NewIterateOptions().WithPrefix([]byte{prefix}).WithIncludeValue(true)
 		options = options.WithCfHandle(handle)
 		ch := dbpkg.IterCF(db, options)
 		var i = 0
 		for kv := range ch {
 			// log.Println(kv.Key)
-			gotKey, err := prefixes.PackGenericKey(prefix, kv.Key)
+			gotKey, err := options.Serializer.PackKey(kv.Key)
 			if err != nil {
 				log.Println(err)
 			}
 
+			if numPartials != kv.Key.NumFields() {
+				t.Errorf("key reports %v fields but %v expected", kv.Key.NumFields(), numPartials)
+			}
 			for j := 1; j <= numPartials; j++ {
-				keyPartial, _ := prefixes.PackPartialGenericKey(prefix, kv.Key, j)
+				keyPartial, _ := options.Serializer.PackPartialKey(kv.Key, j)
 				// Check pack partial for sanity
-				if !bytes.HasPrefix(gotKey, keyPartial) {
-					t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
+				if j < numPartials {
+					if !bytes.HasPrefix(gotKey, keyPartial) || (len(keyPartial) >= len(gotKey)) {
+						t.Errorf("%+v should be prefix of %+v\n", keyPartial, gotKey)
+					}
+				} else {
+					if !bytes.Equal(gotKey, keyPartial) {
+						t.Errorf("%+v should be equal to %+v\n", keyPartial, gotKey)
+					}
 				}
 			}
 
-			got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			got, err := options.Serializer.PackValue(kv.Value)
 			if err != nil {
 				log.Println(err)
 			}
@@ -101,7 +148,7 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 				log.Println(err)
 			}
 			if !bytes.Equal(gotKey, wantKey) {
-				t.Errorf("gotKey: %+v, wantKey: %+v\n", got, want)
+				t.Errorf("gotKey: %+v, wantKey: %+v\n", gotKey, wantKey)
 			}
 			if !bytes.Equal(got, want) {
 				t.Errorf("got: %+v, want: %+v\n", got, want)
@@ -123,12 +170,12 @@ func testGeneric(filePath string, prefix byte, numPartials int) func(*testing.T)
 		if err != nil {
 			log.Println(err)
 		}
-		options2 := dbpkg.NewIterateOptions().WithStart(start).WithStop(stop).WithIncludeValue(true)
+		options2 := dbpkg.NewIterateOptions().WithSerializer(options.Serializer).WithStart(start).WithStop(stop).WithIncludeValue(true)
 		options2 = options2.WithCfHandle(handle)
 		ch2 := dbpkg.IterCF(db, options2)
 		i = 0
 		for kv := range ch2 {
-			got, err := prefixes.PackGenericValue(prefix, kv.Value)
+			got, err := options2.Serializer.PackValue(kv.Value)
 			if err != nil {
 				log.Println(err)
 			}
@@ -216,7 +263,7 @@ func TestTXOToClaim(t *testing.T) {
 
 func TestClaimShortID(t *testing.T) {
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimShortIdPrefix)
-	testGeneric(filePath, prefixes.ClaimShortIdPrefix, 3)(t)
+	testGeneric(filePath, prefixes.ClaimShortIdPrefix, 4)(t)
 }
 
 func TestClaimToChannel(t *testing.T) {
@@ -286,7 +333,7 @@ func TestClaimDiff(t *testing.T) {
 
 func TestUTXO(t *testing.T) {
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.UTXO)
-	testGeneric(filePath, prefixes.UTXO, 1)(t)
+	testGeneric(filePath, prefixes.UTXO, 3)(t)
 }
 
 func TestHashXUTXO(t *testing.T) {
@@ -329,4 +376,176 @@ func TestUTXOKey_String(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestTrendingNotifications(t *testing.T) {
+	prefix := byte(prefixes.TrendingNotifications)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{4, 20}, []int{8, 8}, [][3]int{})
+	key := &prefixes.TrendingNotificationKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
+func TestMempoolTx(t *testing.T) {
+	prefix := byte(prefixes.MempoolTx)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{32}, []int{}, [][3]int{{20, 100, 1}})
+	key := &prefixes.MempoolTxKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
+func TestTouchedHashX(t *testing.T) {
+	prefix := byte(prefixes.TouchedHashX)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{4}, []int{}, [][3]int{{1, 5, 11}})
+	key := &prefixes.TouchedHashXKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
+func TestHashXStatus(t *testing.T) {
+	prefix := byte(prefixes.HashXStatus)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{32}, [][3]int{})
+	key := &prefixes.HashXStatusKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
+func TestHashXMempoolStatus(t *testing.T) {
+	prefix := byte(prefixes.HashXMempoolStatus)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{32}, [][3]int{})
+	key := &prefixes.HashXMempoolStatusKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
+func synthesizeTestData(prefix []byte, filePath string, keyFixed, valFixed []int, valVariable [][3]int) {
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_TRUNC|os.O_RDWR, 0644)
+	if err != nil {
+		panic(err)
+	}
+	defer file.Close()
+
+	records := make([][2][]byte, 0, 20)
+	for r := 0; r < 20; r++ {
+		key := make([]byte, 0, 1000)
+		key = append(key, prefix...)
+		val := make([]byte, 0, 1000)
+		// Handle fixed columns of key.
+		for _, width := range keyFixed {
+			v := make([]byte, width)
+			rand.Read(v)
+			key = append(key, v...)
+		}
+		// Handle fixed columns of value.
+		for _, width := range valFixed {
+			v := make([]byte, width)
+			rand.Read(v)
+			val = append(val, v...)
+		}
+		// Handle variable length array in value. Each element is "chunk" size.
+		for _, w := range valVariable {
+			low, high, chunk := w[0], w[1], w[2]
+			n, _ := rand.Int(rand.Reader, big.NewInt(int64(high-low)))
+			v := make([]byte, chunk*(low+int(n.Int64())))
+			rand.Read(v)
+			val = append(val, v...)
+		}
+		records = append(records, [2][]byte{key, val})
+	}
+
+	sort.Slice(records, func(i, j int) bool { return bytes.Compare(records[i][0], records[j][0]) == -1 })
+
+	wr := csv.NewWriter(file)
+	wr.Write([]string{string(prefix), ""}) // column headers
+	for _, rec := range records {
+		encoded := []string{hex.EncodeToString(rec[0]), hex.EncodeToString(rec[1])}
+		err := wr.Write(encoded)
+		if err != nil {
+			panic(err)
+		}
+	}
+	wr.Flush()
+}
+
+// Fuzz tests for various Key and Value types (EXPERIMENTAL)
+
+func FuzzTouchedHashXKey(f *testing.F) {
+	kvs := []prefixes.TouchedHashXKey{
+		{
+			Prefix: []byte{prefixes.TouchedHashX},
+			Height: 0,
+		},
+		{
+			Prefix: []byte{prefixes.TouchedHashX},
+			Height: 1,
+		},
+		{
+			Prefix: []byte{prefixes.TouchedHashX},
+			Height: math.MaxUint32,
+		},
+	}
+
+	for _, kv := range kvs {
+		seed := make([]byte, 0, 200)
+		seed = append(seed, kv.PackKey()...)
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, in []byte) {
+		t.Logf("testing: %+v", in)
+		out := make([]byte, 0, 200)
+		var kv prefixes.TouchedHashXKey
+		kv.UnpackKey(in)
+		out = append(out, kv.PackKey()...)
+		if len(in) >= 5 {
+			if !bytes.HasPrefix(in, out) {
+				t.Fatalf("%v: not equal after round trip: %v", in, out)
+			}
+		}
+	})
+}
+
+func FuzzTouchedHashXValue(f *testing.F) {
+	kvs := []prefixes.TouchedHashXValue{
+		{
+			TouchedHashXs: [][]byte{},
+		},
+		{
+			TouchedHashXs: [][]byte{
+				{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			},
+		},
+		{
+			TouchedHashXs: [][]byte{
+				{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0},
+				{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+			},
+		},
+		{
+			TouchedHashXs: [][]byte{
+				{0xff, 0xff, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+				{0, 1, 0xff, 0xff, 4, 5, 6, 7, 8, 9, 10},
+				{0, 1, 2, 3, 0xff, 0xff, 6, 7, 8, 9, 10},
+			},
+		},
+	}
+
+	for _, kv := range kvs {
+		seed := make([]byte, 0, 200)
+		seed = append(seed, kv.PackValue()...)
+		f.Add(seed)
+	}
+
+	f.Fuzz(func(t *testing.T, in []byte) {
+		t.Logf("testing: %+v", in)
+		out := make([]byte, 0, 200)
+		var kv prefixes.TouchedHashXValue
+		kv.UnpackValue(in)
+		out = append(out, kv.PackValue()...)
+		if len(in) >= 5 {
+			if !bytes.HasPrefix(in, out) {
+				t.Fatalf("%v: not equal after round trip: %v", in, out)
+			}
+		}
+	})
 }
