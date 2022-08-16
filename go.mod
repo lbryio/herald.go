@@ -7,6 +7,7 @@ go 1.18
 require (
 	github.com/ReneKroon/ttlcache/v2 v2.8.1
 	github.com/akamensky/argparse v1.2.2
+	github.com/go-restruct/restruct v1.2.0-alpha
 	github.com/lbryio/lbry.go/v3 v3.0.1-beta
 	github.com/linxGnu/grocksdb v1.6.42
 	github.com/olivere/elastic/v7 v7.0.24
@@ -19,10 +20,7 @@ require (
 	gopkg.in/karalabe/cookiejar.v1 v1.0.0-20141109175019-e1490cae028c
 )
 
-require (
-	github.com/go-restruct/restruct v1.2.0-alpha // indirect
-	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
-)
+require golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
