@@ -326,6 +326,14 @@ func TestRepostedClaim(t *testing.T) {
 	testGeneric(filePath, prefixes.RepostedClaim, 3)(t)
 }
 
+func TestRepostedCount(t *testing.T) {
+	prefix := byte(prefixes.RepostedCount)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{4}, [][3]int{})
+	key := &prefixes.RepostedCountKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
 func TestClaimDiff(t *testing.T) {
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.ClaimDiff)
 	testGeneric(filePath, prefixes.ClaimDiff, 1)(t)
@@ -415,6 +423,14 @@ func TestHashXMempoolStatus(t *testing.T) {
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
 	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{32}, [][3]int{})
 	key := &prefixes.HashXMempoolStatusKey{}
+	testGeneric(filePath, prefix, key.NumFields())(t)
+}
+
+func TestEffectiveAmount(t *testing.T) {
+	prefix := byte(prefixes.EffectiveAmount)
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
+	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{8}, [][3]int{})
+	key := &prefixes.EffectiveAmountKey{}
 	testGeneric(filePath, prefix, key.NumFields())(t)
 }
 

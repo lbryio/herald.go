@@ -66,6 +66,9 @@ const (
 	HashXStatus           = 'f'
 	HashXMempoolStatus    = 'g'
 
+	EffectiveAmount = 'i'
+	RepostedCount   = 'j'
+
 	ActivateClaimTXOType    = 1
 	ActivatedSupportTXOType = 2
 
@@ -111,6 +114,8 @@ func GetPrefixes() [][]byte {
 		{TouchedHashX},
 		{HashXStatus},
 		{HashXMempoolStatus},
+		{EffectiveAmount},
+		{RepostedCount},
 	}
 }
 
@@ -2968,6 +2973,62 @@ func RepostedValueUnpack(value []byte) *RepostedValue {
 	}
 }
 
+type RepostedCountKey struct {
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
+}
+
+type RepostedCountValue struct {
+	RepostedCount uint32 `json:"reposted_count"`
+}
+
+func (kv *RepostedCountKey) NumFields() int {
+	return 1
+}
+
+func (kv *RepostedCountKey) PartialPack(fields int) []byte {
+	// b'>20s'
+	n := len(kv.Prefix) + 20
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf[offset:], kv.Prefix[:1])
+	if fields <= 0 {
+		return buf[:offset]
+	}
+	offset += copy(buf[offset:], kv.ClaimHash[:20])
+	return buf[:offset]
+}
+
+func (kv *RepostedCountKey) PackKey() []byte {
+	return kv.PartialPack(kv.NumFields())
+}
+
+func (kv *RepostedCountKey) UnpackKey(buf []byte) {
+	// b'>20s'
+	offset := 0
+	kv.Prefix = buf[offset : offset+1]
+	offset += 1
+	kv.ClaimHash = buf[offset : offset+20]
+	offset += 20
+}
+
+func (kv *RepostedCountValue) PackValue() []byte {
+	// b'>L'
+	n := 4
+	buf := make([]byte, n)
+	offset := 0
+	binary.BigEndian.PutUint32(buf[offset:], kv.RepostedCount)
+	offset += 4
+	return buf[:offset]
+}
+
+func (kv *RepostedCountValue) UnpackValue(buf []byte) {
+	// b'>L'
+	offset := 0
+	kv.RepostedCount = binary.BigEndian.Uint32(buf[offset:])
+	offset += 4
+}
+
 type TouchedOrDeletedClaimKey struct {
 	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height int32  `json:"height"`
@@ -3461,6 +3522,62 @@ func (kv *HashXStatusValue) UnpackValue(buf []byte) {
 
 type HashXMempoolStatusKey = HashXStatusKey
 type HashXMempoolStatusValue = HashXStatusValue
+
+type EffectiveAmountKey struct {
+	Prefix    []byte `struct:"[1]byte" json:"prefix"`
+	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
+}
+
+type EffectiveAmountValue struct {
+	EffectiveAmount uint64 `json:"effective_amount"`
+}
+
+func (kv *EffectiveAmountKey) NumFields() int {
+	return 1
+}
+
+func (kv *EffectiveAmountKey) PartialPack(fields int) []byte {
+	// b'>20s'
+	n := len(kv.Prefix) + 20
+	buf := make([]byte, n)
+	offset := 0
+	offset += copy(buf[offset:], kv.Prefix[:1])
+	if fields <= 0 {
+		return buf[:offset]
+	}
+	offset += copy(buf[offset:], kv.ClaimHash[:20])
+	return buf[:offset]
+}
+
+func (kv *EffectiveAmountKey) PackKey() []byte {
+	return kv.PartialPack(kv.NumFields())
+}
+
+func (kv *EffectiveAmountKey) UnpackKey(buf []byte) {
+	// b'>20s'
+	offset := 0
+	kv.Prefix = buf[offset : offset+1]
+	offset += 1
+	kv.ClaimHash = buf[offset : offset+20]
+	offset += 20
+}
+
+func (kv *EffectiveAmountValue) PackValue() []byte {
+	// b'>Q'
+	n := 8
+	buf := make([]byte, n)
+	offset := 0
+	binary.BigEndian.PutUint64(buf[offset:], kv.EffectiveAmount)
+	offset += 8
+	return buf[:offset]
+}
+
+func (kv *EffectiveAmountValue) UnpackValue(buf []byte) {
+	// b'>Q'
+	offset := 0
+	kv.EffectiveAmount = binary.BigEndian.Uint64(buf[offset:])
+	offset += 8
+}
 
 func UnpackGenericKey(key []byte) (BaseKey, error) {
 	if len(key) == 0 {
@@ -4016,6 +4133,22 @@ var prefixRegistry = map[byte]prefixMeta{
 		},
 		newValue: func() interface{} {
 			return &HashXMempoolStatusValue{}
+		},
+	},
+	RepostedCount: {
+		newKey: func() interface{} {
+			return &RepostedCountKey{Prefix: []byte{RepostedCount}}
+		},
+		newValue: func() interface{} {
+			return &RepostedCountValue{}
+		},
+	},
+	EffectiveAmount: {
+		newKey: func() interface{} {
+			return &EffectiveAmountKey{Prefix: []byte{EffectiveAmount}}
+		},
+		newValue: func() interface{} {
+			return &EffectiveAmountValue{}
 		},
 	},
 }
