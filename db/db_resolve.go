@@ -281,15 +281,15 @@ func (db *ReadOnlyDBColumnFamily) ResolveParsedUrl(parsed *PathSegment) (*Resolv
 
 	// Resolve by amount ordering
 	log.Warn("resolving by amount ordering")
-	ch := db.EffectiveAmountNameIter(normalizedName)
+	ch := db.BidOrderNameIter(normalizedName)
 	var i = 0
 	for kv := range ch {
 		if i+1 < amountOrder {
 			i++
 			continue
 		}
-		key := kv.Key.(*prefixes.EffectiveAmountKey)
-		claimVal := kv.Value.(*prefixes.EffectiveAmountValue)
+		key := kv.Key.(*prefixes.BidOrderKey)
+		claimVal := kv.Value.(*prefixes.BidOrderValue)
 		claimTxo, err := db.GetCachedClaimTxo(claimVal.ClaimHash, true)
 		if err != nil {
 			return nil, err

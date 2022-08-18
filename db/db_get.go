@@ -519,13 +519,13 @@ func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {
 	return value, nil
 }
 
-func (db *ReadOnlyDBColumnFamily) EffectiveAmountNameIter(normalizedName string) <-chan *prefixes.PrefixRowKV {
-	handle, err := db.EnsureHandle(prefixes.EffectiveAmount)
+func (db *ReadOnlyDBColumnFamily) BidOrderNameIter(normalizedName string) <-chan *prefixes.PrefixRowKV {
+	handle, err := db.EnsureHandle(prefixes.BidOrder)
 	if err != nil {
 		return nil
 	}
 
-	key := prefixes.NewEffectiveAmountKey(normalizedName)
+	key := prefixes.NewBidOrderKey(normalizedName)
 	var rawKeyPrefix []byte = nil
 	rawKeyPrefix = key.PartialPack(1)
 	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)

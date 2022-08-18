@@ -311,9 +311,9 @@ func TestActiveAmount(t *testing.T) {
 	testGeneric(filePath, prefixes.ActiveAmount, 5)(t)
 }
 
-func TestEffectiveAmount(t *testing.T) {
-	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.EffectiveAmount)
-	testGeneric(filePath, prefixes.EffectiveAmount, 4)(t)
+func TestBidOrder(t *testing.T) {
+	filePath := fmt.Sprintf("../../testdata/%c.csv", prefixes.BidOrder)
+	testGeneric(filePath, prefixes.BidOrder, 4)(t)
 }
 
 func TestRepost(t *testing.T) {

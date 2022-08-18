@@ -32,7 +32,7 @@ const (
 	ChannelToClaim = 'J'
 
 	ClaimShortIdPrefix = 'F'
-	EffectiveAmount    = 'D'
+	BidOrder           = 'D'
 	ClaimExpiration    = 'O'
 
 	ClaimTakeover            = 'P'
@@ -83,7 +83,7 @@ func GetPrefixes() [][]byte {
 		{ClaimToChannel},
 		{ChannelToClaim},
 		{ClaimShortIdPrefix},
-		{EffectiveAmount},
+		{BidOrder},
 		{ClaimExpiration},
 		{ClaimTakeover},
 		{PendingActivation},
@@ -2665,7 +2665,7 @@ func ActiveAmountValueUnpack(value []byte) *ActiveAmountValue {
 
 type OnesComplementEffectiveAmount uint64
 
-type EffectiveAmountKey struct {
+type BidOrderKey struct {
 	Prefix                      []byte                        `struct:"[1]byte" json:"prefix"`
 	LengthEncodedNormalizedName                               // fields NormalizedNameLen, NormalizedName
 	EffectiveAmount             OnesComplementEffectiveAmount `json:"effective_amount"`
@@ -2673,18 +2673,18 @@ type EffectiveAmountKey struct {
 	Position                    uint16                        `json:"position"`
 }
 
-type EffectiveAmountValue struct {
+type BidOrderValue struct {
 	ClaimHash []byte `struct:"[20]byte" json:"claim_hash"`
 }
 
-func NewEffectiveAmountKey(normalizedName string) *EffectiveAmountKey {
-	return &EffectiveAmountKey{
-		Prefix:                      []byte{EffectiveAmount},
+func NewBidOrderKey(normalizedName string) *BidOrderKey {
+	return &BidOrderKey{
+		Prefix:                      []byte{BidOrder},
 		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(normalizedName),
 	}
 }
 
-func (k *EffectiveAmountKey) PackKey() []byte {
+func (k *BidOrderKey) PackKey() []byte {
 	prefixLen := 1
 	// 2 byte length field, plus number of bytes in name
 	nameLen := len(k.NormalizedName)
@@ -2703,7 +2703,7 @@ func (k *EffectiveAmountKey) PackKey() []byte {
 	return key
 }
 
-func (v *EffectiveAmountValue) PackValue() []byte {
+func (v *BidOrderValue) PackValue() []byte {
 	// b'>20s'
 	value := make([]byte, 20)
 	copy(value, v.ClaimHash[:20])
@@ -2711,11 +2711,11 @@ func (v *EffectiveAmountValue) PackValue() []byte {
 	return value
 }
 
-func (kv *EffectiveAmountKey) NumFields() int {
+func (kv *BidOrderKey) NumFields() int {
 	return 4
 }
 
-func (k *EffectiveAmountKey) PartialPack(fields int) []byte {
+func (k *BidOrderKey) PartialPack(fields int) []byte {
 	// Limit fields between 0 and number of fields, we always at least need
 	// the prefix, and we never need to iterate past the number of fields.
 	nameLen := len(k.NormalizedName)
@@ -2763,10 +2763,10 @@ func (k *EffectiveAmountKey) PartialPack(fields int) []byte {
 	return key
 }
 
-func EffectiveAmountKeyUnpack(key []byte) *EffectiveAmountKey {
+func BidOrderKeyUnpack(key []byte) *BidOrderKey {
 	prefixLen := 1
 	nameLen := binary.BigEndian.Uint16(key[prefixLen:])
-	return &EffectiveAmountKey{
+	return &BidOrderKey{
 		Prefix:                      key[:prefixLen],
 		LengthEncodedNormalizedName: NewLengthEncodedNormalizedName(string(key[prefixLen+2 : prefixLen+2+int(nameLen)])),
 		EffectiveAmount:             OnesComplementEffectiveAmount(OnesCompTwiddle64 - binary.BigEndian.Uint64(key[prefixLen+2+int(nameLen):])),
@@ -2775,8 +2775,8 @@ func EffectiveAmountKeyUnpack(key []byte) *EffectiveAmountKey {
 	}
 }
 
-func EffectiveAmountValueUnpack(value []byte) *EffectiveAmountValue {
-	return &EffectiveAmountValue{
+func BidOrderValueUnpack(value []byte) *BidOrderValue {
+	return &BidOrderValue{
 		ClaimHash: value[:20],
 	}
 }
@@ -3651,18 +3651,18 @@ var prefixRegistry = map[byte]prefixMeta{
 			return ClaimShortIDValueUnpack(buf)
 		},
 	},
-	EffectiveAmount: {
+	BidOrder: {
 		newKey: func() interface{} {
-			return &EffectiveAmountKey{Prefix: []byte{EffectiveAmount}}
+			return &BidOrderKey{Prefix: []byte{BidOrder}}
 		},
 		newValue: func() interface{} {
-			return &EffectiveAmountValue{}
+			return &BidOrderValue{}
 		},
 		newKeyUnpack: func(buf []byte) interface{} {
-			return EffectiveAmountKeyUnpack(buf)
+			return BidOrderKeyUnpack(buf)
 		},
 		newValueUnpack: func(buf []byte) interface{} {
-			return EffectiveAmountValueUnpack(buf)
+			return BidOrderValueUnpack(buf)
 		},
 	},
 	ClaimExpiration: {
