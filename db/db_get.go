@@ -212,28 +212,25 @@ func (db *ReadOnlyDBColumnFamily) GetRepost(claimHash []byte) ([]byte, error) {
 }
 
 func (db *ReadOnlyDBColumnFamily) GetRepostedCount(claimHash []byte) (int, error) {
-	handle, err := db.EnsureHandle(prefixes.RepostedClaim)
+	handle, err := db.EnsureHandle(prefixes.RepostedCount)
 	if err != nil {
 		return 0, err
 	}
 
-	key := prefixes.NewRepostedKey(claimHash)
-	keyPrefix := key.PartialPack(1)
-	// Prefix and handle
-	options := NewIterateOptions().WithPrefix(keyPrefix).WithCfHandle(handle)
-	// Start and stop bounds
-	// options = options.WithStart(keyPrefix)
-	// Don't include the key
-	options = options.WithIncludeValue(false)
+	key := prefixes.RepostedCountKey{Prefix: []byte{prefixes.RepostedCount}, ClaimHash: claimHash}
+	rawKey := key.PackKey()
 
-	var i int = 0
-	ch := IterCF(db.DB, options)
-
-	for range ch {
-		i++
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return 0, err
+	} else if slice.Size() == 0 {
+		return 0, nil
 	}
 
-	return i, nil
+	value := prefixes.RepostedCountValue{}
+	value.UnpackValue(slice.Data())
+	return int(value.RepostedCount), nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetChannelForClaim(claimHash []byte, txNum uint32, position uint16) ([]byte, error) {
@@ -286,21 +283,32 @@ func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint
 }
 
 func (db *ReadOnlyDBColumnFamily) GetEffectiveAmount(claimHash []byte, supportOnly bool) (uint64, error) {
-	supportAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivatedSupportTXOType, db.Height+1)
-	if err != nil {
-		return 0, err
-	}
-
 	if supportOnly {
+		supportAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivatedSupportTXOType, db.Height+1)
+		if err != nil {
+			return 0, err
+		}
 		return supportAmount, nil
 	}
 
-	activationAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivateClaimTXOType, db.Height+1)
+	handle, err := db.EnsureHandle(prefixes.EffectiveAmount)
 	if err != nil {
 		return 0, err
 	}
 
-	return activationAmount + supportAmount, nil
+	key := prefixes.EffectiveAmountKey{Prefix: []byte{prefixes.EffectiveAmount}, ClaimHash: claimHash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return 0, err
+	} else if slice.Size() == 0 {
+		return 0, nil
+	}
+
+	value := prefixes.EffectiveAmountValue{}
+	value.UnpackValue(slice.Data())
+	return value.EffectiveAmount, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetSupportAmount(claimHash []byte) (uint64, error) {
