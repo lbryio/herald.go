@@ -331,11 +331,45 @@ func TestGetDBState(t *testing.T) {
 }
 
 func TestGetRepostedClaim(t *testing.T) {
+	t.Skip("skipping obsolete? test of prefix W (Reposted)")
 	channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
 	want := 5
 	// Should be non-existent
 	channelHash2, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bf")
 	filePath := "../testdata/W_resolve.csv"
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+
+	count, err := db.GetRepostedCount(channelHash)
+	if err != nil {
+		t.Error(err)
+	}
+
+	log.Println(count)
+
+	if count != want {
+		t.Errorf("Expected %d, got %d", want, count)
+	}
+
+	count2, err := db.GetRepostedCount(channelHash2)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if count2 != 0 {
+		t.Errorf("Expected 0, got %d", count2)
+	}
+}
+
+func TestGetRepostedCount(t *testing.T) {
+	channelHash, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bd")
+	want := 5
+	// Should be non-existent
+	channelHash2, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bf")
+	filePath := "../testdata/j_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
@@ -536,9 +570,9 @@ func TestGetClaimToChannel(t *testing.T) {
 	}
 }
 
-func TestGetEffectiveAmount(t *testing.T) {
+func TestGetEffectiveAmountSupportOnly(t *testing.T) {
 	filePath := "../testdata/S_resolve.csv"
-	want := uint64(586370959900)
+	want := uint64(78999149300)
 	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
 	claimHash, _ := hex.DecodeString(claimHashStr)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
@@ -549,6 +583,28 @@ func TestGetEffectiveAmount(t *testing.T) {
 	db.Height = 1116054
 
 	amount, err := db.GetEffectiveAmount(claimHash, true)
+	if err != nil {
+		t.Error(err)
+	}
+
+	if amount != want {
+		t.Errorf("Expected %d, got %d", want, amount)
+	}
+}
+
+func TestGetEffectiveAmount(t *testing.T) {
+	filePath := "../testdata/i_resolve.csv"
+	want := uint64(507171810600)
+	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	claimHash, _ := hex.DecodeString(claimHashStr)
+	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	if err != nil {
+		t.Error(err)
+	}
+	defer toDefer()
+	db.Height = 1116054
+
+	amount, err := db.GetEffectiveAmount(claimHash, false)
 	if err != nil {
 		t.Error(err)
 	}
