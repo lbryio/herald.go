@@ -8,6 +8,8 @@ require (
 	github.com/ReneKroon/ttlcache/v2 v2.8.1
 	github.com/akamensky/argparse v1.2.2
 	github.com/go-restruct/restruct v1.2.0-alpha
+	github.com/gorilla/mux v1.7.3
+	github.com/gorilla/rpc v1.2.0
 	github.com/lbryio/lbry.go/v3 v3.0.1-beta
 	github.com/linxGnu/grocksdb v1.6.42
 	github.com/olivere/elastic/v7 v7.0.24

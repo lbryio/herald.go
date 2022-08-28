@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io/ioutil"
@@ -307,6 +308,14 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 			}
 		}()
 	}
+	if !args.DisableStartJSONRPC {
+		go func() {
+			err := s.StartJsonRPC111()
+			if err != nil {
+				log.Println("JSONRPC Server failed!", err)
+			}
+		}()
+	}
 	// Load peers from disk and subscribe to one if there are any
 	if !args.DisableLoadPeers {
 		go func() {
@@ -447,13 +456,49 @@ func (s *Server) HeightHashSubscribe() error {
 }
 
 func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs, error) {
+	// metrics.RequestsCount.With(prometheus.Labels{"method": "resolve"}).Inc()
+
+	// allTxos := make([]*pb.Output, 0)
+	// allExtraTxos := make([]*pb.Output, 0)
+
+	// for _, url := range args.Value {
+	// 	res := s.DB.Resolve(url)
+	// 	txos, extraTxos, err := res.ToOutputs()
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	// TODO: there may be a more efficient way to do this.
+	// 	allTxos = append(allTxos, txos...)
+	// 	allExtraTxos = append(allExtraTxos, extraTxos...)
+	// }
+
+	// res := &pb.Outputs{
+	// 	Txos:         allTxos,
+	// 	ExtraTxos:    allExtraTxos,
+	// 	Total:        uint32(len(allTxos) + len(allExtraTxos)),
+	// 	Offset:       0,   //TODO
+	// 	Blocked:      nil, //TODO
+	// 	BlockedTotal: 0,   //TODO
+	// }
+
+	// logrus.Warn(res)
+
+	// return res, nil
+	return InternalResolve(args.Value, s.DB)
+}
+
+func InternalResolve(urls []string, DB *db.ReadOnlyDBColumnFamily) (*pb.Outputs, error) {
+	if DB == nil {
+		return nil, errors.New("db is nil")
+		// return nil, nil
+	}
 	metrics.RequestsCount.With(prometheus.Labels{"method": "resolve"}).Inc()
 
 	allTxos := make([]*pb.Output, 0)
 	allExtraTxos := make([]*pb.Output, 0)
 
-	for _, url := range args.Value {
-		res := s.DB.Resolve(url)
+	for _, url := range urls {
+		res := DB.Resolve(url)
 		txos, extraTxos, err := res.ToOutputs()
 		if err != nil {
 			return nil, err

@@ -43,6 +43,7 @@ type Args struct {
 	DisableResolve              bool
 	DisableBlockingAndFiltering bool
 	DisableStartNotifier        bool
+	DisableStartJSONRPC         bool
 }
 
 const (
@@ -67,6 +68,7 @@ const (
 	DefaultDisableResolve              = false
 	DefaultDisableBlockingAndFiltering = false
 	DisableStartNotifier               = false
+	DisableStartJSONRPC                = false
 )
 
 var (
@@ -131,6 +133,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableResolve := parser.Flag("", "disable-resolve", &argparse.Options{Required: false, Help: "Disable resolve endpoint (and rocksdb loading)", Default: DefaultDisableRockDBRefresh})
 	disableBlockingAndFiltering := parser.Flag("", "disable-blocking-and-filtering", &argparse.Options{Required: false, Help: "Disable blocking and filtering of channels and streams", Default: DefaultDisableBlockingAndFiltering})
 	disableStartNotifier := parser.Flag("", "disable-start-notifier", &argparse.Options{Required: false, Help: "Disable start notifier", Default: DisableStartNotifier})
+	disableStartJSONRPC := parser.Flag("", "disable-start-jsonrpc", &argparse.Options{Required: false, Help: "Disable start jsonrpc endpoint", Default: DisableStartJSONRPC})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -175,6 +178,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		DisableResolve:              *disableResolve,
 		DisableBlockingAndFiltering: *disableBlockingAndFiltering,
 		DisableStartNotifier:        *disableStartNotifier,
+		DisableStartJSONRPC:         *disableStartJSONRPC,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {
