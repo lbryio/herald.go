@@ -125,6 +125,7 @@ type PrefixRowKV struct {
 	Value    BaseValue
 	RawKey   []byte
 	RawValue []byte
+	Error    error
 }
 
 type BaseKey interface {

@@ -22,6 +22,7 @@ import (
 	"github.com/lbryio/herald.go/internal/metrics"
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	"github.com/lbryio/lbcd/chaincfg"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -38,6 +39,7 @@ type Server struct {
 	DB               *db.ReadOnlyDBColumnFamily
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
+	Coin             *chaincfg.Params
 	S256             *hash.Hash
 	LastRefreshCheck time.Time
 	RefreshDelta     time.Duration
@@ -260,6 +262,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		EsClient:         client,
 		QueryCache:       cache,
 		S256:             &s256,
+		Coin:             &chaincfg.MainNetParams,
 		LastRefreshCheck: time.Now(),
 		RefreshDelta:     refreshDelta,
 		NumESRefreshes:   0,

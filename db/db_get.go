@@ -6,8 +6,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"math"
 
 	"github.com/lbryio/herald.go/db/prefixes"
+	"github.com/lbryio/lbcd/chaincfg/chainhash"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -80,6 +82,187 @@ func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
 	rawValue := make([]byte, len(slice.Data()))
 	copy(rawValue, slice.Data())
 	return rawValue, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetHeaders(height uint32, count uint32) ([][112]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.Header)
+	if err != nil {
+		return nil, err
+	}
+
+	startKeyRaw := prefixes.NewHeaderKey(0).PackKey()
+	endKeyRaw := prefixes.NewHeaderKey(height + count).PackKey()
+	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
+	options = options.WithIncludeKey(false).WithIncludeValue(true) //.WithIncludeStop(true)
+	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw)
+
+	result := make([][112]byte, 0, count)
+	for kv := range IterCF(db.DB, options) {
+		h := [112]byte{}
+		copy(h[:], kv.Value.(*prefixes.BlockHeaderValue).Header[:112])
+		result = append(result, h)
+	}
+
+	return result, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetBalance(hashX []byte) (uint64, uint64, error) {
+	handle, err := db.EnsureHandle(prefixes.UTXO)
+	if err != nil {
+		return 0, 0, err
+	}
+
+	startKey := prefixes.UTXOKey{
+		Prefix: []byte{prefixes.UTXO},
+		HashX:  hashX,
+		TxNum:  0,
+		Nout:   0,
+	}
+	endKey := prefixes.UTXOKey{
+		Prefix: []byte{prefixes.UTXO},
+		HashX:  hashX,
+		TxNum:  math.MaxUint32,
+		Nout:   math.MaxUint16,
+	}
+
+	startKeyRaw := startKey.PackKey()
+	endKeyRaw := endKey.PackKey()
+	// Prefix and handle
+	options := NewIterateOptions().WithPrefix([]byte{prefixes.UTXO}).WithCfHandle(handle)
+	// Start and stop bounds
+	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw).WithIncludeStop(true)
+	// Don't include the key
+	options = options.WithIncludeKey(false).WithIncludeValue(true)
+
+	ch := IterCF(db.DB, options)
+	var confirmed uint64 = 0
+	var unconfirmed uint64 = 0 // TODO
+	for kv := range ch {
+		confirmed += kv.Value.(*prefixes.UTXOValue).Amount
+	}
+
+	return confirmed, unconfirmed, nil
+}
+
+type TXOInfo struct {
+	TxHash *chainhash.Hash
+	TxPos  uint16
+	Height uint32
+	Value  uint64
+}
+
+func (db *ReadOnlyDBColumnFamily) GetUnspent(hashX []byte) ([]TXOInfo, error) {
+	startKey := &prefixes.UTXOKey{
+		Prefix: []byte{prefixes.UTXO},
+		HashX:  hashX,
+		TxNum:  0,
+		Nout:   0,
+	}
+	endKey := &prefixes.UTXOKey{
+		Prefix: []byte{prefixes.UTXO},
+		HashX:  hashX,
+		TxNum:  math.MaxUint32,
+		Nout:   math.MaxUint16,
+	}
+	selectedUTXO, err := db.selectFrom([]byte{prefixes.UTXO}, startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
+
+	selectTxHashByTxNum := func(in []*prefixes.PrefixRowKV) ([]*IterOptions, error) {
+		historyKey := in[0].Key.(*prefixes.UTXOKey)
+		out := make([]*IterOptions, 0, 100)
+		startKey := &prefixes.TxHashKey{
+			Prefix: []byte{prefixes.TxHash},
+			TxNum:  historyKey.TxNum,
+		}
+		endKey := &prefixes.TxHashKey{
+			Prefix: []byte{prefixes.TxHash},
+			TxNum:  historyKey.TxNum,
+		}
+		selectedTxHash, err := db.selectFrom([]byte{prefixes.TxHash}, startKey, endKey)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, selectedTxHash...)
+		return out, nil
+	}
+
+	results := make([]TXOInfo, 0, 1000)
+	for kvs := range innerJoin(db.DB, iterate(db.DB, selectedUTXO), selectTxHashByTxNum) {
+		if err := checkForError(kvs); err != nil {
+			return results, err
+		}
+		utxoKey := kvs[0].Key.(*prefixes.UTXOKey)
+		utxoValue := kvs[0].Value.(*prefixes.UTXOValue)
+		txhashValue := kvs[1].Value.(*prefixes.TxHashValue)
+		results = append(results,
+			TXOInfo{
+				TxHash: txhashValue.TxHash,
+				TxPos:  utxoKey.Nout,
+				Height: 0, // TODO
+				Value:  utxoValue.Amount,
+			},
+		)
+	}
+	return results, nil
+}
+
+type TxInfo struct {
+	TxHash *chainhash.Hash
+	Height uint32
+}
+
+func (db *ReadOnlyDBColumnFamily) GetHistory(hashX []byte) ([]TxInfo, error) {
+	startKey := &prefixes.HashXHistoryKey{
+		Prefix: []byte{prefixes.HashXHistory},
+		HashX:  hashX,
+		Height: 0,
+	}
+	endKey := &prefixes.HashXHistoryKey{
+		Prefix: []byte{prefixes.UTXO},
+		HashX:  hashX,
+		Height: math.MaxUint32,
+	}
+	selectedHistory, err := db.selectFrom([]byte{prefixes.HashXHistory}, startKey, endKey)
+	if err != nil {
+		return nil, err
+	}
+
+	selectTxHashByTxNums := func(in []*prefixes.PrefixRowKV) ([]*IterOptions, error) {
+		historyValue := in[0].Value.(*prefixes.HashXHistoryValue)
+		out := make([]*IterOptions, 0, 100)
+		for _, txnum := range historyValue.TxNums {
+			startKey := &prefixes.TxHashKey{
+				Prefix: []byte{prefixes.TxHash},
+				TxNum:  txnum,
+			}
+			endKey := &prefixes.TxHashKey{
+				Prefix: []byte{prefixes.TxHash},
+				TxNum:  txnum,
+			}
+			selectedTxHash, err := db.selectFrom([]byte{prefixes.TxHash}, startKey, endKey)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, selectedTxHash...)
+		}
+		return out, nil
+	}
+
+	results := make([]TxInfo, 0, 1000)
+	for kvs := range innerJoin(db.DB, iterate(db.DB, selectedHistory), selectTxHashByTxNums) {
+		if err := checkForError(kvs); err != nil {
+			return results, err
+		}
+		historyKey := kvs[0].Key.(*prefixes.HashXHistoryKey)
+		txHashValue := kvs[1].Value.(*prefixes.TxHashValue)
+		results = append(results, TxInfo{
+			TxHash: txHashValue.TxHash,
+			Height: historyKey.Height,
+		})
+	}
+	return results, nil
 }
 
 // GetStreamsAndChannelRepostedByChannelHashes returns a map of streams and channel hashes that are reposted by the given channel hashes.
