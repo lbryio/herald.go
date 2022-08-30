@@ -10,7 +10,7 @@ import (
 func TestPush(t *testing.T) {
 	var want uint32 = 3
 
-	stack := stack.NewSliceBacked(10)
+	stack := stack.NewSliceBacked[int](10)
 
 	stack.Push(0)
 	stack.Push(1)
@@ -22,7 +22,7 @@ func TestPush(t *testing.T) {
 }
 
 func TestPushPop(t *testing.T) {
-	stack := stack.NewSliceBacked(10)
+	stack := stack.NewSliceBacked[int](10)
 
 	for i := 0; i < 5; i++ {
 		stack.Push(i)
@@ -46,20 +46,20 @@ func TestPushPop(t *testing.T) {
 	}
 }
 
-func doPushes(stack *stack.SliceBacked, numPushes int) {
+func doPushes(stack *stack.SliceBacked[int], numPushes int) {
 	for i := 0; i < numPushes; i++ {
 		stack.Push(i)
 	}
 }
 
-func doPops(stack *stack.SliceBacked, numPops int) {
+func doPops(stack *stack.SliceBacked[int], numPops int) {
 	for i := 0; i < numPops; i++ {
 		stack.Pop()
 	}
 }
 
 func TestMultiThreaded(t *testing.T) {
-	stack := stack.NewSliceBacked(100000)
+	stack := stack.NewSliceBacked[int](100000)
 
 	go doPushes(stack, 100000)
 	go doPushes(stack, 100000)
@@ -83,7 +83,7 @@ func TestMultiThreaded(t *testing.T) {
 }
 
 func TestGet(t *testing.T) {
-	stack := stack.NewSliceBacked(10)
+	stack := stack.NewSliceBacked[int](10)
 
 	for i := 0; i < 5; i++ {
 		stack.Push(i)
@@ -99,6 +99,10 @@ func TestGet(t *testing.T) {
 		}
 	}
 
+	if got := stack.Get(5); got != 0 {
+		t.Errorf("got %v, want %v", got, 0)
+	}
+
 	slice := stack.GetSlice()
 
 	if len(slice) != 10 {
@@ -107,7 +111,7 @@ func TestGet(t *testing.T) {
 }
 
 func TestLenCap(t *testing.T) {
-	stack := stack.NewSliceBacked(10)
+	stack := stack.NewSliceBacked[int](10)
 
 	if got := stack.Len(); got != 0 {
 		t.Errorf("got %v, want %v", got, 0)

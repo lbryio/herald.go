@@ -7,23 +7,24 @@ import (
 	"sync"
 
 	"github.com/lbryio/herald.go/internal"
+	"golang.org/x/exp/constraints"
 )
 
-type SliceBacked struct {
-	slice []interface{}
+type SliceBacked[T any] struct {
+	slice []T
 	len   uint32
 	mut   sync.RWMutex
 }
 
-func NewSliceBacked(size int) *SliceBacked {
-	return &SliceBacked{
-		slice: make([]interface{}, size),
+func NewSliceBacked[T any](size int) *SliceBacked[T] {
+	return &SliceBacked[T]{
+		slice: make([]T, size),
 		len:   0,
 		mut:   sync.RWMutex{},
 	}
 }
 
-func (s *SliceBacked) Push(v interface{}) {
+func (s *SliceBacked[T]) Push(v T) {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
@@ -35,64 +36,67 @@ func (s *SliceBacked) Push(v interface{}) {
 	s.len++
 }
 
-func (s *SliceBacked) Pop() interface{} {
+func (s *SliceBacked[T]) Pop() T {
 	s.mut.Lock()
 	defer s.mut.Unlock()
 
 	if s.len == 0 {
-		return nil
+		var null T
+		return null
 	}
 	s.len--
 	return s.slice[s.len]
 }
 
-func (s *SliceBacked) Get(i uint32) interface{} {
+func (s *SliceBacked[T]) Get(i uint32) T {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	if i >= s.len {
-		return nil
+		var null T
+		return null
 	}
 	return s.slice[i]
 }
 
-func (s *SliceBacked) GetTip() interface{} {
+func (s *SliceBacked[T]) GetTip() T {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	if s.len == 0 {
-		return nil
+		var null T
+		return null
 	}
 	return s.slice[s.len-1]
 }
 
-func (s *SliceBacked) Len() uint32 {
+func (s *SliceBacked[T]) Len() uint32 {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	return s.len
 }
 
-func (s *SliceBacked) Cap() int {
+func (s *SliceBacked[T]) Cap() int {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
 	return cap(s.slice)
 }
 
-func (s *SliceBacked) GetSlice() []interface{} {
+func (s *SliceBacked[T]) GetSlice() []T {
 	// This is not thread safe so I won't bother with locking
 	return s.slice
 }
 
-// This function is dangerous because it assumes underlying types
-func (s *SliceBacked) TxCountsBisectRight(txNum, rootTxNum uint32) (uint32, uint32) {
+func BisectRight[T constraints.Ordered](s *SliceBacked[T], searchKeys []T) []uint32 {
 	s.mut.RLock()
 	defer s.mut.RUnlock()
 
-	txCounts := s.slice[:s.Len()]
-	height := internal.BisectRight(txCounts, txNum)
-	createdHeight := internal.BisectRight(txCounts, rootTxNum)
+	found := make([]uint32, len(searchKeys))
+	for i, k := range searchKeys {
+		found[i] = internal.BisectRight(s.slice[:s.Len()], k)
+	}
 
-	return height, createdHeight
+	return found
 }

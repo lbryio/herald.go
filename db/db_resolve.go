@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/lbryio/herald.go/db/prefixes"
+	"github.com/lbryio/herald.go/db/stack"
 	"github.com/lbryio/herald.go/internal"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	lbryurl "github.com/lbryio/lbry.go/v3/url"
@@ -40,7 +41,8 @@ func PrepareResolveResult(
 		return nil, err
 	}
 
-	height, createdHeight := db.TxCounts.TxCountsBisectRight(txNum, rootTxNum)
+	heights := stack.BisectRight(db.TxCounts, []uint32{txNum, rootTxNum})
+	height, createdHeight := heights[0], heights[1]
 	lastTakeoverHeight := controllingClaim.Height
 
 	expirationHeight := GetExpirationHeight(height)
@@ -86,7 +88,7 @@ func PrepareResolveResult(
 				return nil, err
 			}
 			repostTxPostition = repostTxo.Position
-			repostHeight, _ = db.TxCounts.TxCountsBisectRight(repostTxo.TxNum, rootTxNum)
+			repostHeight = stack.BisectRight(db.TxCounts, []uint32{repostTxo.TxNum})[0]
 		}
 	}
 
@@ -122,7 +124,7 @@ func PrepareResolveResult(
 				return nil, err
 			}
 			channelTxPostition = channelVals.Position
-			channelHeight, _ = db.TxCounts.TxCountsBisectRight(channelVals.TxNum, rootTxNum)
+			channelHeight = stack.BisectRight(db.TxCounts, []uint32{channelVals.TxNum})[0]
 		}
 	}
 

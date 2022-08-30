@@ -48,10 +48,10 @@ type ReadOnlyDBColumnFamily struct {
 	DB                     *grocksdb.DB
 	Handles                map[string]*grocksdb.ColumnFamilyHandle
 	Opts                   *grocksdb.ReadOptions
-	TxCounts               *stack.SliceBacked
+	TxCounts               *stack.SliceBacked[uint32]
 	Height                 uint32
 	LastState              *prefixes.DBStateValue
-	Headers                *stack.SliceBacked
+	Headers                *stack.SliceBacked[[]byte]
 	BlockingChannelHashes  [][]byte
 	FilteringChannelHashes [][]byte
 	BlockedStreams         map[string][]byte
@@ -556,7 +556,7 @@ func (db *ReadOnlyDBColumnFamily) Advance(height uint32) {
 	}
 	txCount := txCountObj.TxCount
 
-	if db.TxCounts.GetTip().(uint32) >= txCount {
+	if db.TxCounts.GetTip() >= txCount {
 		log.Error("current tip should be less than new txCount",
 			"tx count tip:", db.TxCounts.GetTip(), "tx count:", txCount)
 	}
@@ -636,11 +636,10 @@ func (db *ReadOnlyDBColumnFamily) detectChanges(notifCh chan *internal.HeightHas
 			if err != nil {
 				return err
 			}
-			curHeaderObj := db.Headers.GetTip()
-			if curHeaderObj == nil {
+			curHeader := db.Headers.GetTip()
+			if curHeader == nil {
 				break
 			}
-			curHeader := curHeaderObj.([]byte)
 			log.Debugln("lastHeightHeader: ", hex.EncodeToString(lastHeightHeader))
 			log.Debugln("curHeader: ", hex.EncodeToString(curHeader))
 			if bytes.Equal(curHeader, lastHeightHeader) {
@@ -716,7 +715,7 @@ func (db *ReadOnlyDBColumnFamily) InitHeaders() error {
 	}
 
 	//TODO: figure out a reasonable default and make it a constant
-	db.Headers = stack.NewSliceBacked(12000)
+	db.Headers = stack.NewSliceBacked[[]byte](12000)
 
 	startKey := prefixes.NewHeaderKey(0)
 	// endKey := prefixes.NewHeaderKey(db.LastState.Height)
@@ -743,7 +742,7 @@ func (db *ReadOnlyDBColumnFamily) InitTxCounts() error {
 		return err
 	}
 
-	db.TxCounts = stack.NewSliceBacked(InitialTxCountSize)
+	db.TxCounts = stack.NewSliceBacked[uint32](InitialTxCountSize)
 
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
