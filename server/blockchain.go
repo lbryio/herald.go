@@ -9,8 +9,10 @@ import (
 	"encoding/hex"
 	"errors"
 
+	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
 	"github.com/lbryio/lbcd/txscript"
+	"github.com/lbryio/lbcd/wire"
 	"github.com/lbryio/lbcutil"
 	"golang.org/x/exp/constraints"
 )
@@ -25,8 +27,8 @@ type RpcHandler interface {
 
 const CHUNK_SIZE = 96
 const MAX_CHUNK_SIZE = 40960
-const HEADER_SIZE = 112
-const HASHX_SIZE = 11
+const HEADER_SIZE = wire.MaxBlockHeaderPayload
+const HASHX_LEN = 11
 
 func min[Ord constraints.Ordered](x, y Ord) Ord {
 	if x < y {
@@ -138,6 +140,12 @@ func (req *blockHeadersReq) Handle(s *Server) (*blockHeadersResp, error) {
 	return result, err
 }
 
+func hashX(scripthash string) []byte {
+	sh, _ := hex.DecodeString(scripthash)
+	internal.ReverseBytesInPlace(sh)
+	return sh[:HASHX_LEN]
+}
+
 func hashXScript(script []byte, coin *chaincfg.Params) []byte {
 	if _, err := txscript.ExtractClaimScript(script); err == nil {
 		baseScript := txscript.StripClaimScriptPrefix(script)
@@ -150,20 +158,20 @@ func hashXScript(script []byte, coin *chaincfg.Params) []byte {
 		}
 	}
 	sum := sha256.Sum256(script)
-	return sum[:HASHX_SIZE]
+	return sum[:HASHX_LEN]
 }
 
 type addressGetBalanceReq struct {
-	Address string
+	Address string `json:"address"`
 }
 type addressGetBalanceResp struct {
-	Confirmed   uint64
-	Unconfirmed uint64
+	Confirmed   uint64 `json:"confirmed"`
+	Unconfirmed uint64 `json:"unconfirmed"`
 }
 
 // 'blockchain.address.get_balance'
 func (req *addressGetBalanceReq) Handle(s *Server) (*addressGetBalanceResp, error) {
-	address, err := lbcutil.DecodeAddress(req.Address, s.Coin)
+	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +179,7 @@ func (req *addressGetBalanceReq) Handle(s *Server) (*addressGetBalanceResp, erro
 	if err != nil {
 		return nil, err
 	}
-	hashX := hashXScript(script, s.Coin)
+	hashX := hashXScript(script, s.Chain)
 	confirmed, unconfirmed, err := s.DB.GetBalance(hashX)
 	if err != nil {
 		return nil, err
@@ -180,24 +188,24 @@ func (req *addressGetBalanceReq) Handle(s *Server) (*addressGetBalanceResp, erro
 }
 
 type addressGetHistoryReq struct {
-	Address string
+	Address string `json:"address"`
 }
 type TxInfo struct {
-	TxHash string
-	Height uint32
+	TxHash string `json:"tx_hash"`
+	Height uint32 `json:"height"`
 }
 type TxInfoFee struct {
 	TxInfo
-	Fee uint64
+	Fee uint64 `json:"fee"`
 }
 type addressGetHistoryResp struct {
-	Confirmed   []TxInfo
-	Unconfirmed []TxInfoFee
+	Confirmed   []TxInfo    `json:"confirmed"`
+	Unconfirmed []TxInfoFee `json:"unconfirmed"`
 }
 
 // 'blockchain.address.get_history'
 func (req *addressGetHistoryReq) Handle(s *Server) (*addressGetHistoryResp, error) {
-	address, err := lbcutil.DecodeAddress(req.Address, s.Coin)
+	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return nil, err
 	}
@@ -205,7 +213,7 @@ func (req *addressGetHistoryReq) Handle(s *Server) (*addressGetHistoryResp, erro
 	if err != nil {
 		return nil, err
 	}
-	hashX := hashXScript(script, s.Coin)
+	hashX := hashXScript(script, s.Chain)
 	dbTXs, err := s.DB.GetHistory(hashX)
 	confirmed := make([]TxInfo, 0, len(dbTXs))
 	for _, tx := range dbTXs {
@@ -223,13 +231,13 @@ func (req *addressGetHistoryReq) Handle(s *Server) (*addressGetHistoryResp, erro
 }
 
 type addressGetMempoolReq struct {
-	Address string
+	Address string `json:"address"`
 }
 type addressGetMempoolResp []TxInfoFee
 
 // 'blockchain.address.get_mempool'
 func (req *addressGetMempoolReq) Handle(s *Server) (*addressGetMempoolResp, error) {
-	address, err := lbcutil.DecodeAddress(req.Address, s.Coin)
+	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return nil, err
 	}
@@ -237,36 +245,28 @@ func (req *addressGetMempoolReq) Handle(s *Server) (*addressGetMempoolResp, erro
 	if err != nil {
 		return nil, err
 	}
+	hashX := hashXScript(script, s.Chain)
 	// TODO...
-	hashX := hashXScript(script, s.Coin)
-	dbTXs, err := s.DB.GetHistory(hashX)
-	confirmed := make([]TxInfo, 0, len(dbTXs))
-	for _, tx := range dbTXs {
-		confirmed = append(confirmed,
-			TxInfo{
-				TxHash: hex.EncodeToString(tx.TxHash[:]),
-				Height: tx.Height,
-			})
-	}
+	internal.ReverseBytesInPlace(hashX)
 	unconfirmed := make([]TxInfoFee, 0, 100)
 	result := addressGetMempoolResp(unconfirmed)
 	return &result, nil
 }
 
 type addressListUnspentReq struct {
-	Address string
+	Address string `json:"address"`
 }
 type TXOInfo struct {
-	TxHash string
-	TxPos  uint16
-	Height uint32
-	Value  uint64
+	TxHash string `json:"tx_hash"`
+	TxPos  uint16 `json:"tx_pos"`
+	Height uint32 `json:"height"`
+	Value  uint64 `json:"value"`
 }
 type addressListUnspentResp []TXOInfo
 
 // 'blockchain.address.listunspent'
 func (req *addressListUnspentReq) Handle(s *Server) (*addressListUnspentResp, error) {
-	address, err := lbcutil.DecodeAddress(req.Address, s.Coin)
+	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return nil, err
 	}
@@ -274,7 +274,7 @@ func (req *addressListUnspentReq) Handle(s *Server) (*addressListUnspentResp, er
 	if err != nil {
 		return nil, err
 	}
-	hashX := hashXScript(script, s.Coin)
+	hashX := hashXScript(script, s.Chain)
 	dbTXOs, err := s.DB.GetUnspent(hashX)
 	unspent := make([]TXOInfo, 0, len(dbTXOs))
 	for _, txo := range dbTXOs {

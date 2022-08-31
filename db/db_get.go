@@ -9,6 +9,7 @@ import (
 	"math"
 
 	"github.com/lbryio/herald.go/db/prefixes"
+	"github.com/lbryio/herald.go/db/stack"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
 	"github.com/linxGnu/grocksdb"
 )
@@ -200,7 +201,7 @@ func (db *ReadOnlyDBColumnFamily) GetUnspent(hashX []byte) ([]TXOInfo, error) {
 			TXOInfo{
 				TxHash: txhashValue.TxHash,
 				TxPos:  utxoKey.Nout,
-				Height: 0, // TODO
+				Height: stack.BisectRight(db.TxCounts, []uint32{utxoKey.TxNum})[0],
 				Value:  utxoValue.Amount,
 			},
 		)
