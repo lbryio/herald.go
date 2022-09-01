@@ -72,6 +72,8 @@ tar xfzv rocksdb-6.29.5.tar.gz
 cd rocksdb-6.29.5
 make static_lib
 sudo make install
+export CGO_CFLAGS="-I/usr/local/lib"
+export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd -lbz2"
 ```
 
 ```
