@@ -11,6 +11,7 @@ import (
 
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbcd/chaincfg/chainhash"
 	"github.com/lbryio/lbcd/txscript"
 	"github.com/lbryio/lbcd/wire"
 	"github.com/lbryio/lbcutil"
@@ -78,11 +79,15 @@ func (req *blockGetHeaderReq) Handle(s *Server) (*blockGetHeaderResp, error) {
 		return nil, errors.New("not found")
 	}
 	decode := func(header *[HEADER_SIZE]byte, height uint32) *blockGetHeaderResp {
+		var h1, h2, h3 chainhash.Hash
+		h1.SetBytes(header[4:36])
+		h2.SetBytes(header[36:68])
+		h3.SetBytes(header[68:100])
 		return &blockGetHeaderResp{
 			Version:       binary.LittleEndian.Uint32(header[0:]),
-			PrevBlockHash: hex.EncodeToString(header[4:46]),
-			MerkleRoot:    hex.EncodeToString(header[36:68]),
-			ClaimTrieRoot: hex.EncodeToString(header[68:100]),
+			PrevBlockHash: h1.String(),
+			MerkleRoot:    h2.String(),
+			ClaimTrieRoot: h3.String(),
 			Timestamp:     binary.LittleEndian.Uint32(header[100:]),
 			Bits:          binary.LittleEndian.Uint32(header[104:]),
 			Nonce:         binary.LittleEndian.Uint32(header[108:]),
@@ -219,7 +224,7 @@ func (req *addressGetHistoryReq) Handle(s *Server) (*addressGetHistoryResp, erro
 	for _, tx := range dbTXs {
 		confirmed = append(confirmed,
 			TxInfo{
-				TxHash: hex.EncodeToString(tx.TxHash[:]),
+				TxHash: tx.TxHash.String(),
 				Height: tx.Height,
 			})
 	}
@@ -280,7 +285,7 @@ func (req *addressListUnspentReq) Handle(s *Server) (*addressListUnspentResp, er
 	for _, txo := range dbTXOs {
 		unspent = append(unspent,
 			TXOInfo{
-				TxHash: hex.EncodeToString(txo.TxHash[:]),
+				TxHash: txo.TxHash.String(),
 				TxPos:  txo.TxPos,
 				Height: txo.Height,
 				Value:  txo.Value,
