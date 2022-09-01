@@ -407,7 +407,7 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 }
 
 func (db *ReadOnlyDBColumnFamily) selectFrom(prefix []byte, startKey, stopKey prefixes.BaseKey) ([]*IterOptions, error) {
-	handle, err := db.EnsureHandle(prefixes.HashXHistory)
+	handle, err := db.EnsureHandle(prefix[0])
 	if err != nil {
 		return nil, err
 	}
@@ -423,11 +423,14 @@ func (db *ReadOnlyDBColumnFamily) selectFrom(prefix []byte, startKey, stopKey pr
 func iterate(db *grocksdb.DB, opts []*IterOptions) <-chan []*prefixes.PrefixRowKV {
 	out := make(chan []*prefixes.PrefixRowKV)
 	routine := func() {
-		for _, o := range opts {
+		for i, o := range opts {
+			j := 0
 			for kv := range IterCF(db, o) {
 				row := make([]*prefixes.PrefixRowKV, 0, 1)
 				row = append(row, kv)
+				log.Debugf("iterate[%v][%v] %#v", i, j, kv)
 				out <- row
+				j++
 			}
 		}
 		close(out)
@@ -450,6 +453,9 @@ func innerJoin(db *grocksdb.DB, in <-chan []*prefixes.PrefixRowKV, selectFn func
 				row := make([]*prefixes.PrefixRowKV, 0, len(kvs)+1)
 				row = append(row, kvs...)
 				row = append(row, kv...)
+				for i, kv := range row {
+					log.Debugf("row[%v] %#v", i, kv)
+				}
 				out <- row
 			}
 		}

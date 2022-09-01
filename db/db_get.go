@@ -91,7 +91,7 @@ func (db *ReadOnlyDBColumnFamily) GetHeaders(height uint32, count uint32) ([][11
 		return nil, err
 	}
 
-	startKeyRaw := prefixes.NewHeaderKey(0).PackKey()
+	startKeyRaw := prefixes.NewHeaderKey(height).PackKey()
 	endKeyRaw := prefixes.NewHeaderKey(height + count).PackKey()
 	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true) //.WithIncludeStop(true)
@@ -221,7 +221,7 @@ func (db *ReadOnlyDBColumnFamily) GetHistory(hashX []byte) ([]TxInfo, error) {
 		Height: 0,
 	}
 	endKey := &prefixes.HashXHistoryKey{
-		Prefix: []byte{prefixes.UTXO},
+		Prefix: []byte{prefixes.HashXHistory},
 		HashX:  hashX,
 		Height: math.MaxUint32,
 	}
