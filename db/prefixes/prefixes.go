@@ -541,7 +541,7 @@ func (v *HashXHistoryValue) PackValue() []byte {
 	n := len(v.TxNums)
 	value := make([]byte, n*4)
 	for i, x := range v.TxNums {
-		binary.BigEndian.PutUint32(value[i*4:], x)
+		binary.LittleEndian.PutUint32(value[i*4:], x)
 	}
 
 	return value
@@ -603,7 +603,7 @@ func HashXHistoryValueUnpack(value []byte) *HashXHistoryValue {
 	n := len(value) / 4
 	txnums := make([]uint32, n)
 	for i := 0; i < n; i++ {
-		txnums[i] = binary.BigEndian.Uint32(value[i*4:])
+		txnums[i] = binary.LittleEndian.Uint32(value[i*4:])
 	}
 	return &HashXHistoryValue{
 		TxNums: txnums,
