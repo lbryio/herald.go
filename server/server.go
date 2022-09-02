@@ -274,17 +274,39 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		}
 	}
 
-	chain := chaincfg.MainNetParams
+	dbChain := (*chaincfg.Params)(nil)
 	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
 		// The chain params can be inferred from DBStateValue.
 		switch *myDB.LastState.Genesis {
 		case *chaincfg.MainNetParams.GenesisHash:
-			chain = chaincfg.MainNetParams
+			dbChain = &chaincfg.MainNetParams
 		case *chaincfg.TestNet3Params.GenesisHash:
-			chain = chaincfg.TestNet3Params
+			dbChain = &chaincfg.TestNet3Params
 		case *chaincfg.RegressionNetParams.GenesisHash:
-			chain = chaincfg.RegressionNetParams
+			dbChain = &chaincfg.RegressionNetParams
 		}
+	}
+	cliChain := (*chaincfg.Params)(nil)
+	if args.Chain != nil {
+		switch *args.Chain {
+		case chaincfg.MainNetParams.Name:
+			cliChain = &chaincfg.MainNetParams
+		case chaincfg.TestNet3Params.Name, "testnet":
+			cliChain = &chaincfg.TestNet3Params
+		case chaincfg.RegressionNetParams.Name:
+			cliChain = &chaincfg.RegressionNetParams
+		}
+	}
+	chain := chaincfg.MainNetParams
+	if dbChain != nil && cliChain != nil {
+		if dbChain != cliChain {
+			logrus.Warnf("network: %v (from db) conflicts with %v (from cli)", dbChain.Name, cliChain.Name)
+		}
+		chain = *dbChain
+	} else if dbChain != nil {
+		chain = *dbChain
+	} else if cliChain != nil {
+		chain = *cliChain
 	}
 	logrus.Infof("network: %v", chain.Name)
 
