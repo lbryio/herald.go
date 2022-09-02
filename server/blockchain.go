@@ -8,6 +8,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
@@ -145,10 +146,19 @@ func (req *blockHeadersReq) Handle(s *Server) (*blockHeadersResp, error) {
 	return result, err
 }
 
-func hashX(scripthash string) []byte {
-	sh, _ := hex.DecodeString(scripthash)
+func decodeScriptHash(scripthash string) ([]byte, error) {
+	sh, err := hex.DecodeString(scripthash)
+	if err != nil {
+		return nil, err
+	}
+	if len(sh) != chainhash.HashSize {
+		return nil, fmt.Errorf("invalid scripthash: %v (length %v)", scripthash, len(sh))
+	}
 	internal.ReverseBytesInPlace(sh)
-	return sh[:HASHX_LEN]
+	return sh, nil
+}
+func hashX(scripthash []byte) []byte {
+	return scripthash[:HASHX_LEN]
 }
 
 func hashXScript(script []byte, coin *chaincfg.Params) []byte {
@@ -192,6 +202,28 @@ func (req *addressGetBalanceReq) Handle(s *Server) (*addressGetBalanceResp, erro
 	return &addressGetBalanceResp{confirmed, unconfirmed}, err
 }
 
+type scripthashGetBalanceReq struct {
+	ScriptHash string `json:"scripthash"`
+}
+type scripthashGetBalanceResp struct {
+	Confirmed   uint64 `json:"confirmed"`
+	Unconfirmed uint64 `json:"unconfirmed"`
+}
+
+// 'blockchain.scripthash.get_balance'
+func (req *scripthashGetBalanceReq) Handle(s *Server) (*scripthashGetBalanceResp, error) {
+	scripthash, err := decodeScriptHash(req.ScriptHash)
+	if err != nil {
+		return nil, err
+	}
+	hashX := hashX(scripthash)
+	confirmed, unconfirmed, err := s.DB.GetBalance(hashX)
+	if err != nil {
+		return nil, err
+	}
+	return &scripthashGetBalanceResp{confirmed, unconfirmed}, err
+}
+
 type addressGetHistoryReq struct {
 	Address string `json:"address"`
 }
@@ -220,6 +252,9 @@ func (req *addressGetHistoryReq) Handle(s *Server) (*addressGetHistoryResp, erro
 	}
 	hashX := hashXScript(script, s.Chain)
 	dbTXs, err := s.DB.GetHistory(hashX)
+	if err != nil {
+		return nil, err
+	}
 	confirmed := make([]TxInfo, 0, len(dbTXs))
 	for _, tx := range dbTXs {
 		confirmed = append(confirmed,
@@ -229,6 +264,40 @@ func (req *addressGetHistoryReq) Handle(s *Server) (*addressGetHistoryResp, erro
 			})
 	}
 	result := &addressGetHistoryResp{
+		Confirmed:   confirmed,
+		Unconfirmed: []TxInfoFee{}, // TODO
+	}
+	return result, nil
+}
+
+type scripthashGetHistoryReq struct {
+	ScriptHash string `json:"scripthash"`
+}
+type scripthashGetHistoryResp struct {
+	Confirmed   []TxInfo    `json:"confirmed"`
+	Unconfirmed []TxInfoFee `json:"unconfirmed"`
+}
+
+// 'blockchain.scripthash.get_history'
+func (req *scripthashGetHistoryReq) Handle(s *Server) (*scripthashGetHistoryResp, error) {
+	scripthash, err := decodeScriptHash(req.ScriptHash)
+	if err != nil {
+		return nil, err
+	}
+	hashX := hashX(scripthash)
+	dbTXs, err := s.DB.GetHistory(hashX)
+	if err != nil {
+		return nil, err
+	}
+	confirmed := make([]TxInfo, 0, len(dbTXs))
+	for _, tx := range dbTXs {
+		confirmed = append(confirmed,
+			TxInfo{
+				TxHash: tx.TxHash.String(),
+				Height: tx.Height,
+			})
+	}
+	result := &scripthashGetHistoryResp{
 		Confirmed:   confirmed,
 		Unconfirmed: []TxInfoFee{}, // TODO
 	}
@@ -255,6 +324,25 @@ func (req *addressGetMempoolReq) Handle(s *Server) (*addressGetMempoolResp, erro
 	internal.ReverseBytesInPlace(hashX)
 	unconfirmed := make([]TxInfoFee, 0, 100)
 	result := addressGetMempoolResp(unconfirmed)
+	return &result, nil
+}
+
+type scripthashGetMempoolReq struct {
+	ScriptHash string `json:"scripthash"`
+}
+type scripthashGetMempoolResp []TxInfoFee
+
+// 'blockchain.scripthash.get_mempool'
+func (req *scripthashGetMempoolReq) Handle(s *Server) (*scripthashGetMempoolResp, error) {
+	scripthash, err := decodeScriptHash(req.ScriptHash)
+	if err != nil {
+		return nil, err
+	}
+	hashX := hashX(scripthash)
+	// TODO...
+	internal.ReverseBytesInPlace(hashX)
+	unconfirmed := make([]TxInfoFee, 0, 100)
+	result := scripthashGetMempoolResp(unconfirmed)
 	return &result, nil
 }
 
@@ -292,5 +380,32 @@ func (req *addressListUnspentReq) Handle(s *Server) (*addressListUnspentResp, er
 			})
 	}
 	result := addressListUnspentResp(unspent)
+	return &result, nil
+}
+
+type scripthashListUnspentReq struct {
+	ScriptHash string `json:"scripthash"`
+}
+type scripthashListUnspentResp []TXOInfo
+
+// 'blockchain.scripthash.listunspent'
+func (req *scripthashListUnspentReq) Handle(s *Server) (*scripthashListUnspentResp, error) {
+	scripthash, err := decodeScriptHash(req.ScriptHash)
+	if err != nil {
+		return nil, err
+	}
+	hashX := hashX(scripthash)
+	dbTXOs, err := s.DB.GetUnspent(hashX)
+	unspent := make([]TXOInfo, 0, len(dbTXOs))
+	for _, txo := range dbTXOs {
+		unspent = append(unspent,
+			TXOInfo{
+				TxHash: txo.TxHash.String(),
+				TxPos:  txo.TxPos,
+				Height: txo.Height,
+				Value:  txo.Value,
+			})
+	}
+	result := scripthashListUnspentResp(unspent)
 	return &result, nil
 }
