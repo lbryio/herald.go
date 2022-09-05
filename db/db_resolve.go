@@ -175,8 +175,8 @@ func (db *ReadOnlyDBColumnFamily) ResolveParsedUrl(parsed *PathSegment) (*Resolv
 		for kv := range ch {
 			key := kv.Key.(*prefixes.ClaimTakeoverKey)
 			val := kv.Value.(*prefixes.ClaimTakeoverValue)
-			log.Warnf("ClaimTakeoverKey: %#v", key)
-			log.Warnf("ClaimTakeoverValue: %#v", val)
+			log.Tracef("ClaimTakeoverKey: %#v", key)
+			log.Tracef("ClaimTakeoverValue: %#v", val)
 		}
 		controlling, err := db.GetControllingClaim(normalizedName)
 		log.Warnf("controlling: %#v", controlling)
