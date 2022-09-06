@@ -1,7 +1,7 @@
 name: 'Build and Test Hub'
 
-on:
-  push:
+on: ["push", "pull_request"]
+
 jobs:
   build:
     runs-on: ubuntu-latest
