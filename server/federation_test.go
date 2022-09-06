@@ -70,6 +70,7 @@ func makeDefaultArgs() *server.Args {
 		DisableResolve:              true,
 		DisableBlockingAndFiltering: true,
 		DisableStartNotifier:        true,
+		DisableStartJSONRPC:         true,
 	}
 
 	return args
