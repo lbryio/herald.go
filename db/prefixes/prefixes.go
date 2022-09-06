@@ -513,7 +513,7 @@ type HashXHistoryKey struct {
 }
 
 type HashXHistoryValue struct {
-	TxNums []uint32 `struct-while:"!_eof" json:"tx_nums"`
+	TxNums []uint32 `struct:"lsb" struct-while:"!_eof" json:"tx_nums"`
 }
 
 func (k *HashXHistoryKey) String() string {
