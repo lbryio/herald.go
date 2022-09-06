@@ -513,7 +513,7 @@ type HashXHistoryKey struct {
 }
 
 type HashXHistoryValue struct {
-	HashXes []uint16 `struct-while:"!_eof" json:"hashxes"`
+	TxNums []uint32 `struct-while:"!_eof" json:"tx_nums"`
 }
 
 func (k *HashXHistoryKey) String() string {
@@ -538,10 +538,10 @@ func (k *HashXHistoryKey) PackKey() []byte {
 }
 
 func (v *HashXHistoryValue) PackValue() []byte {
-	n := len(v.HashXes)
-	value := make([]byte, n*2)
-	for i, x := range v.HashXes {
-		binary.BigEndian.PutUint16(value[i*2:], x)
+	n := len(v.TxNums)
+	value := make([]byte, n*4)
+	for i, x := range v.TxNums {
+		binary.LittleEndian.PutUint32(value[i*4:], x)
 	}
 
 	return value
@@ -600,13 +600,13 @@ func HashXHistoryKeyUnpack(key []byte) *HashXHistoryKey {
 }
 
 func HashXHistoryValueUnpack(value []byte) *HashXHistoryValue {
-	n := len(value) / 2
-	hashxes := make([]uint16, n)
+	n := len(value) / 4
+	txnums := make([]uint32, n)
 	for i := 0; i < n; i++ {
-		hashxes[i] = binary.BigEndian.Uint16(value[i*2:])
+		txnums[i] = binary.LittleEndian.Uint32(value[i*4:])
 	}
 	return &HashXHistoryValue{
-		HashXes: hashxes,
+		TxNums: txnums,
 	}
 }
 
