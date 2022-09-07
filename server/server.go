@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"hash"
 	"io/ioutil"
@@ -307,6 +308,14 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 			}
 		}()
 	}
+	if !args.DisableStartJSONRPC {
+		go func() {
+			err := s.StartJsonRPC()
+			if err != nil {
+				log.Println("JSONRPC Server failed!", err)
+			}
+		}()
+	}
 	// Load peers from disk and subscribe to one if there are any
 	if !args.DisableLoadPeers {
 		go func() {
@@ -446,14 +455,24 @@ func (s *Server) HeightHashSubscribe() error {
 	return nil
 }
 
+// Resolve is the gRPC endpoint for resolve.
 func (s *Server) Resolve(ctx context.Context, args *pb.StringArray) (*pb.Outputs, error) {
+	return InternalResolve(args.Value, s.DB)
+}
+
+// InternalResolve takes an array of urls and resolves them to their transactions.
+func InternalResolve(urls []string, DB *db.ReadOnlyDBColumnFamily) (*pb.Outputs, error) {
+	if DB == nil {
+		return nil, errors.New("db is nil")
+		// return nil, nil
+	}
 	metrics.RequestsCount.With(prometheus.Labels{"method": "resolve"}).Inc()
 
 	allTxos := make([]*pb.Output, 0)
 	allExtraTxos := make([]*pb.Output, 0)
 
-	for _, url := range args.Value {
-		res := s.DB.Resolve(url)
+	for _, url := range urls {
+		res := DB.Resolve(url)
 		txos, extraTxos, err := res.ToOutputs()
 		if err != nil {
 			return nil, err

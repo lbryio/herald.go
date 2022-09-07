@@ -25,6 +25,7 @@ type Args struct {
 	EsPort                      string
 	PrometheusPort              string
 	NotifierPort                string
+	JSONRPCPort                 string
 	EsIndex                     string
 	RefreshDelta                int
 	CacheTTL                    int
@@ -43,6 +44,7 @@ type Args struct {
 	DisableResolve              bool
 	DisableBlockingAndFiltering bool
 	DisableStartNotifier        bool
+	DisableStartJSONRPC         bool
 }
 
 const (
@@ -54,6 +56,7 @@ const (
 	DefaultEsPort                      = "9200"
 	DefaultPrometheusPort              = "2112"
 	DefaultNotifierPort                = "18080"
+	DefaultJSONRPCPort                 = "50001"
 	DefaultRefreshDelta                = 5
 	DefaultCacheTTL                    = 5
 	DefaultPeerFile                    = "peers.txt"
@@ -67,6 +70,7 @@ const (
 	DefaultDisableResolve              = false
 	DefaultDisableBlockingAndFiltering = false
 	DisableStartNotifier               = false
+	DisableStartJSONRPC                = false
 )
 
 var (
@@ -112,6 +116,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
 	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
+	jsonRPCPort := parser.String("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Default: DefaultJSONRPCPort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
@@ -131,6 +136,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableResolve := parser.Flag("", "disable-resolve", &argparse.Options{Required: false, Help: "Disable resolve endpoint (and rocksdb loading)", Default: DefaultDisableRockDBRefresh})
 	disableBlockingAndFiltering := parser.Flag("", "disable-blocking-and-filtering", &argparse.Options{Required: false, Help: "Disable blocking and filtering of channels and streams", Default: DefaultDisableBlockingAndFiltering})
 	disableStartNotifier := parser.Flag("", "disable-start-notifier", &argparse.Options{Required: false, Help: "Disable start notifier", Default: DisableStartNotifier})
+	disableStartJSONRPC := parser.Flag("", "disable-start-jsonrpc", &argparse.Options{Required: false, Help: "Disable start jsonrpc endpoint", Default: DisableStartJSONRPC})
 
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
@@ -157,6 +163,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		EsPort:                      *esPort,
 		PrometheusPort:              *prometheusPort,
 		NotifierPort:                *notifierPort,
+		JSONRPCPort:                 *jsonRPCPort,
 		EsIndex:                     *esIndex,
 		RefreshDelta:                *refreshDelta,
 		CacheTTL:                    *cacheTTL,
@@ -175,6 +182,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		DisableResolve:              *disableResolve,
 		DisableBlockingAndFiltering: *disableBlockingAndFiltering,
 		DisableStartNotifier:        *disableStartNotifier,
+		DisableStartJSONRPC:         *disableStartJSONRPC,
 	}
 
 	if esHost, ok := environment["ELASTIC_HOST"]; ok {

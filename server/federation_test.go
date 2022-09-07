@@ -55,6 +55,7 @@ func makeDefaultArgs() *server.Args {
 		EsPort:                      server.DefaultEsPort,
 		PrometheusPort:              server.DefaultPrometheusPort,
 		NotifierPort:                server.DefaultNotifierPort,
+		JSONRPCPort:                 server.DefaultJSONRPCPort,
 		EsIndex:                     server.DefaultEsIndex,
 		RefreshDelta:                server.DefaultRefreshDelta,
 		CacheTTL:                    server.DefaultCacheTTL,
@@ -70,6 +71,7 @@ func makeDefaultArgs() *server.Args {
 		DisableResolve:              true,
 		DisableBlockingAndFiltering: true,
 		DisableStartNotifier:        true,
+		DisableStartJSONRPC:         true,
 	}
 
 	return args

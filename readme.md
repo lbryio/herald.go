@@ -72,6 +72,8 @@ tar xfzv rocksdb-6.29.5.tar.gz
 cd rocksdb-6.29.5
 make static_lib
 sudo make install
+export CGO_CFLAGS="-I/usr/local/lib"
+export CGO_LDFLAGS="-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd -lbz2"
 ```
 
 ```
@@ -79,6 +81,19 @@ https://github.com/protocolbuffers/protobuf/releases/download/v3.17.1/protobuf-a
 ```
 
 If you can run `./protobuf/build.sh` without errors, you have `go` and `protoc` installed correctly. 
+
+On Linux you probably need to instead the open file limits
+
+```
+ulimit -n 1000000
+sysctl -w fs.file-max=1000000
+```
+
+and `/etc/security/limits.conf` or `/etc/sysctl.conf` change:
+
+```
+fs.file-max = 1000000
+```
 
 Finally, run the block processor as described under Usage.
 
