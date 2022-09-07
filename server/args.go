@@ -25,6 +25,7 @@ type Args struct {
 	EsPort                      string
 	PrometheusPort              string
 	NotifierPort                string
+	JSONRPCPort                 string
 	EsIndex                     string
 	RefreshDelta                int
 	CacheTTL                    int
@@ -55,6 +56,7 @@ const (
 	DefaultEsPort                      = "9200"
 	DefaultPrometheusPort              = "2112"
 	DefaultNotifierPort                = "18080"
+	DefaultJSONRPCPort                 = "8080"
 	DefaultRefreshDelta                = 5
 	DefaultCacheTTL                    = 5
 	DefaultPeerFile                    = "peers.txt"
@@ -114,6 +116,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
 	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
+	jsonRPCPort := parser.String("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Default: DefaultJSONRPCPort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
@@ -160,6 +163,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		EsPort:                      *esPort,
 		PrometheusPort:              *prometheusPort,
 		NotifierPort:                *notifierPort,
+		JSONRPCPort:                 *jsonRPCPort,
 		EsIndex:                     *esIndex,
 		RefreshDelta:                *refreshDelta,
 		CacheTTL:                    *cacheTTL,
