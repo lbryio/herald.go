@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/gorilla/rpc"
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
@@ -22,35 +23,22 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-// TODO: import this from gorilla/rpc
-// Codec creates a CodecRequest to process each request.
-type Codec interface {
-	NewRequest(*http.Request) CodecRequest
-}
-
-// TODO: import this from gorilla/rpc
-// CodecRequest decodes a request and encodes a response using a specific
-// serialization scheme.
-type CodecRequest interface {
-	// Reads request and returns the RPC method name.
-	Method() (string, error)
-	// Reads request filling the RPC method args.
-	ReadRequest(interface{}) error
-	// Writes response using the RPC method reply. The error parameter is
-	// the error returned by the method call, if any.
-	WriteResponse(http.ResponseWriter, interface{}, error) error
-}
-
 type BlockchainCodec struct {
-	Codec
+	rpc.Codec
 }
 
-func (c *BlockchainCodec) NewRequest(r *http.Request) CodecRequest {
+func (c *BlockchainCodec) NewRequest(r *http.Request) rpc.CodecRequest {
 	return &BlockchainCodecRequest{c.Codec.NewRequest(r)}
 }
 
+// BlockchainCodecRequest provides ability to rewrite the incoming
+// request "method" field. For example:
+//     blockchain.block.get_header -> blockchain_block.Get_header
+//     blockchain.address.listunspent -> blockchain_address.Listunspent
+// This makes the "method" string compatible with Gorilla/RPC
+// requirements.
 type BlockchainCodecRequest struct {
-	CodecRequest
+	rpc.CodecRequest
 }
 
 func (cr *BlockchainCodecRequest) Method() (string, error) {
