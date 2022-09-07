@@ -20,14 +20,15 @@ func TestGetChunk(t *testing.T) {
 		return
 	}
 
-	s := &Server{
+	s := &BlockchainService{
 		DB:    db,
 		Chain: &chaincfg.MainNetParams,
 	}
 
 	for index := 0; index < 10; index++ {
-		req := blockGetChunkReq(index)
-		resp, err := (&req).Handle(s)
+		req := BlockGetChunkReq(index)
+		var resp *blockGetChunkResp
+		err := s.Get_chunk(nil, &req, &resp)
 		if err != nil {
 			t.Errorf("index: %v handler err: %v", index, err)
 		}
@@ -54,14 +55,15 @@ func TestGetHeader(t *testing.T) {
 		return
 	}
 
-	s := &Server{
+	s := &BlockchainService{
 		DB:    db,
 		Chain: &chaincfg.MainNetParams,
 	}
 
 	for height := 1000; height < 1010; height++ {
-		req := blockGetHeaderReq(height)
-		resp, err := (&req).Handle(s)
+		req := BlockGetHeaderReq(height)
+		var resp *BlockGetHeaderResp
+		err := s.Get_header(nil, &req, &resp)
 		if err != nil {
 			t.Errorf("height: %v handler err: %v", height, err)
 		}
@@ -85,9 +87,11 @@ func TestGetBalance(t *testing.T) {
 		return
 	}
 
-	s := &Server{
-		DB:    db,
-		Chain: &chaincfg.MainNetParams,
+	s := &BlockchainAddressService{
+		BlockchainService{
+			DB:    db,
+			Chain: &chaincfg.MainNetParams,
+		},
 	}
 
 	addrs := []string{
@@ -96,8 +100,9 @@ func TestGetBalance(t *testing.T) {
 	}
 
 	for _, addr := range addrs {
-		req := addressGetBalanceReq{addr}
-		resp, err := (&req).Handle(s)
+		req := AddressGetBalanceReq{addr}
+		var resp *AddressGetBalanceResp
+		err := s.Get_balance(nil, &req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -121,9 +126,11 @@ func TestGetHistory(t *testing.T) {
 		return
 	}
 
-	s := &Server{
-		DB:    db,
-		Chain: &chaincfg.MainNetParams,
+	s := &BlockchainAddressService{
+		BlockchainService{
+			DB:    db,
+			Chain: &chaincfg.MainNetParams,
+		},
 	}
 
 	addrs := []string{
@@ -132,8 +139,9 @@ func TestGetHistory(t *testing.T) {
 	}
 
 	for _, addr := range addrs {
-		req := addressGetHistoryReq{addr}
-		resp, err := (&req).Handle(s)
+		req := AddressGetHistoryReq{addr}
+		var resp *AddressGetHistoryResp
+		err := s.Get_history(nil, &req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -157,9 +165,11 @@ func TestListUnspent(t *testing.T) {
 		return
 	}
 
-	s := &Server{
-		DB:    db,
-		Chain: &chaincfg.MainNetParams,
+	s := &BlockchainAddressService{
+		BlockchainService{
+			DB:    db,
+			Chain: &chaincfg.MainNetParams,
+		},
 	}
 
 	addrs := []string{
@@ -168,8 +178,9 @@ func TestListUnspent(t *testing.T) {
 	}
 
 	for _, addr := range addrs {
-		req := addressListUnspentReq{addr}
-		resp, err := (&req).Handle(s)
+		req := AddressListUnspentReq{addr}
+		var resp *AddressListUnspentResp
+		err := s.Listunspent(nil, &req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
