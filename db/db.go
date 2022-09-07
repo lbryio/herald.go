@@ -550,7 +550,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 
 	var handlesMap = make(map[string]*grocksdb.ColumnFamilyHandle)
 	for i, handle := range handles {
-		log.Printf("%d: %+v\n", i, handle)
+		log.Printf("handle %d(%s): %+v\n", i, cfNames[i], handle)
 		handlesMap[cfNames[i]] = handle
 	}
 

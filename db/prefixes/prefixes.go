@@ -194,7 +194,7 @@ type DBStateValue struct {
 	UtxoFlushCount uint32
 	WallTime       uint32
 	FirstSync      bool
-	DDVersion      uint8
+	DBVersion      uint8
 	HistFlushCount int32
 	CompFlushCount int32
 	CompCursor     int32
@@ -210,7 +210,7 @@ func NewDBStateValue() *DBStateValue {
 		UtxoFlushCount: 0,
 		WallTime:       0,
 		FirstSync:      true,
-		DDVersion:      0,
+		DBVersion:      0,
 		HistFlushCount: 0,
 		CompFlushCount: -1,
 		CompCursor:     -1,
@@ -248,7 +248,7 @@ func (v *DBStateValue) PackValue() []byte {
 		bitSetVar = 1
 	}
 	value[32+4+4+32+4+4] = bitSetVar
-	value[32+4+4+32+4+4+1] = v.DDVersion
+	value[32+4+4+32+4+4+1] = v.DBVersion
 
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1:], uint32(v.HistFlushCount))
 	binary.BigEndian.PutUint32(value[32+4+4+32+4+4+1+1+4:], uint32(v.CompFlushCount))
@@ -290,7 +290,7 @@ func DBStateValueUnpack(value []byte) *DBStateValue {
 		UtxoFlushCount: binary.BigEndian.Uint32(value[32+4+4+32:]),
 		WallTime:       binary.BigEndian.Uint32(value[32+4+4+32+4:]),
 		FirstSync:      value[32+4+4+32+4+4] == 1,
-		DDVersion:      value[32+4+4+32+4+4+1],
+		DBVersion:      value[32+4+4+32+4+4+1],
 		HistFlushCount: int32(binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1:])),
 		CompFlushCount: int32(binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4:])),
 		CompCursor:     int32(binary.BigEndian.Uint32(value[32+4+4+32+4+4+1+1+4+4:])),

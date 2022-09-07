@@ -37,9 +37,9 @@ type Server struct {
 	MultiSpaceRe     *regexp.Regexp
 	WeirdCharsRe     *regexp.Regexp
 	DB               *db.ReadOnlyDBColumnFamily
+	Chain            *chaincfg.Params
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
-	Coin             *chaincfg.Params
 	S256             *hash.Hash
 	LastRefreshCheck time.Time
 	RefreshDelta     time.Duration
@@ -169,27 +169,48 @@ func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
 		log.Fatalln(err)
 	}
 
+	if myDB.LastState != nil {
+		logrus.Infof("DB version: %v", myDB.LastState.DBVersion)
+		logrus.Infof("height: %v", myDB.LastState.Height)
+		logrus.Infof("tip: %v", myDB.LastState.Tip.String())
+		logrus.Infof("tx count: %v", myDB.LastState.TxCount)
+	}
+
 	blockingChannelHashes := make([][]byte, 0, 10)
+	blockingIds := make([]string, 0, 10)
 	filteringChannelHashes := make([][]byte, 0, 10)
+	filteringIds := make([]string, 0, 10)
 
 	for _, id := range args.BlockingChannelIds {
 		hash, err := hex.DecodeString(id)
 		if err != nil {
 			logrus.Warn("Invalid channel id: ", id)
+			continue
 		}
 		blockingChannelHashes = append(blockingChannelHashes, hash)
+		blockingIds = append(blockingIds, id)
 	}
 
 	for _, id := range args.FilteringChannelIds {
 		hash, err := hex.DecodeString(id)
 		if err != nil {
 			logrus.Warn("Invalid channel id: ", id)
+			continue
 		}
 		filteringChannelHashes = append(filteringChannelHashes, hash)
+		filteringIds = append(filteringIds, id)
 	}
 
 	myDB.BlockingChannelHashes = blockingChannelHashes
 	myDB.FilteringChannelHashes = filteringChannelHashes
+
+	if len(filteringIds) > 0 {
+		logrus.Infof("filtering claims reposted by channels: %+s", filteringIds)
+	}
+	if len(blockingIds) > 0 {
+		logrus.Infof("blocking claims reposted by channels: %+s", blockingIds)
+	}
+
 	return myDB, nil
 }
 
@@ -253,16 +274,30 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		}
 	}
 
+	chain := chaincfg.MainNetParams
+	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
+		// The chain params can be inferred from DBStateValue.
+		switch *myDB.LastState.Genesis {
+		case *chaincfg.MainNetParams.GenesisHash:
+			chain = chaincfg.MainNetParams
+		case *chaincfg.TestNet3Params.GenesisHash:
+			chain = chaincfg.TestNet3Params
+		case *chaincfg.RegressionNetParams.GenesisHash:
+			chain = chaincfg.RegressionNetParams
+		}
+	}
+	logrus.Infof("network: %v", chain.Name)
+
 	s := &Server{
 		GrpcServer:       grpcServer,
 		Args:             args,
 		MultiSpaceRe:     multiSpaceRe,
 		WeirdCharsRe:     weirdCharsRe,
 		DB:               myDB,
+		Chain:            &chain,
 		EsClient:         client,
 		QueryCache:       cache,
 		S256:             &s256,
-		Coin:             &chaincfg.MainNetParams,
 		LastRefreshCheck: time.Now(),
 		RefreshDelta:     refreshDelta,
 		NumESRefreshes:   0,
