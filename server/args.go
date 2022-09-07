@@ -56,7 +56,7 @@ const (
 	DefaultEsPort                      = "9200"
 	DefaultPrometheusPort              = "2112"
 	DefaultNotifierPort                = "18080"
-	DefaultJSONRPCPort                 = "8080"
+	DefaultJSONRPCPort                 = "50001"
 	DefaultRefreshDelta                = 5
 	DefaultCacheTTL                    = 5
 	DefaultPeerFile                    = "peers.txt"
