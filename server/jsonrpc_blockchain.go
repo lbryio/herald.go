@@ -87,6 +87,18 @@ func min[Ord constraints.Ordered](x, y Ord) Ord {
 	return y
 }
 
+type BlockGetServerHeightReq struct{}
+type BlockGetServerHeightResp uint32
+
+func (s *BlockchainService) Get_server_height(r *http.Request, req *BlockGetServerHeightReq, resp **BlockGetServerHeightResp) error {
+	if s.DB == nil || s.DB.LastState == nil {
+		return fmt.Errorf("unknown height")
+	}
+	result := BlockGetServerHeightResp(s.DB.LastState.Height)
+	*resp = &result
+	return nil
+}
+
 type BlockGetChunkReq uint32
 type BlockGetChunkResp string
 

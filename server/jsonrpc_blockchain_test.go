@@ -8,6 +8,36 @@ import (
 	"github.com/lbryio/lbcd/chaincfg"
 )
 
+func TestServerGetHeight(t *testing.T) {
+	dbPath := "/Users/swdev1/hub/scribe_db.599529/lbry-rocksdb"
+	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
+	secondaryPath := "asdf"
+	db, toDefer, err := db.GetProdDB(dbPath, secondaryPath)
+	defer toDefer()
+	if err != nil {
+		t.Skip("DB not found")
+		t.Error(err)
+		return
+	}
+
+	s := &BlockchainService{
+		DB:    db,
+		Chain: &chaincfg.MainNetParams,
+	}
+
+	req := BlockGetServerHeightReq{}
+	var resp *BlockGetServerHeightResp
+	err = s.Get_server_height(nil, &req, &resp)
+	if err != nil {
+		t.Errorf("handler err: %v", err)
+	}
+	marshalled, err := json.MarshalIndent(resp, "", "    ")
+	if err != nil {
+		t.Errorf("unmarshal err: %v", err)
+	}
+	t.Logf("resp: %v", string(marshalled))
+}
+
 func TestGetChunk(t *testing.T) {
 	dbPath := "/Users/swdev1/hub/scribe_db.599529/lbry-rocksdb"
 	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
