@@ -27,7 +27,7 @@ func TestGetChunk(t *testing.T) {
 
 	for index := 0; index < 10; index++ {
 		req := BlockGetChunkReq(index)
-		var resp *blockGetChunkResp
+		var resp *BlockGetChunkResp
 		err := s.Get_chunk(nil, &req, &resp)
 		if err != nil {
 			t.Errorf("index: %v handler err: %v", index, err)

@@ -88,10 +88,10 @@ func min[Ord constraints.Ordered](x, y Ord) Ord {
 }
 
 type BlockGetChunkReq uint32
-type blockGetChunkResp string
+type BlockGetChunkResp string
 
 // 'blockchain.block.get_chunk'
-func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, resp **blockGetChunkResp) error {
+func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, resp **BlockGetChunkResp) error {
 	index := uint32(*req)
 	db_headers, err := s.DB.GetHeaders(index*CHUNK_SIZE, CHUNK_SIZE)
 	if err != nil {
@@ -101,7 +101,7 @@ func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, re
 	for _, h := range db_headers {
 		raw = append(raw, h[:]...)
 	}
-	headers := blockGetChunkResp(hex.EncodeToString(raw))
+	headers := BlockGetChunkResp(hex.EncodeToString(raw))
 	*resp = &headers
 	return err
 }

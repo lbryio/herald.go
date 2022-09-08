@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -9,6 +8,7 @@ import (
 	"github.com/gorilla/rpc/json"
 	"github.com/lbryio/herald.go/db"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	log "github.com/sirupsen/logrus"
 )
 
 type ClaimtrieService struct {
@@ -41,13 +41,25 @@ func (s *Server) StartJsonRPC() error {
 
 	// Register "blockchain.claimtrie.*"" handlers.
 	claimtrieSvc := &ClaimtrieService{s.DB}
-	s1.RegisterService(claimtrieSvc, "blockchain_claimtrie")
+	err := s1.RegisterService(claimtrieSvc, "blockchain_claimtrie")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
 
 	// Register other "blockchain.{block,address,scripthash}.*" handlers.
 	blockchainSvc := &BlockchainService{s.DB, s.Chain}
-	s1.RegisterService(&blockchainSvc, "blockchain_block")
-	s1.RegisterService(&BlockchainAddressService{*blockchainSvc}, "blockchain_address")
-	s1.RegisterService(&BlockchainScripthashService{*blockchainSvc}, "blockchain_scripthash")
+	err = s1.RegisterService(blockchainSvc, "blockchain_block")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
+	err = s1.RegisterService(&BlockchainAddressService{*blockchainSvc}, "blockchain_address")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
+	err = s1.RegisterService(&BlockchainScripthashService{*blockchainSvc}, "blockchain_scripthash")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
 
 	r := mux.NewRouter()
 	r.Handle("/rpc", s1)
