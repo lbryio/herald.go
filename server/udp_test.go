@@ -39,10 +39,10 @@ func TestUDPPing(t *testing.T) {
 			toPort := "50001"
 
 			pong, err := server.UDPPing(toAddr, toPort)
-			gotCountry := pong.DecodeCountry()
 			if err != nil {
-				log.Println(err)
+				t.Skipf("ping failed: %v", err)
 			}
+			gotCountry := pong.DecodeCountry()
 
 			res, err := exec.Command("dig", "@resolver4.opendns.com", "myip.opendns.com", "+short").Output()
 
