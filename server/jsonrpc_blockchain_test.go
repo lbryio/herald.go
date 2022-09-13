@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"strconv"
 	"testing"
 
 	"github.com/lbryio/herald.go/db"
@@ -10,6 +11,7 @@ import (
 
 // Source: test_variety_of_transactions_and_longish_history (lbry-sdk/tests/integration/transactions)
 const regTestDBPath = "../testdata/test_variety_of_transactions/lbry-rocksdb"
+const regTestHeight = 502
 
 var regTestAddrs = [30]string{
 	"mtgiQkd35xpx3TaZ4RBNirf3uSMQ8tXQ7z",
@@ -72,7 +74,7 @@ func TestServerGetHeight(t *testing.T) {
 		t.Errorf("unmarshal err: %v", err)
 	}
 	t.Logf("resp: %v", string(marshalled))
-	if string(marshalled) != "500" {
+	if string(marshalled) != strconv.FormatInt(regTestHeight, 10) {
 		t.Errorf("bad height: %v", string(marshalled))
 	}
 }
@@ -109,7 +111,7 @@ func TestGetChunk(t *testing.T) {
 				t.Errorf("index: %v bad length: %v", index, len(*resp))
 			}
 		case 5:
-			if len(*resp) != 21*112*2 {
+			if len(*resp) != 23*112*2 {
 				t.Errorf("index: %v bad length: %v", index, len(*resp))
 			}
 		default:
