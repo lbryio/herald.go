@@ -10,6 +10,7 @@ require (
 	github.com/go-restruct/restruct v1.2.0-alpha
 	github.com/gorilla/mux v1.7.3
 	github.com/gorilla/rpc v1.2.0
+	github.com/lbryio/lbcutil v1.0.202
 	github.com/lbryio/lbry.go/v3 v3.0.1-beta
 	github.com/linxGnu/grocksdb v1.6.42
 	github.com/olivere/elastic/v7 v7.0.24
@@ -23,15 +24,17 @@ require (
 	gopkg.in/karalabe/cookiejar.v1 v1.0.0-20141109175019-e1490cae028c
 )
 
-require golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
+require (
+)
 
 require (
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f // indirect
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
-	github.com/lbryio/lbcd v0.22.201-beta-rc1
+	github.com/lbryio/lbcd v0.22.201-beta-rc4
 	github.com/mailru/easyjson v0.7.7 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
@@ -39,6 +42,7 @@ require (
 	github.com/prometheus/common v0.26.0 // indirect
 	github.com/prometheus/procfs v0.6.0 // indirect
 	github.com/stretchr/testify v1.7.0 // indirect
+	golang.org/x/crypto v0.0.0-20211209193657-4570a0811e8b // indirect
 	golang.org/x/net v0.0.0-20211112202133-69e39bad7dc2 // indirect
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c // indirect
 	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect

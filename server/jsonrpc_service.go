@@ -1,7 +1,6 @@
 package server
 
 import (
-	"log"
 	"net/http"
 
 	"github.com/gorilla/mux"
@@ -9,9 +8,10 @@ import (
 	"github.com/gorilla/rpc/json"
 	"github.com/lbryio/herald.go/db"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	log "github.com/sirupsen/logrus"
 )
 
-type JSONServer struct {
+type ClaimtrieService struct {
 	DB *db.ReadOnlyDBColumnFamily
 }
 
@@ -23,8 +23,8 @@ type Result struct {
 	Data string `json:"data"`
 }
 
-// Resolve is the json rpc endpoint for resolve
-func (t *JSONServer) Resolve(r *http.Request, args *ResolveData, result **pb.Outputs) error {
+// Resolve is the json rpc endpoint for 'blockchain.claimtrie.resolve'.
+func (t *ClaimtrieService) Resolve(r *http.Request, args *ResolveData, result **pb.Outputs) error {
 	log.Println("Resolve")
 	res, err := InternalResolve(args.Data, t.DB)
 	*result = res
@@ -33,14 +33,33 @@ func (t *JSONServer) Resolve(r *http.Request, args *ResolveData, result **pb.Out
 
 // StartJsonRPC starts the json rpc server and registers the endpoints.
 func (s *Server) StartJsonRPC() error {
-	server := new(JSONServer)
-	server.DB = s.DB
-
 	port := ":" + s.Args.JSONRPCPort
 
-	s1 := rpc.NewServer()                                 // Create a new RPC server
-	s1.RegisterCodec(json.NewCodec(), "application/json") // Register the type of data requested as JSON
-	s1.RegisterService(server, "")                        // Register the service by creating a new JSON server
+	s1 := rpc.NewServer() // Create a new RPC server
+	// Register the type of data requested as JSON, with custom codec.
+	s1.RegisterCodec(&BlockchainCodec{json.NewCodec()}, "application/json")
+
+	// Register "blockchain.claimtrie.*"" handlers.
+	claimtrieSvc := &ClaimtrieService{s.DB}
+	err := s1.RegisterService(claimtrieSvc, "blockchain_claimtrie")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
+
+	// Register other "blockchain.{block,address,scripthash}.*" handlers.
+	blockchainSvc := &BlockchainService{s.DB, s.Chain}
+	err = s1.RegisterService(blockchainSvc, "blockchain_block")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
+	err = s1.RegisterService(&BlockchainAddressService{*blockchainSvc}, "blockchain_address")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
+	err = s1.RegisterService(&BlockchainScripthashService{*blockchainSvc}, "blockchain_scripthash")
+	if err != nil {
+		log.Errorf("RegisterService: %v\n", err)
+	}
 
 	r := mux.NewRouter()
 	r.Handle("/rpc", s1)

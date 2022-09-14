@@ -39,11 +39,13 @@ func main() {
 		defer func() {
 			log.Println("Shutting down server...")
 
-			if !s.Args.DisableEs {
+			if s.EsClient != nil {
 				s.EsClient.Stop()
 			}
-			s.GrpcServer.GracefulStop()
-			if !s.Args.DisableResolve {
+			if s.GrpcServer != nil {
+				s.GrpcServer.GracefulStop()
+			}
+			if s.DB != nil {
 				s.DB.Shutdown()
 			}
 

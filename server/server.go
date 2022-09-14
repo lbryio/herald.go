@@ -22,6 +22,7 @@ import (
 	"github.com/lbryio/herald.go/internal/metrics"
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	"github.com/lbryio/lbcd/chaincfg"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -36,6 +37,7 @@ type Server struct {
 	MultiSpaceRe     *regexp.Regexp
 	WeirdCharsRe     *regexp.Regexp
 	DB               *db.ReadOnlyDBColumnFamily
+	Chain            *chaincfg.Params
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
 	S256             *hash.Hash
@@ -167,27 +169,48 @@ func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
 		log.Fatalln(err)
 	}
 
+	if myDB.LastState != nil {
+		logrus.Infof("DB version: %v", myDB.LastState.DBVersion)
+		logrus.Infof("height: %v", myDB.LastState.Height)
+		logrus.Infof("tip: %v", myDB.LastState.Tip.String())
+		logrus.Infof("tx count: %v", myDB.LastState.TxCount)
+	}
+
 	blockingChannelHashes := make([][]byte, 0, 10)
+	blockingIds := make([]string, 0, 10)
 	filteringChannelHashes := make([][]byte, 0, 10)
+	filteringIds := make([]string, 0, 10)
 
 	for _, id := range args.BlockingChannelIds {
 		hash, err := hex.DecodeString(id)
 		if err != nil {
 			logrus.Warn("Invalid channel id: ", id)
+			continue
 		}
 		blockingChannelHashes = append(blockingChannelHashes, hash)
+		blockingIds = append(blockingIds, id)
 	}
 
 	for _, id := range args.FilteringChannelIds {
 		hash, err := hex.DecodeString(id)
 		if err != nil {
 			logrus.Warn("Invalid channel id: ", id)
+			continue
 		}
 		filteringChannelHashes = append(filteringChannelHashes, hash)
+		filteringIds = append(filteringIds, id)
 	}
 
 	myDB.BlockingChannelHashes = blockingChannelHashes
 	myDB.FilteringChannelHashes = filteringChannelHashes
+
+	if len(filteringIds) > 0 {
+		logrus.Infof("filtering claims reposted by channels: %+s", filteringIds)
+	}
+	if len(blockingIds) > 0 {
+		logrus.Infof("blocking claims reposted by channels: %+s", blockingIds)
+	}
+
 	return myDB, nil
 }
 
@@ -251,12 +274,49 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		}
 	}
 
+	dbChain := (*chaincfg.Params)(nil)
+	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
+		// The chain params can be inferred from DBStateValue.
+		switch *myDB.LastState.Genesis {
+		case *chaincfg.MainNetParams.GenesisHash:
+			dbChain = &chaincfg.MainNetParams
+		case *chaincfg.TestNet3Params.GenesisHash:
+			dbChain = &chaincfg.TestNet3Params
+		case *chaincfg.RegressionNetParams.GenesisHash:
+			dbChain = &chaincfg.RegressionNetParams
+		}
+	}
+	cliChain := (*chaincfg.Params)(nil)
+	if args.Chain != nil {
+		switch *args.Chain {
+		case chaincfg.MainNetParams.Name:
+			cliChain = &chaincfg.MainNetParams
+		case chaincfg.TestNet3Params.Name, "testnet":
+			cliChain = &chaincfg.TestNet3Params
+		case chaincfg.RegressionNetParams.Name:
+			cliChain = &chaincfg.RegressionNetParams
+		}
+	}
+	chain := chaincfg.MainNetParams
+	if dbChain != nil && cliChain != nil {
+		if dbChain != cliChain {
+			logrus.Warnf("network: %v (from db) conflicts with %v (from cli)", dbChain.Name, cliChain.Name)
+		}
+		chain = *dbChain
+	} else if dbChain != nil {
+		chain = *dbChain
+	} else if cliChain != nil {
+		chain = *cliChain
+	}
+	logrus.Infof("network: %v", chain.Name)
+
 	s := &Server{
 		GrpcServer:       grpcServer,
 		Args:             args,
 		MultiSpaceRe:     multiSpaceRe,
 		WeirdCharsRe:     weirdCharsRe,
 		DB:               myDB,
+		Chain:            &chain,
 		EsClient:         client,
 		QueryCache:       cache,
 		S256:             &s256,

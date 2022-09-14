@@ -406,6 +406,75 @@ func Iter(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	return ch
 }
 
+func (db *ReadOnlyDBColumnFamily) selectFrom(prefix []byte, startKey, stopKey prefixes.BaseKey) ([]*IterOptions, error) {
+	handle, err := db.EnsureHandle(prefix[0])
+	if err != nil {
+		return nil, err
+	}
+	// Prefix and handle
+	options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
+	// Start and stop bounds
+	options = options.WithStart(startKey.PackKey()).WithStop(stopKey.PackKey()).WithIncludeStop(true)
+	// Don't include the key
+	options = options.WithIncludeKey(true).WithIncludeValue(true)
+	return []*IterOptions{options}, nil
+}
+
+func iterate(db *grocksdb.DB, opts []*IterOptions) <-chan []*prefixes.PrefixRowKV {
+	out := make(chan []*prefixes.PrefixRowKV)
+	routine := func() {
+		for i, o := range opts {
+			j := 0
+			for kv := range IterCF(db, o) {
+				row := make([]*prefixes.PrefixRowKV, 0, 1)
+				row = append(row, kv)
+				log.Debugf("iterate[%v][%v] %#v", i, j, kv)
+				out <- row
+				j++
+			}
+		}
+		close(out)
+	}
+	go routine()
+	return out
+}
+
+func innerJoin(db *grocksdb.DB, in <-chan []*prefixes.PrefixRowKV, selectFn func([]*prefixes.PrefixRowKV) ([]*IterOptions, error)) <-chan []*prefixes.PrefixRowKV {
+	out := make(chan []*prefixes.PrefixRowKV)
+	routine := func() {
+		for kvs := range in {
+			selected, err := selectFn(kvs)
+			if err != nil {
+				out <- []*prefixes.PrefixRowKV{{Error: err}}
+				close(out)
+				return
+			}
+			for kv := range iterate(db, selected) {
+				row := make([]*prefixes.PrefixRowKV, 0, len(kvs)+1)
+				row = append(row, kvs...)
+				row = append(row, kv...)
+				for i, kv := range row {
+					log.Debugf("row[%v] %#v", i, kv)
+				}
+				out <- row
+			}
+		}
+		close(out)
+		return
+	}
+	go routine()
+	return out
+}
+
+func checkForError(kvs []*prefixes.PrefixRowKV) error {
+	for _, kv := range kvs {
+		if kv.Error != nil {
+			return kv.Error
+		}
+	}
+	return nil
+}
+
 //
 // GetDB functions that open and return a db
 //
@@ -487,7 +556,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 
 	var handlesMap = make(map[string]*grocksdb.ColumnFamilyHandle)
 	for i, handle := range handles {
-		log.Printf("%d: %+v\n", i, handle)
+		log.Printf("handle %d(%s): %+v\n", i, cfNames[i], handle)
 		handlesMap[cfNames[i]] = handle
 	}
 
