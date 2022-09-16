@@ -3530,7 +3530,8 @@ type EffectiveAmountKey struct {
 }
 
 type EffectiveAmountValue struct {
-	EffectiveAmount uint64 `json:"effective_amount"`
+	ActivatedSum        uint64 `json:"activated_sum"`
+	ActivatedSupportSum uint64 `json:"activated_support_sum"`
 }
 
 func (kv *EffectiveAmountKey) NumFields() int {
@@ -3564,19 +3565,23 @@ func (kv *EffectiveAmountKey) UnpackKey(buf []byte) {
 }
 
 func (kv *EffectiveAmountValue) PackValue() []byte {
-	// b'>Q'
-	n := 8
+	// b'>QQ'
+	n := 8 + 8
 	buf := make([]byte, n)
 	offset := 0
-	binary.BigEndian.PutUint64(buf[offset:], kv.EffectiveAmount)
+	binary.BigEndian.PutUint64(buf[offset:], kv.ActivatedSum)
+	offset += 8
+	binary.BigEndian.PutUint64(buf[offset:], kv.ActivatedSupportSum)
 	offset += 8
 	return buf[:offset]
 }
 
 func (kv *EffectiveAmountValue) UnpackValue(buf []byte) {
-	// b'>Q'
+	// b'>QQ'
 	offset := 0
-	kv.EffectiveAmount = binary.BigEndian.Uint64(buf[offset:])
+	kv.ActivatedSum = binary.BigEndian.Uint64(buf[offset:])
+	offset += 8
+	kv.ActivatedSupportSum = binary.BigEndian.Uint64(buf[offset:])
 	offset += 8
 }
 

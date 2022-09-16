@@ -571,46 +571,66 @@ func TestGetClaimToChannel(t *testing.T) {
 }
 
 func TestGetEffectiveAmountSupportOnly(t *testing.T) {
-	filePath := "../testdata/S_resolve.csv"
-	want := uint64(78999149300)
-	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	filePath := "../testdata/Si_resolve.csv"
+	want := uint64(20000006)
+	claimHashStr := "00000324e40fcb63a0b517a3660645e9bd99244a"
 	claimHash, _ := hex.DecodeString(claimHashStr)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
 	}
 	defer toDefer()
-	db.Height = 1116054
+	db.Height = 999999999
 
 	amount, err := db.GetEffectiveAmount(claimHash, true)
 	if err != nil {
 		t.Error(err)
 	}
-
 	if amount != want {
 		t.Errorf("Expected %d, got %d", want, amount)
+	}
+
+	// Cross-check against iterator-based implementation.
+	iteratorAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivatedSupportTXOType, db.Height)
+	if err != nil {
+		t.Error(err)
+	}
+	if iteratorAmount != want {
+		t.Errorf("Expected %d, got %d", want, iteratorAmount)
 	}
 }
 
 func TestGetEffectiveAmount(t *testing.T) {
-	filePath := "../testdata/i_resolve.csv"
-	want := uint64(507171810600)
-	claimHashStr := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
+	filePath := "../testdata/Si_resolve.csv"
+	want := uint64(21000006)
+	claimHashStr := "00000324e40fcb63a0b517a3660645e9bd99244a"
 	claimHash, _ := hex.DecodeString(claimHashStr)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
 	if err != nil {
 		t.Error(err)
 	}
 	defer toDefer()
-	db.Height = 1116054
+	db.Height = 999999999
 
 	amount, err := db.GetEffectiveAmount(claimHash, false)
 	if err != nil {
 		t.Error(err)
 	}
-
 	if amount != want {
 		t.Errorf("Expected %d, got %d", want, amount)
+	}
+
+	// Cross-check against iterator-based implementation.
+	iteratorAmount1, err := db.GetActiveAmount(claimHash, prefixes.ActivatedSupportTXOType, db.Height)
+	if err != nil {
+		t.Error(err)
+	}
+	iteratorAmount2, err := db.GetActiveAmount(claimHash, prefixes.ActivateClaimTXOType, db.Height)
+	if err != nil {
+		t.Error(err)
+	}
+	if iteratorAmount1+iteratorAmount2 != want {
+		t.Errorf("Expected %d, got %d (%d + %d)", want, iteratorAmount1+iteratorAmount2, iteratorAmount1, iteratorAmount2)
 	}
 }
 

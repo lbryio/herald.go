@@ -429,7 +429,7 @@ func TestHashXMempoolStatus(t *testing.T) {
 func TestEffectiveAmount(t *testing.T) {
 	prefix := byte(prefixes.EffectiveAmount)
 	filePath := fmt.Sprintf("../../testdata/%c.csv", prefix)
-	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{8}, [][3]int{})
+	//synthesizeTestData([]byte{prefix}, filePath, []int{20}, []int{8, 8}, [][3]int{})
 	key := &prefixes.EffectiveAmountKey{}
 	testGeneric(filePath, prefix, key.NumFields())(t)
 }

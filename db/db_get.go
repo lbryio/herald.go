@@ -446,7 +446,7 @@ func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint
 	}
 
 	startKey := prefixes.NewActiveAmountKey(claimHash, txoType, 0)
-	endKey := prefixes.NewActiveAmountKey(claimHash, txoType, height)
+	endKey := prefixes.NewActiveAmountKey(claimHash, txoType, height+1)
 
 	startKeyRaw := startKey.PartialPack(3)
 	endKeyRaw := endKey.PartialPack(3)
@@ -467,14 +467,6 @@ func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint
 }
 
 func (db *ReadOnlyDBColumnFamily) GetEffectiveAmount(claimHash []byte, supportOnly bool) (uint64, error) {
-	if supportOnly {
-		supportAmount, err := db.GetActiveAmount(claimHash, prefixes.ActivatedSupportTXOType, db.Height+1)
-		if err != nil {
-			return 0, err
-		}
-		return supportAmount, nil
-	}
-
 	handle, err := db.EnsureHandle(prefixes.EffectiveAmount)
 	if err != nil {
 		return 0, err
@@ -492,7 +484,13 @@ func (db *ReadOnlyDBColumnFamily) GetEffectiveAmount(claimHash []byte, supportOn
 
 	value := prefixes.EffectiveAmountValue{}
 	value.UnpackValue(slice.Data())
-	return value.EffectiveAmount, nil
+	var amount uint64
+	if supportOnly {
+		amount += value.ActivatedSupportSum
+	} else {
+		amount += value.ActivatedSum
+	}
+	return amount, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetSupportAmount(claimHash []byte) (uint64, error) {
