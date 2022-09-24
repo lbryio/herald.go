@@ -15,8 +15,6 @@
 
 RES=(0)
 FINALRES=0
-CHUNK_TEST_RES="010000000000000000000000000000000000000000000000000000000000000000000000cc59e59ff97ac092b55e423aa549"
-
 # functions
 
 
@@ -40,7 +38,7 @@ function want_got {
 }
 
 function want_greater {
-	if [ "${WANT}" -gt "${GOT}" ]; then
+	if [ ${WANT} -ge ${GOT} ]; then
 		echo "WANT: ${WANT}"
 		echo "GOT: ${GOT}"
 		RES+=(1)
@@ -94,7 +92,7 @@ read -r -d '' CMD <<- EOM
 	--data '{"id": 1, "method": "blockchain.block.get_chunk", "params": [0]}'
 	| jq .result | sed 's/"//g' | head -c 100
 EOM
-WANT="${CHUNK_TEST_RES}"
+WANT="010000000000000000000000000000000000000000000000000000000000000000000000cc59e59ff97ac092b55e423aa549"
 test_command_with_want
 
 ### blockchain.block.get_header
