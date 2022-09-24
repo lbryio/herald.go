@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/lbryio/herald.go/db/prefixes"
@@ -58,6 +59,8 @@ type ReadOnlyDBColumnFamily struct {
 	BlockedChannels        map[string][]byte
 	FilteredStreams        map[string][]byte
 	FilteredChannels       map[string][]byte
+	OpenIterators          map[string][]chan struct{}
+	ItMut                  sync.RWMutex
 	ShutdownChan           chan struct{}
 	DoneChan               chan struct{}
 	Cleanup                func()
@@ -318,6 +321,20 @@ func intMin(a, b int) int {
 	return b
 }
 
+// FIXME: This was copied from the signal.go file, maybe move it to a more common place?
+// interruptRequested returns true when the channel returned by
+// interruptListener was closed.  This simplifies early shutdown slightly since
+// the caller can just use an if statement instead of a select.
+func interruptRequested(interrupted <-chan struct{}) bool {
+	select {
+	case <-interrupted:
+		return true
+	default:
+	}
+
+	return false
+}
+
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
 
@@ -325,14 +342,27 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ro.SetFillCache(opts.FillCache)
 	it := db.NewIteratorCF(ro, opts.CfHandle)
 	opts.It = it
+	iterKey := fmt.Sprintf("%p", opts)
 
 	it.Seek(opts.Prefix)
 	if opts.Start != nil {
 		it.Seek(opts.Start)
 	}
 
+	if opts.DB != nil {
+		opts.DB.ItMut.Lock()
+		opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
+		opts.DB.ItMut.Unlock()
+	}
+
 	go func() {
 		defer func() {
+			if opts.DB != nil {
+				opts.DB.ItMut.Lock()
+				delete(opts.DB.OpenIterators, iterKey)
+				opts.DB.ItMut.Unlock()
+				opts.DoneChan <- struct{}{}
+			}
 			it.Close()
 			close(ch)
 			ro.Destroy()
@@ -354,6 +384,9 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 		for ; kv != nil && !opts.StopIteration(prevKey) && it.Valid(); it.Next() {
 			if kv = opts.ReadRow(&prevKey); kv != nil {
 				ch <- kv
+			}
+			if interruptRequested(opts.ShutdownChan) {
+				return
 			}
 		}
 	}()
@@ -514,6 +547,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	}
 
 	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
+	db.OpenIterators = make(map[string][]chan struct{})
 
 	cleanupFiles := func() {
 		err = os.RemoveAll(secondaryPath)
@@ -642,7 +676,16 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
+	// FIXME: Do we need to shutdown the iterators first?
 	db.ShutdownChan <- struct{}{}
+	db.ItMut.Lock()
+	for _, it := range db.OpenIterators {
+		it[0] <- struct{}{}
+	}
+	for _, it := range db.OpenIterators {
+		<-it[1]
+	}
+	db.ItMut.Unlock()
 	<-db.DoneChan
 	db.Cleanup()
 }

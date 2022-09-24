@@ -22,6 +22,9 @@ type IterOptions struct {
 	IncludeValue bool
 	RawKey       bool
 	RawValue     bool
+	ShutdownChan chan struct{}
+	DoneChan     chan struct{}
+	DB           *ReadOnlyDBColumnFamily
 	CfHandle     *grocksdb.ColumnFamilyHandle
 	It           *grocksdb.Iterator
 	Serializer   *prefixes.SerializationAPI
@@ -40,6 +43,9 @@ func NewIterateOptions() *IterOptions {
 		IncludeValue: false,
 		RawKey:       false,
 		RawValue:     false,
+		ShutdownChan: make(chan struct{}),
+		DoneChan:     make(chan struct{}),
+		DB:           nil,
 		CfHandle:     nil,
 		It:           nil,
 		Serializer:   prefixes.ProductionAPI,
@@ -98,6 +104,11 @@ func (o *IterOptions) WithRawKey(rawKey bool) *IterOptions {
 
 func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
 	o.RawValue = rawValue
+	return o
+}
+
+func (o *IterOptions) WithDB(db *ReadOnlyDBColumnFamily) *IterOptions {
+	o.DB = db
 	return o
 }
 
