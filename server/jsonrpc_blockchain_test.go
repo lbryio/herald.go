@@ -65,7 +65,7 @@ func TestServerGetHeight(t *testing.T) {
 
 	req := BlockGetServerHeightReq{}
 	var resp *BlockGetServerHeightResp
-	err = s.Get_server_height(nil, &req, &resp)
+	err = s.Get_server_height(&req, &resp)
 	if err != nil {
 		t.Errorf("handler err: %v", err)
 	}
@@ -96,7 +96,7 @@ func TestGetChunk(t *testing.T) {
 	for index := 0; index < 10; index++ {
 		req := BlockGetChunkReq(index)
 		var resp *BlockGetChunkResp
-		err := s.Get_chunk(nil, &req, &resp)
+		err := s.Get_chunk(&req, &resp)
 		if err != nil {
 			t.Errorf("index: %v handler err: %v", index, err)
 		}
@@ -139,7 +139,7 @@ func TestGetHeader(t *testing.T) {
 	for height := 0; height < 700; height += 100 {
 		req := BlockGetHeaderReq(height)
 		var resp *BlockGetHeaderResp
-		err := s.Get_header(nil, &req, &resp)
+		err := s.Get_header(&req, &resp)
 		if err != nil && height <= 500 {
 			t.Errorf("height: %v handler err: %v", height, err)
 		}
@@ -170,7 +170,7 @@ func TestGetBalance(t *testing.T) {
 	for _, addr := range regTestAddrs {
 		req := AddressGetBalanceReq{addr}
 		var resp *AddressGetBalanceResp
-		err := s.Get_balance(nil, &req, &resp)
+		err := s.Get_balance(&req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -201,7 +201,7 @@ func TestGetHistory(t *testing.T) {
 	for _, addr := range regTestAddrs {
 		req := AddressGetHistoryReq{addr}
 		var resp *AddressGetHistoryResp
-		err := s.Get_history(nil, &req, &resp)
+		err := s.Get_history(&req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -232,7 +232,7 @@ func TestListUnspent(t *testing.T) {
 	for _, addr := range regTestAddrs {
 		req := AddressListUnspentReq{addr}
 		var resp *AddressListUnspentResp
-		err := s.Listunspent(nil, &req, &resp)
+		err := s.Listunspent(&req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
