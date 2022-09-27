@@ -3,6 +3,7 @@ package server
 import (
 	"log"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/akamensky/argparse"
@@ -27,7 +28,8 @@ type Args struct {
 	EsPort                      string
 	PrometheusPort              string
 	NotifierPort                string
-	JSONRPCPort                 string
+	JSONRPCPort                 *int
+	JSONRPCHTTPPort             *int
 	EsIndex                     string
 	RefreshDelta                int
 	CacheTTL                    int
@@ -58,7 +60,7 @@ const (
 	DefaultEsPort                      = "9200"
 	DefaultPrometheusPort              = "2112"
 	DefaultNotifierPort                = "18080"
-	DefaultJSONRPCPort                 = "50001"
+	DefaultJSONRPCPort                 = 50001
 	DefaultRefreshDelta                = 5
 	DefaultCacheTTL                    = 5
 	DefaultPeerFile                    = "peers.txt"
@@ -111,6 +113,11 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	searchCmd := parser.NewCommand("search", "claim search")
 	dbCmd := parser.NewCommand("db", "db testing")
 
+	validatePort := func(arg []string) error {
+		_, err := strconv.ParseUint(arg[0], 10, 16)
+		return err
+	}
+
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
 	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
@@ -120,7 +127,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
 	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
-	jsonRPCPort := parser.String("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Default: DefaultJSONRPCPort})
+	jsonRPCPort := parser.Int("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Validate: validatePort, Default: DefaultJSONRPCPort})
+	jsonRPCHTTPPort := parser.Int("", "json-rpc-http-port", &argparse.Options{Required: false, Help: "JSON RPC over HTTP port", Validate: validatePort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
@@ -168,7 +176,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		EsPort:                      *esPort,
 		PrometheusPort:              *prometheusPort,
 		NotifierPort:                *notifierPort,
-		JSONRPCPort:                 *jsonRPCPort,
+		JSONRPCPort:                 jsonRPCPort,
+		JSONRPCHTTPPort:             jsonRPCHTTPPort,
 		EsIndex:                     *esIndex,
 		RefreshDelta:                *refreshDelta,
 		CacheTTL:                    *cacheTTL,

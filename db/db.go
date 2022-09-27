@@ -650,7 +650,7 @@ func (db *ReadOnlyDBColumnFamily) Shutdown() {
 // RunDetectChanges Go routine the runs continuously while the hub is active
 // to keep the db readonly view up to date and handle reorgs on the
 // blockchain.
-func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan *internal.HeightHash) {
+func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan<- interface{}) {
 	go func() {
 		lastPrint := time.Now()
 		for {
@@ -674,7 +674,7 @@ func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan *internal.Height
 }
 
 // DetectChanges keep the rocksdb db in sync and handle reorgs
-func (db *ReadOnlyDBColumnFamily) detectChanges(notifCh chan *internal.HeightHash) error {
+func (db *ReadOnlyDBColumnFamily) detectChanges(notifCh chan<- interface{}) error {
 	err := db.DB.TryCatchUpWithPrimary()
 	if err != nil {
 		return err

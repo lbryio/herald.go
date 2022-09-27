@@ -52,8 +52,13 @@ func (s *Server) DoNotify(heightHash *internal.HeightHash) error {
 
 // RunNotifier Runs the notfying action forever
 func (s *Server) RunNotifier() error {
-	for heightHash := range s.NotifierChan {
-		s.DoNotify(heightHash)
+	for notification := range s.NotifierChan {
+		switch notification.(type) {
+		case internal.HeightHash:
+			heightHash, _ := notification.(internal.HeightHash)
+			s.DoNotify(&heightHash)
+		}
+		s.sessionManager.doNotify(notification)
 	}
 	return nil
 }
