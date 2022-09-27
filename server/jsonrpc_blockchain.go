@@ -10,9 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"strings"
 
-	"github.com/gorilla/rpc"
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
@@ -22,42 +20,6 @@ import (
 	"github.com/lbryio/lbcutil"
 	"golang.org/x/exp/constraints"
 )
-
-type BlockchainCodec struct {
-	rpc.Codec
-}
-
-func (c *BlockchainCodec) NewRequest(r *http.Request) rpc.CodecRequest {
-	return &BlockchainCodecRequest{c.Codec.NewRequest(r)}
-}
-
-// BlockchainCodecRequest provides ability to rewrite the incoming
-// request "method" field. For example:
-//     blockchain.block.get_header -> blockchain_block.Get_header
-//     blockchain.address.listunspent -> blockchain_address.Listunspent
-// This makes the "method" string compatible with Gorilla/RPC
-// requirements.
-type BlockchainCodecRequest struct {
-	rpc.CodecRequest
-}
-
-func (cr *BlockchainCodecRequest) Method() (string, error) {
-	rawMethod, err := cr.CodecRequest.Method()
-	if err != nil {
-		return rawMethod, err
-	}
-	parts := strings.Split(rawMethod, ".")
-	if len(parts) < 2 {
-		return rawMethod, fmt.Errorf("blockchain rpc: service/method ill-formed: %q", rawMethod)
-	}
-	service := strings.Join(parts[0:len(parts)-1], "_")
-	method := parts[len(parts)-1]
-	if len(method) < 1 {
-		return rawMethod, fmt.Errorf("blockchain rpc: method ill-formed: %q", method)
-	}
-	method = strings.ToUpper(string(method[0])) + string(method[1:])
-	return service + "." + method, err
-}
 
 // BlockchainService methods handle "blockchain.block.*" RPCs
 type BlockchainService struct {
