@@ -67,11 +67,11 @@ func (s *Server) StartJsonRPC() error {
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}
-	err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain}, "blockchain_address")
+	err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}
-	err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain}, "blockchain_scripthash")
+	err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain, nil, nil}, "blockchain_scripthash")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}

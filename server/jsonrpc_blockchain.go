@@ -26,16 +26,31 @@ type BlockchainBlockService struct {
 	Chain *chaincfg.Params
 }
 
+// BlockchainBlockService methods handle "blockchain.headers.*" RPCs
+type BlockchainHeadersService struct {
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
+}
+
 // BlockchainAddressService methods handle "blockchain.address.*" RPCs
 type BlockchainAddressService struct {
 	DB    *db.ReadOnlyDBColumnFamily
 	Chain *chaincfg.Params
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
 }
 
 // BlockchainScripthashService methods handle "blockchain.scripthash.*" RPCs
 type BlockchainScripthashService struct {
 	DB    *db.ReadOnlyDBColumnFamily
 	Chain *chaincfg.Params
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
 }
 
 const CHUNK_SIZE = 96
@@ -174,6 +189,47 @@ func (s *BlockchainBlockService) Headers(req *BlockHeadersReq, resp **BlockHeade
 		//last_height := height + count - 1
 	}
 	*resp = result
+	return err
+}
+
+type HeadersSubscribeReq struct {
+	Raw bool `json:"raw"`
+}
+
+type HeadersSubscribeResp struct {
+	BlockHeaderElectrum
+}
+type HeadersSubscribeRawResp struct {
+	Hex    string `json:"hex"`
+	Height uint32 `json:"height"`
+}
+
+// 'blockchain.headers.subscribe'
+func (s *BlockchainHeadersService) Subscribe(req *HeadersSubscribeReq, resp *interface{}) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	s.sessionMgr.headersSubscribe(s.session, req.Raw, true /*subscribe*/)
+	height := s.DB.Height
+	if s.DB.LastState != nil {
+		height = s.DB.LastState.Height
+	}
+	headers, err := s.DB.GetHeaders(height, 1)
+	if err != nil {
+		s.sessionMgr.headersSubscribe(s.session, req.Raw, false /*subscribe*/)
+		return err
+	}
+	if len(headers) < 1 {
+		return errors.New("not found")
+	}
+	if req.Raw {
+		*resp = &HeadersSubscribeRawResp{
+			Hex:    hex.EncodeToString(headers[0][:]),
+			Height: height,
+		}
+	} else {
+		*resp = &HeadersSubscribeResp{*newBlockHeaderElectrum(&headers[0], height)}
+	}
 	return err
 }
 
@@ -448,4 +504,95 @@ func (s *BlockchainScripthashService) Listunspent(req *ScripthashListUnspentReq,
 	result := ScripthashListUnspentResp(unspent)
 	*resp = &result
 	return err
+}
+
+type AddressSubscribeReq []string
+type AddressSubscribeResp []string
+
+// 'blockchain.address.subscribe'
+func (s *BlockchainAddressService) Subscribe(req *AddressSubscribeReq, resp **AddressSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	result := make([]string, 0, len(*req))
+	for _, addr := range *req {
+		address, err := lbcutil.DecodeAddress(addr, s.Chain)
+		if err != nil {
+			return err
+		}
+		script, err := txscript.PayToAddrScript(address)
+		if err != nil {
+			return err
+		}
+		hashX := hashXScript(script, s.Chain)
+		s.sessionMgr.hashXSubscribe(s.session, hashX, addr, true /*subscribe*/)
+		status, err := s.DB.GetStatus(hashX)
+		if err != nil {
+			return err
+		}
+		result = append(result, hex.EncodeToString(status))
+	}
+	*resp = (*AddressSubscribeResp)(&result)
+	return nil
+}
+
+// 'blockchain.address.unsubscribe'
+func (s *BlockchainAddressService) Unsubscribe(req *AddressSubscribeReq, resp **AddressSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	for _, addr := range *req {
+		address, err := lbcutil.DecodeAddress(addr, s.Chain)
+		if err != nil {
+			return err
+		}
+		script, err := txscript.PayToAddrScript(address)
+		if err != nil {
+			return err
+		}
+		hashX := hashXScript(script, s.Chain)
+		s.sessionMgr.hashXSubscribe(s.session, hashX, addr, false /*subscribe*/)
+	}
+	*resp = (*AddressSubscribeResp)(nil)
+	return nil
+}
+
+type ScripthashSubscribeReq string
+type ScripthashSubscribeResp string
+
+// 'blockchain.scripthash.subscribe'
+func (s *BlockchainScripthashService) Subscribe(req *ScripthashSubscribeReq, resp **ScripthashSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	var result string
+	scripthash, err := decodeScriptHash(string(*req))
+	if err != nil {
+		return err
+	}
+	hashX := hashX(scripthash)
+	s.sessionMgr.hashXSubscribe(s.session, hashX, string(*req), true /*subscribe*/)
+
+	status, err := s.DB.GetStatus(hashX)
+	if err != nil {
+		return err
+	}
+	result = hex.EncodeToString(status)
+	*resp = (*ScripthashSubscribeResp)(&result)
+	return nil
+}
+
+// 'blockchain.scripthash.unsubscribe'
+func (s *BlockchainScripthashService) Unsubscribe(req *ScripthashSubscribeReq, resp **ScripthashSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	scripthash, err := decodeScriptHash(string(*req))
+	if err != nil {
+		return err
+	}
+	hashX := hashX(scripthash)
+	s.sessionMgr.hashXSubscribe(s.session, hashX, string(*req), false /*subscribe*/)
+	*resp = (*ScripthashSubscribeResp)(nil)
+	return nil
 }
