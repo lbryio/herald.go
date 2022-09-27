@@ -8,30 +8,8 @@ import (
 	gorilla_mux "github.com/gorilla/mux"
 	gorilla_rpc "github.com/gorilla/rpc"
 	gorilla_json "github.com/gorilla/rpc/json"
-	"github.com/lbryio/herald.go/db"
-	pb "github.com/lbryio/herald.go/protobuf/go"
 	log "github.com/sirupsen/logrus"
 )
-
-type ClaimtrieService struct {
-	DB *db.ReadOnlyDBColumnFamily
-}
-
-type ResolveData struct {
-	Data []string `json:"data"`
-}
-
-type Result struct {
-	Data string `json:"data"`
-}
-
-// Resolve is the json rpc endpoint for 'blockchain.claimtrie.resolve'.
-func (t *ClaimtrieService) Resolve(r *http.Request, args *ResolveData, result **pb.Outputs) error {
-	log.Println("Resolve")
-	res, err := InternalResolve(args.Data, t.DB)
-	*result = res
-	return err
-}
 
 type gorillaRpcCodec struct {
 	gorilla_rpc.Codec
@@ -79,7 +57,7 @@ func (s *Server) StartJsonRPC() error {
 
 	// Register "blockchain.claimtrie.*"" handlers.
 	claimtrieSvc := &ClaimtrieService{s.DB}
-	err := s1.RegisterService(claimtrieSvc, "blockchain_claimtrie")
+	err := s1.RegisterTCPService(claimtrieSvc, "blockchain_claimtrie")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}
