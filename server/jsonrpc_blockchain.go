@@ -28,12 +28,14 @@ type BlockchainBlockService struct {
 
 // BlockchainAddressService methods handle "blockchain.address.*" RPCs
 type BlockchainAddressService struct {
-	BlockchainBlockService
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
 }
 
 // BlockchainScripthashService methods handle "blockchain.scripthash.*" RPCs
 type BlockchainScripthashService struct {
-	BlockchainBlockService
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
 }
 
 const CHUNK_SIZE = 96

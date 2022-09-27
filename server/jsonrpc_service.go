@@ -63,16 +63,15 @@ func (s *Server) StartJsonRPC() error {
 	}
 
 	// Register other "blockchain.{block,address,scripthash}.*" handlers.
-	blockchainSvc := &BlockchainBlockService{s.DB, s.Chain}
-	err = s1.RegisterTCPService(blockchainSvc, "blockchain_block")
+	err = s1.RegisterTCPService(&BlockchainBlockService{s.DB, s.Chain}, "blockchain_block")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}
-	err = s1.RegisterTCPService(&BlockchainAddressService{*blockchainSvc}, "blockchain_address")
+	err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain}, "blockchain_address")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}
-	err = s1.RegisterTCPService(&BlockchainScripthashService{*blockchainSvc}, "blockchain_scripthash")
+	err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain}, "blockchain_scripthash")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}

@@ -161,10 +161,8 @@ func TestGetBalance(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainBlockService{
-			DB:    db,
-			Chain: &chaincfg.RegressionNetParams,
-		},
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	for _, addr := range regTestAddrs {
@@ -192,10 +190,8 @@ func TestGetHistory(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainBlockService{
-			DB:    db,
-			Chain: &chaincfg.RegressionNetParams,
-		},
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	for _, addr := range regTestAddrs {
@@ -223,10 +219,8 @@ func TestListUnspent(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainBlockService{
-			DB:    db,
-			Chain: &chaincfg.RegressionNetParams,
-		},
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	for _, addr := range regTestAddrs {
