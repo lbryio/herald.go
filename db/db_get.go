@@ -266,6 +266,30 @@ func (db *ReadOnlyDBColumnFamily) GetHistory(hashX []byte) ([]TxInfo, error) {
 	return results, nil
 }
 
+func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.HashXStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	key := &prefixes.HashXStatusKey{
+		Prefix: []byte{prefixes.HashXStatus},
+		HashX:  hashX,
+	}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return nil, err
+	} else if slice.Size() == 0 {
+		return nil, err
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	return rawValue, nil
+}
+
 // GetStreamsAndChannelRepostedByChannelHashes returns a map of streams and channel hashes that are reposted by the given channel hashes.
 func (db *ReadOnlyDBColumnFamily) GetStreamsAndChannelRepostedByChannelHashes(reposterChannelHashes [][]byte) (map[string][]byte, map[string][]byte, error) {
 	handle, err := db.EnsureHandle(prefixes.ChannelToClaim)
