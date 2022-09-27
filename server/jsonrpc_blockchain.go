@@ -21,20 +21,20 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-// BlockchainService methods handle "blockchain.block.*" RPCs
-type BlockchainService struct {
+// BlockchainBlockService methods handle "blockchain.block.*" RPCs
+type BlockchainBlockService struct {
 	DB    *db.ReadOnlyDBColumnFamily
 	Chain *chaincfg.Params
 }
 
 // BlockchainAddressService methods handle "blockchain.address.*" RPCs
 type BlockchainAddressService struct {
-	BlockchainService
+	BlockchainBlockService
 }
 
 // BlockchainScripthashService methods handle "blockchain.scripthash.*" RPCs
 type BlockchainScripthashService struct {
-	BlockchainService
+	BlockchainBlockService
 }
 
 const CHUNK_SIZE = 96
@@ -80,7 +80,7 @@ func newBlockHeaderElectrum(header *[HEADER_SIZE]byte, height uint32) *BlockHead
 type BlockGetServerHeightReq struct{}
 type BlockGetServerHeightResp uint32
 
-func (s *BlockchainService) Get_server_height(r *http.Request, req *BlockGetServerHeightReq, resp **BlockGetServerHeightResp) error {
+func (s *BlockchainBlockService) Get_server_height(r *http.Request, req *BlockGetServerHeightReq, resp **BlockGetServerHeightResp) error {
 	if s.DB == nil || s.DB.LastState == nil {
 		return fmt.Errorf("unknown height")
 	}
@@ -93,7 +93,7 @@ type BlockGetChunkReq uint32
 type BlockGetChunkResp string
 
 // 'blockchain.block.get_chunk'
-func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, resp **BlockGetChunkResp) error {
+func (s *BlockchainBlockService) Get_chunk(r *http.Request, req *BlockGetChunkReq, resp **BlockGetChunkResp) error {
 	index := uint32(*req)
 	db_headers, err := s.DB.GetHeaders(index*CHUNK_SIZE, CHUNK_SIZE)
 	if err != nil {
@@ -114,7 +114,7 @@ type BlockGetHeaderResp struct {
 }
 
 // 'blockchain.block.get_header'
-func (s *BlockchainService) Get_header(r *http.Request, req *BlockGetHeaderReq, resp **BlockGetHeaderResp) error {
+func (s *BlockchainBlockService) Get_header(r *http.Request, req *BlockGetHeaderReq, resp **BlockGetHeaderResp) error {
 	height := uint32(*req)
 	headers, err := s.DB.GetHeaders(height, 1)
 	if err != nil {
@@ -144,7 +144,7 @@ type BlockHeadersResp struct {
 }
 
 // 'blockchain.block.headers'
-func (s *BlockchainService) Headers(r *http.Request, req *BlockHeadersReq, resp **BlockHeadersResp) error {
+func (s *BlockchainBlockService) Headers(r *http.Request, req *BlockHeadersReq, resp **BlockHeadersResp) error {
 	count := min(req.Count, MAX_CHUNK_SIZE)
 	db_headers, err := s.DB.GetHeaders(req.StartHeight, count)
 	if err != nil {

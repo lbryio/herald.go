@@ -58,7 +58,7 @@ func TestServerGetHeight(t *testing.T) {
 		return
 	}
 
-	s := &BlockchainService{
+	s := &BlockchainBlockService{
 		DB:    db,
 		Chain: &chaincfg.RegressionNetParams,
 	}
@@ -88,7 +88,7 @@ func TestGetChunk(t *testing.T) {
 		return
 	}
 
-	s := &BlockchainService{
+	s := &BlockchainBlockService{
 		DB:    db,
 		Chain: &chaincfg.RegressionNetParams,
 	}
@@ -131,7 +131,7 @@ func TestGetHeader(t *testing.T) {
 		return
 	}
 
-	s := &BlockchainService{
+	s := &BlockchainBlockService{
 		DB:    db,
 		Chain: &chaincfg.RegressionNetParams,
 	}
@@ -161,7 +161,7 @@ func TestGetBalance(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainService{
+		BlockchainBlockService{
 			DB:    db,
 			Chain: &chaincfg.RegressionNetParams,
 		},
@@ -192,7 +192,7 @@ func TestGetHistory(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainService{
+		BlockchainBlockService{
 			DB:    db,
 			Chain: &chaincfg.RegressionNetParams,
 		},
@@ -223,7 +223,7 @@ func TestListUnspent(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainService{
+		BlockchainBlockService{
 			DB:    db,
 			Chain: &chaincfg.RegressionNetParams,
 		},

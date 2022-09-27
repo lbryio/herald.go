@@ -63,7 +63,7 @@ func (s *Server) StartJsonRPC() error {
 	}
 
 	// Register other "blockchain.{block,address,scripthash}.*" handlers.
-	blockchainSvc := &BlockchainService{s.DB, s.Chain}
+	blockchainSvc := &BlockchainBlockService{s.DB, s.Chain}
 	err = s1.RegisterService(blockchainSvc, "blockchain_block")
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
