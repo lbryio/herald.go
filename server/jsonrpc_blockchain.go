@@ -49,6 +49,34 @@ func min[Ord constraints.Ordered](x, y Ord) Ord {
 	return y
 }
 
+type BlockHeaderElectrum struct {
+	Version       uint32 `json:"version"`
+	PrevBlockHash string `json:"prev_block_hash"`
+	MerkleRoot    string `json:"merkle_root"`
+	ClaimTrieRoot string `json:"claim_trie_root"`
+	Timestamp     uint32 `json:"timestamp"`
+	Bits          uint32 `json:"bits"`
+	Nonce         uint32 `json:"nonce"`
+	BlockHeight   uint32 `json:"block_height"`
+}
+
+func newBlockHeaderElectrum(header *[HEADER_SIZE]byte, height uint32) *BlockHeaderElectrum {
+	var h1, h2, h3 chainhash.Hash
+	h1.SetBytes(header[4:36])
+	h2.SetBytes(header[36:68])
+	h3.SetBytes(header[68:100])
+	return &BlockHeaderElectrum{
+		Version:       binary.LittleEndian.Uint32(header[0:]),
+		PrevBlockHash: h1.String(),
+		MerkleRoot:    h2.String(),
+		ClaimTrieRoot: h3.String(),
+		Timestamp:     binary.LittleEndian.Uint32(header[100:]),
+		Bits:          binary.LittleEndian.Uint32(header[104:]),
+		Nonce:         binary.LittleEndian.Uint32(header[108:]),
+		BlockHeight:   height,
+	}
+}
+
 type BlockGetServerHeightReq struct{}
 type BlockGetServerHeightResp uint32
 
@@ -82,14 +110,7 @@ func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, re
 
 type BlockGetHeaderReq uint32
 type BlockGetHeaderResp struct {
-	Version       uint32 `json:"version"`
-	PrevBlockHash string `json:"prev_block_hash"`
-	MerkleRoot    string `json:"merkle_root"`
-	ClaimTrieRoot string `json:"claim_trie_root"`
-	Timestamp     uint32 `json:"timestamp"`
-	Bits          uint32 `json:"bits"`
-	Nonce         uint32 `json:"nonce"`
-	BlockHeight   uint32 `json:"block_height"`
+	BlockHeaderElectrum
 }
 
 // 'blockchain.block.get_header'
@@ -102,23 +123,7 @@ func (s *BlockchainService) Get_header(r *http.Request, req *BlockGetHeaderReq, 
 	if len(headers) < 1 {
 		return errors.New("not found")
 	}
-	decode := func(header *[HEADER_SIZE]byte, height uint32) *BlockGetHeaderResp {
-		var h1, h2, h3 chainhash.Hash
-		h1.SetBytes(header[4:36])
-		h2.SetBytes(header[36:68])
-		h3.SetBytes(header[68:100])
-		return &BlockGetHeaderResp{
-			Version:       binary.LittleEndian.Uint32(header[0:]),
-			PrevBlockHash: h1.String(),
-			MerkleRoot:    h2.String(),
-			ClaimTrieRoot: h3.String(),
-			Timestamp:     binary.LittleEndian.Uint32(header[100:]),
-			Bits:          binary.LittleEndian.Uint32(header[104:]),
-			Nonce:         binary.LittleEndian.Uint32(header[108:]),
-			BlockHeight:   height,
-		}
-	}
-	*resp = decode(&headers[0], height)
+	*resp = &BlockGetHeaderResp{*newBlockHeaderElectrum(&headers[0], height)}
 	return err
 }
 
