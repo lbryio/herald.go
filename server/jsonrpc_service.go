@@ -55,17 +55,17 @@ func (s *Server) StartJsonRPC() error {
 	defer s.sessionManager.stop()
 
 	// Set up the pure JSONRPC server with persistent connections/sessions.
-	for s.Args.JSONRPCPort != 0 {
+	if s.Args.JSONRPCPort != 0 {
 		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCPort), 10)
 		laddr, err := net.ResolveTCPAddr("tcp", port)
 		if err != nil {
 			log.Errorf("ResoveIPAddr: %v\n", err)
-			break
+			goto fail1
 		}
 		listener, err := net.ListenTCP("tcp", laddr)
 		if err != nil {
 			log.Errorf("ListenTCP: %v\n", err)
-			break
+			goto fail1
 		}
 		log.Infof("JSONRPC server listening on %s", listener.Addr().String())
 		acceptConnections := func(listener net.Listener) {
@@ -80,11 +80,11 @@ func (s *Server) StartJsonRPC() error {
 			}
 		}
 		go acceptConnections(listener)
-		break
 	}
 
+fail1:
 	// Set up the JSONRPC over HTTP server.
-	for s.Args.JSONRPCHTTPPort != 0 {
+	if s.Args.JSONRPCHTTPPort != 0 {
 		s1 := gorilla_rpc.NewServer() // Create a new RPC server
 		// Register the type of data requested as JSON, with custom codec.
 		s1.RegisterCodec(&gorillaRpcCodec{gorilla_json.NewCodec()}, "application/json")
@@ -93,22 +93,31 @@ func (s *Server) StartJsonRPC() error {
 		claimtrieSvc := &ClaimtrieService{s.DB}
 		err := s1.RegisterTCPService(claimtrieSvc, "blockchain_claimtrie")
 		if err != nil {
-			log.Errorf("RegisterService: %v\n", err)
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
 		}
 
 		// Register other "blockchain.{block,address,scripthash}.*" handlers.
 		blockchainSvc := &BlockchainBlockService{s.DB, s.Chain}
 		err = s1.RegisterTCPService(blockchainSvc, "blockchain_block")
 		if err != nil {
-			log.Errorf("RegisterService: %v\n", err)
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
+		err = s1.RegisterTCPService(&BlockchainHeadersService{s.DB, s.Chain, nil, nil}, "blockchain_headers")
 		if err != nil {
-			log.Errorf("RegisterService: %v\n", err)
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+			err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
 		}
 		err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain, nil, nil}, "blockchain_scripthash")
 		if err != nil {
-			log.Errorf("RegisterService: %v\n", err)
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
 		}
 
 		r := gorilla_mux.NewRouter()
@@ -116,8 +125,8 @@ func (s *Server) StartJsonRPC() error {
 		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCHTTPPort), 10)
 		log.Infof("HTTP JSONRPC server listening on %s", port)
 		log.Fatal(http.ListenAndServe(port, r))
-		break
 	}
 
+fail2:
 	return nil
 }

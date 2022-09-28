@@ -201,22 +201,30 @@ func (sm *sessionManager) addSession(conn net.Conn) {
 	blockchainSvc := &BlockchainBlockService{sm.db, sm.chain}
 	err = s1.RegisterName("blockchain.block", blockchainSvc)
 	if err != nil {
-		log.Errorf("RegisterService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
+		goto fail
 	}
 	err = s1.RegisterName("blockchain.headers", &BlockchainHeadersService{sm.db, sm.chain, sm, sess})
 	if err != nil {
-		log.Errorf("RegisterService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
+		goto fail
 	}
 	err = s1.RegisterName("blockchain.address", &BlockchainAddressService{sm.db, sm.chain, sm, sess})
 	if err != nil {
-		log.Errorf("RegisterService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
+		goto fail
 	}
 	err = s1.RegisterName("blockchain.scripthash", &BlockchainScripthashService{sm.db, sm.chain, sm, sess})
 	if err != nil {
-		log.Errorf("RegisterService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
+		goto fail
 	}
 
 	go s1.ServeCodec(&SessionServerCodec{jsonrpc.NewServerCodec(conn), sess})
+	return
+
+fail:
+	sm.removeSession(sess)
 }
 
 func (sm *sessionManager) removeSession(sess *session) {
