@@ -333,7 +333,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		HeightSubs:       make(map[net.Addr]net.Conn),
 		HeightSubsMut:    sync.RWMutex{},
 		NotifierChan:     make(chan interface{}),
-		sessionManager:   newSessionManager(myDB, &chain),
+		sessionManager:   newSessionManager(myDB, &chain, args.MaxSessions, args.SessionTimeout),
 	}
 
 	// Start up our background services

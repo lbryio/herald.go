@@ -11,6 +11,7 @@ import (
 	gorilla_rpc "github.com/gorilla/rpc"
 	gorilla_json "github.com/gorilla/rpc/json"
 	log "github.com/sirupsen/logrus"
+	"golang.org/x/net/netutil"
 )
 
 type gorillaRpcCodec struct {
@@ -79,7 +80,7 @@ func (s *Server) StartJsonRPC() error {
 				s.sessionManager.addSession(conn)
 			}
 		}
-		go acceptConnections(listener)
+		go acceptConnections(netutil.LimitListener(listener, s.sessionManager.sessionsMax))
 	}
 
 fail1:
@@ -109,7 +110,7 @@ fail1:
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-			err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
+		err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2

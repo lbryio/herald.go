@@ -18,8 +18,6 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var SESSION_INACTIVE_TIMEOUT = 2 * time.Minute
-
 type headerNotification struct {
 	internal.HeightHash
 	blockHeader         [HEADER_SIZE]byte
@@ -116,23 +114,28 @@ type sessionMap map[net.Addr]*session
 
 type sessionManager struct {
 	// sessionsMut protects sessions, headerSubs, hashXSubs state
-	sessionsMut sync.RWMutex
-	sessions    sessionMap
-	db          *db.ReadOnlyDBColumnFamily
-	chain       *chaincfg.Params
+	sessionsMut    sync.RWMutex
+	sessions       sessionMap
+	sessionsWait   sync.WaitGroup
+	sessionsMax    int
+	sessionTimeout time.Duration
+	db             *db.ReadOnlyDBColumnFamily
+	chain          *chaincfg.Params
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
 	headerSubs sessionMap
 	// hashXSubs are sessions subscribed via 'blockchain.{address,scripthash}.subscribe'
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(db *db.ReadOnlyDBColumnFamily, chain *chaincfg.Params) *sessionManager {
+func newSessionManager(db *db.ReadOnlyDBColumnFamily, chain *chaincfg.Params, sessionsMax, sessionTimeout int) *sessionManager {
 	return &sessionManager{
-		sessions:   make(sessionMap),
-		db:         db,
-		chain:      chain,
-		headerSubs: make(sessionMap),
-		hashXSubs:  make(map[[HASHX_LEN]byte]sessionMap),
+		sessions:       make(sessionMap),
+		sessionsMax:    sessionsMax,
+		sessionTimeout: time.Duration(sessionTimeout) * time.Second,
+		db:             db,
+		chain:          chain,
+		headerSubs:     make(sessionMap),
+		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
 	}
 }
 
@@ -153,12 +156,14 @@ func (sm *sessionManager) stop() {
 }
 
 func (sm *sessionManager) manage() {
+	sm.sessionsMut.Lock()
 	for _, sess := range sm.sessions {
-		if time.Since(sess.lastRecv) > SESSION_INACTIVE_TIMEOUT {
-			sm.removeSession(sess)
+		if time.Since(sess.lastRecv) > sm.sessionTimeout {
+			sm.removeSessionLocked(sess)
 			log.Infof("session %v timed out", sess.addr.String())
 		}
 	}
+	sm.sessionsMut.Unlock()
 
 	// TEMPORARY TESTING: Send fake notification for specific address.
 	address, _ := lbcutil.DecodeAddress("bNe63fYgYNA85ZQ56p7MwBtuCL7MXPRfrm", sm.chain)
@@ -220,7 +225,12 @@ func (sm *sessionManager) addSession(conn net.Conn) {
 		goto fail
 	}
 
-	go s1.ServeCodec(&SessionServerCodec{jsonrpc.NewServerCodec(conn), sess})
+	sm.sessionsWait.Add(1)
+	go func() {
+		s1.ServeCodec(&SessionServerCodec{jsonrpc.NewServerCodec(conn), sess})
+		log.Infof("session %v goroutine exit", sess.addr.String())
+		sm.sessionsWait.Done()
+	}()
 	return
 
 fail:
@@ -230,6 +240,10 @@ fail:
 func (sm *sessionManager) removeSession(sess *session) {
 	sm.sessionsMut.Lock()
 	defer sm.sessionsMut.Unlock()
+	sm.removeSessionLocked(sess)
+}
+
+func (sm *sessionManager) removeSessionLocked(sess *session) {
 	if sess.headersSub {
 		delete(sm.headerSubs, sess.addr)
 	}

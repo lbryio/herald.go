@@ -30,6 +30,8 @@ type Args struct {
 	NotifierPort                string
 	JSONRPCPort                 int
 	JSONRPCHTTPPort             int
+	MaxSessions                 int
+	SessionTimeout              int
 	EsIndex                     string
 	RefreshDelta                int
 	CacheTTL                    int
@@ -61,6 +63,8 @@ const (
 	DefaultPrometheusPort              = "2112"
 	DefaultNotifierPort                = "18080"
 	DefaultJSONRPCPort                 = 50001
+	DefaultMaxSessions                 = 10000
+	DefaultSessionTimeout              = 300
 	DefaultRefreshDelta                = 5
 	DefaultCacheTTL                    = 5
 	DefaultPeerFile                    = "peers.txt"
@@ -129,6 +133,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
 	jsonRPCPort := parser.Int("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Validate: validatePort})
 	jsonRPCHTTPPort := parser.Int("", "json-rpc-http-port", &argparse.Options{Required: false, Help: "JSON RPC over HTTP port", Validate: validatePort})
+	maxSessions := parser.Int("", "max-sessions", &argparse.Options{Required: false, Help: "Maximum number of electrum clients that can be connected", Default: DefaultMaxSessions})
+	sessionTimeout := parser.Int("", "session-timeout", &argparse.Options{Required: false, Help: "Session inactivity timeout (seconds)", Default: DefaultSessionTimeout})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
@@ -183,6 +189,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		NotifierPort:                *notifierPort,
 		JSONRPCPort:                 *jsonRPCPort,
 		JSONRPCHTTPPort:             *jsonRPCHTTPPort,
+		MaxSessions:                 *maxSessions,
+		SessionTimeout:              *sessionTimeout,
 		EsIndex:                     *esIndex,
 		RefreshDelta:                *refreshDelta,
 		CacheTTL:                    *cacheTTL,
