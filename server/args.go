@@ -28,8 +28,8 @@ type Args struct {
 	EsPort                      string
 	PrometheusPort              string
 	NotifierPort                string
-	JSONRPCPort                 *int
-	JSONRPCHTTPPort             *int
+	JSONRPCPort                 int
+	JSONRPCHTTPPort             int
 	EsIndex                     string
 	RefreshDelta                int
 	CacheTTL                    int
@@ -127,7 +127,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
 	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
-	jsonRPCPort := parser.Int("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Validate: validatePort, Default: DefaultJSONRPCPort})
+	jsonRPCPort := parser.Int("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Validate: validatePort})
 	jsonRPCHTTPPort := parser.Int("", "json-rpc-http-port", &argparse.Options{Required: false, Help: "JSON RPC over HTTP port", Validate: validatePort})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
@@ -166,6 +166,11 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		log.Fatalln(parser.Usage(err))
 	}
 
+	// Use default JSON RPC port only if *neither* JSON RPC arg is specified.
+	if *jsonRPCPort == 0 && *jsonRPCHTTPPort == 0 {
+		*jsonRPCPort = DefaultJSONRPCPort
+	}
+
 	args := &Args{
 		CmdType:                     SearchCmd,
 		Host:                        *host,
@@ -176,8 +181,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		EsPort:                      *esPort,
 		PrometheusPort:              *prometheusPort,
 		NotifierPort:                *notifierPort,
-		JSONRPCPort:                 jsonRPCPort,
-		JSONRPCHTTPPort:             jsonRPCHTTPPort,
+		JSONRPCPort:                 *jsonRPCPort,
+		JSONRPCHTTPPort:             *jsonRPCHTTPPort,
 		EsIndex:                     *esIndex,
 		RefreshDelta:                *refreshDelta,
 		CacheTTL:                    *cacheTTL,

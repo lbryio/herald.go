@@ -55,8 +55,8 @@ func (s *Server) StartJsonRPC() error {
 	defer s.sessionManager.stop()
 
 	// Set up the pure JSONRPC server with persistent connections/sessions.
-	for s.Args.JSONRPCPort != nil {
-		port := ":" + strconv.FormatUint(uint64(*s.Args.JSONRPCPort), 10)
+	for s.Args.JSONRPCPort != 0 {
+		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCPort), 10)
 		laddr, err := net.ResolveTCPAddr("tcp", port)
 		if err != nil {
 			log.Errorf("ResoveIPAddr: %v\n", err)
@@ -67,6 +67,7 @@ func (s *Server) StartJsonRPC() error {
 			log.Errorf("ListenTCP: %v\n", err)
 			break
 		}
+		log.Infof("JSONRPC server listening on %s", listener.Addr().String())
 		acceptConnections := func(listener net.Listener) {
 			for {
 				conn, err := listener.Accept()
@@ -83,7 +84,7 @@ func (s *Server) StartJsonRPC() error {
 	}
 
 	// Set up the JSONRPC over HTTP server.
-	for s.Args.JSONRPCHTTPPort != nil {
+	for s.Args.JSONRPCHTTPPort != 0 {
 		s1 := gorilla_rpc.NewServer() // Create a new RPC server
 		// Register the type of data requested as JSON, with custom codec.
 		s1.RegisterCodec(&gorillaRpcCodec{gorilla_json.NewCodec()}, "application/json")
@@ -112,7 +113,8 @@ func (s *Server) StartJsonRPC() error {
 
 		r := gorilla_mux.NewRouter()
 		r.Handle("/rpc", s1)
-		port := ":" + strconv.FormatUint(uint64(*s.Args.JSONRPCHTTPPort), 10)
+		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCHTTPPort), 10)
+		log.Infof("HTTP JSONRPC server listening on %s", port)
 		log.Fatal(http.ListenAndServe(port, r))
 		break
 	}

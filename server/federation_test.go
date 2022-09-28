@@ -46,7 +46,6 @@ func removeFile(fileName string) {
 
 // makeDefaultArgs creates a default set of arguments for testing the server.
 func makeDefaultArgs() *server.Args {
-	port := server.DefaultJSONRPCPort
 	args := &server.Args{
 		CmdType:                     server.ServeCmd,
 		Host:                        server.DefaultHost,
@@ -56,7 +55,7 @@ func makeDefaultArgs() *server.Args {
 		EsPort:                      server.DefaultEsPort,
 		PrometheusPort:              server.DefaultPrometheusPort,
 		NotifierPort:                server.DefaultNotifierPort,
-		JSONRPCPort:                 &port,
+		JSONRPCPort:                 server.DefaultJSONRPCPort,
 		EsIndex:                     server.DefaultEsIndex,
 		RefreshDelta:                server.DefaultRefreshDelta,
 		CacheTTL:                    server.DefaultCacheTTL,
