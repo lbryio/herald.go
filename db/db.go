@@ -338,34 +338,34 @@ func interruptRequested(interrupted <-chan struct{}) bool {
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
 
-	ro := grocksdb.NewDefaultReadOptions()
-	ro.SetFillCache(opts.FillCache)
-	it := db.NewIteratorCF(ro, opts.CfHandle)
-	opts.It = it
 	iterKey := fmt.Sprintf("%p", opts)
-
-	it.Seek(opts.Prefix)
-	if opts.Start != nil {
-		it.Seek(opts.Start)
-	}
-
 	if opts.DB != nil {
 		opts.DB.ItMut.Lock()
 		opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
 		opts.DB.ItMut.Unlock()
 	}
 
+	ro := grocksdb.NewDefaultReadOptions()
+	ro.SetFillCache(opts.FillCache)
+	it := db.NewIteratorCF(ro, opts.CfHandle)
+	opts.It = it
+
+	it.Seek(opts.Prefix)
+	if opts.Start != nil {
+		it.Seek(opts.Start)
+	}
+
 	go func() {
 		defer func() {
-			if opts.DB != nil {
-				opts.DB.ItMut.Lock()
-				delete(opts.DB.OpenIterators, iterKey)
-				opts.DB.ItMut.Unlock()
-				opts.DoneChan <- struct{}{}
-			}
 			it.Close()
 			close(ch)
 			ro.Destroy()
+			if opts.DB != nil {
+				opts.DB.ItMut.Lock()
+				delete(opts.DB.OpenIterators, iterKey)
+				opts.DoneChan <- struct{}{}
+				opts.DB.ItMut.Unlock()
+			}
 		}()
 
 		var prevKey []byte
@@ -680,10 +680,10 @@ func (db *ReadOnlyDBColumnFamily) Shutdown() {
 	db.ShutdownChan <- struct{}{}
 	db.ItMut.Lock()
 	for _, it := range db.OpenIterators {
-		it[0] <- struct{}{}
+		it[1] <- struct{}{}
 	}
 	for _, it := range db.OpenIterators {
-		<-it[1]
+		<-it[0]
 	}
 	db.ItMut.Unlock()
 	<-db.DoneChan
