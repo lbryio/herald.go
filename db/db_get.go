@@ -3,6 +3,7 @@ package db
 // db_get.go contains the basic access functions to the database.
 
 import (
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"log"
@@ -267,13 +268,53 @@ func (db *ReadOnlyDBColumnFamily) GetHistory(hashX []byte) ([]TxInfo, error) {
 }
 
 func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
+	// Lookup in HashXMempoolStatus first.
+	status, err := db.getMempoolStatus(hashX)
+	if err == nil && status != nil {
+		return status, err
+	}
+
+	// No indexed mempool status. Lookup in HashXStatus second.
 	handle, err := db.EnsureHandle(prefixes.HashXStatus)
 	if err != nil {
 		return nil, err
 	}
-
 	key := &prefixes.HashXStatusKey{
 		Prefix: []byte{prefixes.HashXStatus},
+		HashX:  hashX,
+	}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err == nil && slice.Size() > 0 {
+		rawValue := make([]byte, len(slice.Data()))
+		copy(rawValue, slice.Data())
+		value := prefixes.HashXStatusValue{}
+		value.UnpackValue(rawValue)
+		return value.Status, nil
+	}
+
+	// No indexed status. Fall back to enumerating HashXHistory.
+	txs, err := db.GetHistory(hashX)
+	if err != nil {
+		return nil, err
+	}
+	hash := sha256.New()
+	for _, tx := range txs {
+		hash.Write([]byte(fmt.Sprintf("%s:%d:", tx.TxHash.String(), tx.Height)))
+	}
+	// TODO: Mempool history
+	return hash.Sum(nil), err
+}
+
+func (db *ReadOnlyDBColumnFamily) getMempoolStatus(hashX []byte) ([]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.HashXMempoolStatus)
+	if err != nil {
+		return nil, err
+	}
+
+	key := &prefixes.HashXMempoolStatusKey{
+		Prefix: []byte{prefixes.HashXMempoolStatus},
 		HashX:  hashX,
 	}
 	rawKey := key.PackKey()
@@ -282,12 +323,14 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	} else if slice.Size() == 0 {
-		return nil, err
+		return nil, nil
 	}
 
 	rawValue := make([]byte, len(slice.Data()))
 	copy(rawValue, slice.Data())
-	return rawValue, nil
+	value := prefixes.HashXMempoolStatusValue{}
+	value.UnpackValue(rawValue)
+	return value.Status, nil
 }
 
 // GetStreamsAndChannelRepostedByChannelHashes returns a map of streams and channel hashes that are reposted by the given channel hashes.

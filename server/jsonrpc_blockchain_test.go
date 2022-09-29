@@ -443,7 +443,11 @@ func TestAddressSubscribe(t *testing.T) {
 	script, _ := txscript.PayToAddrScript(address)
 	note := hashXNotification{}
 	copy(note.hashX[:], hashXScript(script, sm.chain))
-	note.status = append(note.status, []byte("fake status bytes for addr2")...)
+	status, err := hex.DecodeString((*resp1)[1])
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	note.status = append(note.status, []byte(status)...)
 	t.Logf("sending notification")
 	sm.doNotify(note)
 
