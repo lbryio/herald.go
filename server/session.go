@@ -119,6 +119,7 @@ type sessionManager struct {
 	sessionsWait   sync.WaitGroup
 	sessionsMax    int
 	sessionTimeout time.Duration
+	manageTicker   *time.Ticker
 	db             *db.ReadOnlyDBColumnFamily
 	chain          *chaincfg.Params
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
@@ -132,6 +133,7 @@ func newSessionManager(db *db.ReadOnlyDBColumnFamily, chain *chaincfg.Params, se
 		sessions:       make(sessionMap),
 		sessionsMax:    sessionsMax,
 		sessionTimeout: time.Duration(sessionTimeout) * time.Second,
+		manageTicker:   time.NewTicker(time.Duration(max(5, sessionTimeout/20)) * time.Second),
 		db:             db,
 		chain:          chain,
 		headerSubs:     make(sessionMap),
@@ -156,17 +158,18 @@ func (sm *sessionManager) stop() {
 }
 
 func (sm *sessionManager) manage() {
-	sm.sessionsMut.Lock()
-	for _, sess := range sm.sessions {
-		if time.Since(sess.lastRecv) > sm.sessionTimeout {
-			sm.removeSessionLocked(sess)
-			log.Infof("session %v timed out", sess.addr.String())
+	for {
+		sm.sessionsMut.Lock()
+		for _, sess := range sm.sessions {
+			if time.Since(sess.lastRecv) > sm.sessionTimeout {
+				sm.removeSessionLocked(sess)
+				log.Infof("session %v timed out", sess.addr.String())
+			}
 		}
+		sm.sessionsMut.Unlock()
+		// Wait for next management clock tick.
+		<-sm.manageTicker.C
 	}
-	sm.sessionsMut.Unlock()
-
-	dur, _ := time.ParseDuration("10s")
-	time.AfterFunc(dur, func() { sm.manage() })
 }
 
 func (sm *sessionManager) addSession(conn net.Conn) *session {

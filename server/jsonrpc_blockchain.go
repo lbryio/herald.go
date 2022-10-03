@@ -65,6 +65,13 @@ func min[Ord constraints.Ordered](x, y Ord) Ord {
 	return y
 }
 
+func max[Ord constraints.Ordered](x, y Ord) Ord {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 type BlockHeaderElectrum struct {
 	Version       uint32 `json:"version"`
 	PrevBlockHash string `json:"prev_block_hash"`
