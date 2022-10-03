@@ -361,9 +361,9 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			close(ch)
 			ro.Destroy()
 			if opts.DB != nil {
+				opts.DoneChan <- struct{}{}
 				opts.DB.ItMut.Lock()
 				delete(opts.DB.OpenIterators, iterKey)
-				opts.DoneChan <- struct{}{}
 				opts.DB.ItMut.Unlock()
 			}
 		}()
@@ -445,7 +445,7 @@ func (db *ReadOnlyDBColumnFamily) selectFrom(prefix []byte, startKey, stopKey pr
 		return nil, err
 	}
 	// Prefix and handle
-	options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix(prefix).WithCfHandle(handle)
 	// Start and stop bounds
 	options = options.WithStart(startKey.PackKey()).WithStop(stopKey.PackKey()).WithIncludeStop(true)
 	// Don't include the key
@@ -606,8 +606,8 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		ShutdownChan:     make(chan struct{}),
-		DoneChan:         make(chan struct{}),
+		ShutdownChan:     make(chan struct{}, 1),
+		DoneChan:         make(chan struct{}, 1),
 	}
 
 	err = myDB.ReadDBState() //TODO: Figure out right place for this
@@ -833,7 +833,7 @@ func (db *ReadOnlyDBColumnFamily) InitHeaders() error {
 	// endKey := prefixes.NewHeaderKey(db.LastState.Height)
 	startKeyRaw := startKey.PackKey()
 	// endKeyRaw := endKey.PackKey()
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true) //.WithIncludeStop(true)
 	options = options.WithStart(startKeyRaw)                       //.WithStop(endKeyRaw)
 
@@ -856,7 +856,7 @@ func (db *ReadOnlyDBColumnFamily) InitTxCounts() error {
 
 	db.TxCounts = stack.NewSliceBacked[uint32](InitialTxCountSize)
 
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
 
 	ch := IterCF(db.DB, options)
@@ -1080,7 +1080,7 @@ func GenerateTestData(prefix byte, fileName string) {
 		log.Fatalln(err)
 	}
 
-	options := NewIterateOptions()
+	options := NewIterateOptions().WithDB(db)
 	options.WithRawKey(true).WithRawValue(true).WithIncludeValue(true)
 	options.WithPrefix([]byte{prefix})
 

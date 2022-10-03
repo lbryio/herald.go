@@ -326,7 +326,7 @@ func (db *ReadOnlyDBColumnFamily) ResolveClaimInChannel(channelHash []byte, norm
 
 	key := prefixes.NewChannelToClaimKey(channelHash, normalizedName)
 	rawKeyPrefix := key.PartialPack(2)
-	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+	options := NewIterateOptions().WithDB(db).WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)
 	// TODO: what's a good default size for this?

@@ -94,7 +94,7 @@ func (db *ReadOnlyDBColumnFamily) GetHeaders(height uint32, count uint32) ([][11
 
 	startKeyRaw := prefixes.NewHeaderKey(height).PackKey()
 	endKeyRaw := prefixes.NewHeaderKey(height + count).PackKey()
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true) //.WithIncludeStop(true)
 	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw)
 
@@ -130,7 +130,7 @@ func (db *ReadOnlyDBColumnFamily) GetBalance(hashX []byte) (uint64, uint64, erro
 	startKeyRaw := startKey.PackKey()
 	endKeyRaw := endKey.PackKey()
 	// Prefix and handle
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.UTXO}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.UTXO}).WithCfHandle(handle)
 	// Start and stop bounds
 	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw).WithIncludeStop(true)
 	// Don't include the key
@@ -346,7 +346,7 @@ func (db *ReadOnlyDBColumnFamily) GetStreamsAndChannelRepostedByChannelHashes(re
 	for _, reposterChannelHash := range reposterChannelHashes {
 		key := prefixes.NewChannelToClaimKeyWHash(reposterChannelHash)
 		rawKeyPrefix := key.PartialPack(1)
-		options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+		options := NewIterateOptions().WithDB(db).WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 		options = options.WithIncludeKey(false).WithIncludeValue(true)
 		ch := IterCF(db.DB, options)
 		// for stream := range Iterate(db.DB, prefixes.ChannelToClaim, []byte{reposterChannelHash}, false) {
@@ -420,7 +420,7 @@ func (db *ReadOnlyDBColumnFamily) GetShortClaimIdUrl(name string, normalizedName
 		log.Printf("partialKey: %#v\n", partialKey)
 		keyPrefix := partialKey.PartialPack(2)
 		// Prefix and handle
-		options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
+		options := NewIterateOptions().WithDB(db).WithPrefix(prefix).WithCfHandle(handle)
 		// Start and stop bounds
 		options = options.WithStart(keyPrefix).WithStop(keyPrefix)
 		// Don't include the key
@@ -518,7 +518,7 @@ func (db *ReadOnlyDBColumnFamily) GetActiveAmount(claimHash []byte, txoType uint
 	startKeyRaw := startKey.PartialPack(3)
 	endKeyRaw := endKey.PartialPack(3)
 	// Prefix and handle
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.ActiveAmount}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.ActiveAmount}).WithCfHandle(handle)
 	// Start and stop bounds
 	options = options.WithStart(startKeyRaw).WithStop(endKeyRaw)
 	// Don't include the key
@@ -674,7 +674,7 @@ func (db *ReadOnlyDBColumnFamily) ControllingClaimIter() <-chan *prefixes.Prefix
 	key := prefixes.NewClaimTakeoverKey("")
 	var rawKeyPrefix []byte = nil
 	rawKeyPrefix = key.PartialPack(0)
-	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+	options := NewIterateOptions().WithDB(db).WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)
 	return ch
@@ -785,7 +785,7 @@ func (db *ReadOnlyDBColumnFamily) BidOrderNameIter(normalizedName string) <-chan
 	key := prefixes.NewBidOrderKey(normalizedName)
 	var rawKeyPrefix []byte = nil
 	rawKeyPrefix = key.PartialPack(1)
-	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+	options := NewIterateOptions().WithDB(db).WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)
 	return ch
@@ -803,7 +803,7 @@ func (db *ReadOnlyDBColumnFamily) ClaimShortIdIter(normalizedName string, claimI
 	} else {
 		rawKeyPrefix = key.PartialPack(1)
 	}
-	options := NewIterateOptions().WithCfHandle(handle).WithPrefix(rawKeyPrefix)
+	options := NewIterateOptions().WithDB(db).WithCfHandle(handle).WithPrefix(rawKeyPrefix)
 	options = options.WithIncludeValue(true) //.WithIncludeStop(true)
 	ch := IterCF(db.DB, options)
 	return ch
