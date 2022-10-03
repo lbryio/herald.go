@@ -606,6 +606,8 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
+		OpenIterators:    make(map[string][]chan struct{}),
+		ItMut:            sync.RWMutex{},
 		ShutdownChan:     make(chan struct{}, 1),
 		DoneChan:         make(chan struct{}, 1),
 	}
@@ -1080,7 +1082,7 @@ func GenerateTestData(prefix byte, fileName string) {
 		log.Fatalln(err)
 	}
 
-	options := NewIterateOptions().WithDB(db)
+	options := NewIterateOptions()
 	options.WithRawKey(true).WithRawValue(true).WithIncludeValue(true)
 	options.WithPrefix([]byte{prefix})
 
