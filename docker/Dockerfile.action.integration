@@ -1,0 +1,13 @@
+FROM jeffreypicard/hub-github-env:dev
+
+COPY scripts/integration_tests.sh /integration_tests.sh
+COPY scripts/cicd_integration_test_runner.sh /cicd_integration_test_runner.sh
+COPY herald /herald
+
+RUN apt install -y jq curl
+
+ENV CGO_LDFLAGS "-L/usr/local/lib -lrocksdb -lstdc++ -lm -lz -lsnappy -llz4 -lzstd"
+ENV CGO_CFLAGS "-I/usr/local/include/rocksdb"
+ENV LD_LIBRARY_PATH /usr/local/lib
+
+ENTRYPOINT ["/cicd_integration_test_runner.sh"]

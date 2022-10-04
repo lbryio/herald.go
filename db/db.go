@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/lbryio/herald.go/db/prefixes"
@@ -58,8 +59,11 @@ type ReadOnlyDBColumnFamily struct {
 	BlockedChannels        map[string][]byte
 	FilteredStreams        map[string][]byte
 	FilteredChannels       map[string][]byte
+	OpenIterators          map[string][]chan struct{}
+	ItMut                  sync.RWMutex
 	ShutdownChan           chan struct{}
 	DoneChan               chan struct{}
+	ShutdownCalled         bool
 	Cleanup                func()
 }
 
@@ -318,8 +322,37 @@ func intMin(a, b int) int {
 	return b
 }
 
+// FIXME: This was copied from the signal.go file, maybe move it to a more common place?
+// interruptRequested returns true when the channel returned by
+// interruptListener was closed.  This simplifies early shutdown slightly since
+// the caller can just use an if statement instead of a select.
+func interruptRequested(interrupted <-chan struct{}) bool {
+	select {
+	case <-interrupted:
+		return true
+	default:
+	}
+
+	return false
+}
+
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
+
+	iterKey := fmt.Sprintf("%p", opts)
+	if opts.DB != nil {
+		opts.DB.ItMut.Lock()
+		// There is a tiny chance that we were wating on the above lock while shutdown was
+		// being called and by the time we get it the db has already notified all active
+		// iterators to shutdown. In this case we go to the else branch.
+		if !opts.DB.ShutdownCalled {
+			opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
+			opts.DB.ItMut.Unlock()
+		} else {
+			opts.DB.ItMut.Unlock()
+			return ch
+		}
+	}
 
 	ro := grocksdb.NewDefaultReadOptions()
 	ro.SetFillCache(opts.FillCache)
@@ -336,6 +369,12 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			it.Close()
 			close(ch)
 			ro.Destroy()
+			if opts.DB != nil {
+				opts.DoneChan <- struct{}{}
+				opts.DB.ItMut.Lock()
+				delete(opts.DB.OpenIterators, iterKey)
+				opts.DB.ItMut.Unlock()
+			}
 		}()
 
 		var prevKey []byte
@@ -354,6 +393,9 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 		for ; kv != nil && !opts.StopIteration(prevKey) && it.Valid(); it.Next() {
 			if kv = opts.ReadRow(&prevKey); kv != nil {
 				ch <- kv
+			}
+			if interruptRequested(opts.ShutdownChan) {
+				return
 			}
 		}
 	}()
@@ -412,7 +454,7 @@ func (db *ReadOnlyDBColumnFamily) selectFrom(prefix []byte, startKey, stopKey pr
 		return nil, err
 	}
 	// Prefix and handle
-	options := NewIterateOptions().WithPrefix(prefix).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix(prefix).WithCfHandle(handle)
 	// Start and stop bounds
 	options = options.WithStart(startKey.PackKey()).WithStop(stopKey.PackKey()).WithIncludeStop(true)
 	// Don't include the key
@@ -514,6 +556,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	}
 
 	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
+	db.OpenIterators = make(map[string][]chan struct{})
 
 	cleanupFiles := func() {
 		err = os.RemoveAll(secondaryPath)
@@ -572,8 +615,11 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		ShutdownChan:     make(chan struct{}),
-		DoneChan:         make(chan struct{}),
+		OpenIterators:    make(map[string][]chan struct{}),
+		ItMut:            sync.RWMutex{},
+		ShutdownChan:     make(chan struct{}, 1),
+		ShutdownCalled:   false,
+		DoneChan:         make(chan struct{}, 1),
 	}
 
 	err = myDB.ReadDBState() //TODO: Figure out right place for this
@@ -643,6 +689,15 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
 	db.ShutdownChan <- struct{}{}
+	db.ItMut.Lock()
+	db.ShutdownCalled = true
+	for _, it := range db.OpenIterators {
+		it[1] <- struct{}{}
+	}
+	for _, it := range db.OpenIterators {
+		<-it[0]
+	}
+	db.ItMut.Unlock()
 	<-db.DoneChan
 	db.Cleanup()
 }
@@ -790,7 +845,7 @@ func (db *ReadOnlyDBColumnFamily) InitHeaders() error {
 	// endKey := prefixes.NewHeaderKey(db.LastState.Height)
 	startKeyRaw := startKey.PackKey()
 	// endKeyRaw := endKey.PackKey()
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.Header}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true) //.WithIncludeStop(true)
 	options = options.WithStart(startKeyRaw)                       //.WithStop(endKeyRaw)
 
@@ -813,7 +868,7 @@ func (db *ReadOnlyDBColumnFamily) InitTxCounts() error {
 
 	db.TxCounts = stack.NewSliceBacked[uint32](InitialTxCountSize)
 
-	options := NewIterateOptions().WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
+	options := NewIterateOptions().WithDB(db).WithPrefix([]byte{prefixes.TxCount}).WithCfHandle(handle)
 	options = options.WithIncludeKey(false).WithIncludeValue(true).WithIncludeStop(true)
 
 	ch := IterCF(db.DB, options)

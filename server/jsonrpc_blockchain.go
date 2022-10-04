@@ -18,6 +18,8 @@ import (
 	"github.com/lbryio/lbcd/wire"
 	"github.com/lbryio/lbcutil"
 	"golang.org/x/exp/constraints"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // BlockchainBlockService methods handle "blockchain.block.*" RPCs
@@ -120,6 +122,7 @@ func (s *BlockchainBlockService) Get_chunk(req *BlockGetChunkReq, resp **BlockGe
 	index := uint32(*req)
 	db_headers, err := s.DB.GetHeaders(index*CHUNK_SIZE, CHUNK_SIZE)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	raw := make([]byte, 0, HEADER_SIZE*len(db_headers))
@@ -141,6 +144,7 @@ func (s *BlockchainBlockService) Get_header(req *BlockGetHeaderReq, resp **Block
 	height := uint32(*req)
 	headers, err := s.DB.GetHeaders(height, 1)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	if len(headers) < 1 {
@@ -171,6 +175,7 @@ func (s *BlockchainBlockService) Headers(req *BlockHeadersReq, resp **BlockHeade
 	count := min(req.Count, MAX_CHUNK_SIZE)
 	db_headers, err := s.DB.GetHeaders(req.StartHeight, count)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	count = uint32(len(db_headers))
@@ -283,18 +288,22 @@ type AddressGetBalanceResp struct {
 func (s *BlockchainAddressService) Get_balance(req *AddressGetBalanceReq, resp **AddressGetBalanceResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	script, err := txscript.PayToAddrScript(address)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashXScript(script, s.Chain)
 	confirmed, unconfirmed, err := s.DB.GetBalance(hashX)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	*resp = &AddressGetBalanceResp{confirmed, unconfirmed}
+
 	return err
 }
 
@@ -310,11 +319,13 @@ type ScripthashGetBalanceResp struct {
 func (s *BlockchainScripthashService) Get_balance(req *scripthashGetBalanceReq, resp **ScripthashGetBalanceResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashX(scripthash)
 	confirmed, unconfirmed, err := s.DB.GetBalance(hashX)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	*resp = &ScripthashGetBalanceResp{confirmed, unconfirmed}
@@ -341,15 +352,18 @@ type AddressGetHistoryResp struct {
 func (s *BlockchainAddressService) Get_history(req *AddressGetHistoryReq, resp **AddressGetHistoryResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	script, err := txscript.PayToAddrScript(address)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashXScript(script, s.Chain)
 	dbTXs, err := s.DB.GetHistory(hashX)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	confirmed := make([]TxInfo, 0, len(dbTXs))
@@ -380,11 +394,13 @@ type ScripthashGetHistoryResp struct {
 func (s *BlockchainScripthashService) Get_history(req *ScripthashGetHistoryReq, resp **ScripthashGetHistoryResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashX(scripthash)
 	dbTXs, err := s.DB.GetHistory(hashX)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	confirmed := make([]TxInfo, 0, len(dbTXs))
@@ -412,10 +428,12 @@ type AddressGetMempoolResp []TxInfoFee
 func (s *BlockchainAddressService) Get_mempool(req *AddressGetMempoolReq, resp **AddressGetMempoolResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	script, err := txscript.PayToAddrScript(address)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashXScript(script, s.Chain)
@@ -436,6 +454,7 @@ type ScripthashGetMempoolResp []TxInfoFee
 func (s *BlockchainScripthashService) Get_mempool(req *ScripthashGetMempoolReq, resp **ScripthashGetMempoolResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashX(scripthash)
@@ -462,10 +481,12 @@ type AddressListUnspentResp []TXOInfo
 func (s *BlockchainAddressService) Listunspent(req *AddressListUnspentReq, resp **AddressListUnspentResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	script, err := txscript.PayToAddrScript(address)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashXScript(script, s.Chain)
@@ -494,6 +515,7 @@ type ScripthashListUnspentResp []TXOInfo
 func (s *BlockchainScripthashService) Listunspent(req *ScripthashListUnspentReq, resp **ScripthashListUnspentResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
+		log.Warn(err)
 		return err
 	}
 	hashX := hashX(scripthash)

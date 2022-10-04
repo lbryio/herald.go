@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"sync"
 	"testing"
 
 	dbpkg "github.com/lbryio/herald.go/db"
@@ -93,6 +94,11 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
+		OpenIterators:    make(map[string][]chan struct{}),
+		ItMut:            sync.RWMutex{},
+		ShutdownChan:     make(chan struct{}, 1),
+		DoneChan:         make(chan struct{}, 1),
+		ShutdownCalled:   false,
 	}
 
 	// err = dbpkg.ReadDBState(myDB) //TODO: Figure out right place for this
