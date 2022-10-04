@@ -98,6 +98,7 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 		ItMut:            sync.RWMutex{},
 		ShutdownChan:     make(chan struct{}, 1),
 		DoneChan:         make(chan struct{}, 1),
+		ShutdownCalled:   false,
 	}
 
 	// err = dbpkg.ReadDBState(myDB) //TODO: Figure out right place for this

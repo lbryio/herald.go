@@ -63,6 +63,7 @@ type ReadOnlyDBColumnFamily struct {
 	ItMut                  sync.RWMutex
 	ShutdownChan           chan struct{}
 	DoneChan               chan struct{}
+	ShutdownCalled         bool
 	Cleanup                func()
 }
 
@@ -341,8 +342,16 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	iterKey := fmt.Sprintf("%p", opts)
 	if opts.DB != nil {
 		opts.DB.ItMut.Lock()
-		opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
-		opts.DB.ItMut.Unlock()
+		// There is a tiny chance that we were wating on the above lock while shutdown was
+		// being called and by the time we get it the db has already notified all active
+		// iterators to shutdown. In this case we go to the else branch.
+		if !opts.DB.ShutdownCalled {
+			opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
+			opts.DB.ItMut.Unlock()
+		} else {
+			opts.DB.ItMut.Unlock()
+			return ch
+		}
 	}
 
 	ro := grocksdb.NewDefaultReadOptions()
@@ -609,6 +618,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		OpenIterators:    make(map[string][]chan struct{}),
 		ItMut:            sync.RWMutex{},
 		ShutdownChan:     make(chan struct{}, 1),
+		ShutdownCalled:   false,
 		DoneChan:         make(chan struct{}, 1),
 	}
 
@@ -678,9 +688,9 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
-	// FIXME: Do we need to shutdown the iterators first?
 	db.ShutdownChan <- struct{}{}
 	db.ItMut.Lock()
+	db.ShutdownCalled = true
 	for _, it := range db.OpenIterators {
 		it[1] <- struct{}{}
 	}
