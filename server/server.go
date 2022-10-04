@@ -18,7 +18,6 @@ import (
 
 	"github.com/ReneKroon/ttlcache/v2"
 	"github.com/lbryio/herald.go/db"
-	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/herald.go/internal/metrics"
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
@@ -53,7 +52,8 @@ type Server struct {
 	ExternalIP       net.IP
 	HeightSubs       map[net.Addr]net.Conn
 	HeightSubsMut    sync.RWMutex
-	NotifierChan     chan *internal.HeightHash
+	NotifierChan     chan interface{}
+	sessionManager   *sessionManager
 	pb.UnimplementedHubServer
 }
 
@@ -332,7 +332,8 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
 		HeightSubs:       make(map[net.Addr]net.Conn),
 		HeightSubsMut:    sync.RWMutex{},
-		NotifierChan:     make(chan *internal.HeightHash),
+		NotifierChan:     make(chan interface{}),
+		sessionManager:   newSessionManager(myDB, &chain, args.MaxSessions, args.SessionTimeout),
 	}
 
 	// Start up our background services

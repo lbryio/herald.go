@@ -80,7 +80,7 @@ func TestNotifierServer(t *testing.T) {
 
 	hash, _ := hex.DecodeString("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	logrus.Warn("sending hash")
-	hub.NotifierChan <- &internal.HeightHash{Height: 1, BlockHash: hash}
+	hub.NotifierChan <- internal.HeightHash{Height: 1, BlockHash: hash}
 
 	res := <-resCh
 	logrus.Info(string(res))

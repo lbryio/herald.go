@@ -9,10 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"net/http"
-	"strings"
 
-	"github.com/gorilla/rpc"
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
@@ -23,56 +20,37 @@ import (
 	"golang.org/x/exp/constraints"
 )
 
-type BlockchainCodec struct {
-	rpc.Codec
-}
-
-func (c *BlockchainCodec) NewRequest(r *http.Request) rpc.CodecRequest {
-	return &BlockchainCodecRequest{c.Codec.NewRequest(r)}
-}
-
-// BlockchainCodecRequest provides ability to rewrite the incoming
-// request "method" field. For example:
-//     blockchain.block.get_header -> blockchain_block.Get_header
-//     blockchain.address.listunspent -> blockchain_address.Listunspent
-// This makes the "method" string compatible with Gorilla/RPC
-// requirements.
-type BlockchainCodecRequest struct {
-	rpc.CodecRequest
-}
-
-func (cr *BlockchainCodecRequest) Method() (string, error) {
-	rawMethod, err := cr.CodecRequest.Method()
-	if err != nil {
-		return rawMethod, err
-	}
-	parts := strings.Split(rawMethod, ".")
-	if len(parts) < 2 {
-		return rawMethod, fmt.Errorf("blockchain rpc: service/method ill-formed: %q", rawMethod)
-	}
-	service := strings.Join(parts[0:len(parts)-1], "_")
-	method := parts[len(parts)-1]
-	if len(method) < 1 {
-		return rawMethod, fmt.Errorf("blockchain rpc: method ill-formed: %q", method)
-	}
-	method = strings.ToUpper(string(method[0])) + string(method[1:])
-	return service + "." + method, err
-}
-
-// BlockchainService methods handle "blockchain.block.*" RPCs
-type BlockchainService struct {
+// BlockchainBlockService methods handle "blockchain.block.*" RPCs
+type BlockchainBlockService struct {
 	DB    *db.ReadOnlyDBColumnFamily
 	Chain *chaincfg.Params
 }
 
+// BlockchainBlockService methods handle "blockchain.headers.*" RPCs
+type BlockchainHeadersService struct {
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
+}
+
 // BlockchainAddressService methods handle "blockchain.address.*" RPCs
 type BlockchainAddressService struct {
-	BlockchainService
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
 }
 
 // BlockchainScripthashService methods handle "blockchain.scripthash.*" RPCs
 type BlockchainScripthashService struct {
-	BlockchainService
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
 }
 
 const CHUNK_SIZE = 96
@@ -87,10 +65,45 @@ func min[Ord constraints.Ordered](x, y Ord) Ord {
 	return y
 }
 
+func max[Ord constraints.Ordered](x, y Ord) Ord {
+	if x > y {
+		return x
+	}
+	return y
+}
+
+type BlockHeaderElectrum struct {
+	Version       uint32 `json:"version"`
+	PrevBlockHash string `json:"prev_block_hash"`
+	MerkleRoot    string `json:"merkle_root"`
+	ClaimTrieRoot string `json:"claim_trie_root"`
+	Timestamp     uint32 `json:"timestamp"`
+	Bits          uint32 `json:"bits"`
+	Nonce         uint32 `json:"nonce"`
+	BlockHeight   uint32 `json:"block_height"`
+}
+
+func newBlockHeaderElectrum(header *[HEADER_SIZE]byte, height uint32) *BlockHeaderElectrum {
+	var h1, h2, h3 chainhash.Hash
+	h1.SetBytes(header[4:36])
+	h2.SetBytes(header[36:68])
+	h3.SetBytes(header[68:100])
+	return &BlockHeaderElectrum{
+		Version:       binary.LittleEndian.Uint32(header[0:]),
+		PrevBlockHash: h1.String(),
+		MerkleRoot:    h2.String(),
+		ClaimTrieRoot: h3.String(),
+		Timestamp:     binary.LittleEndian.Uint32(header[100:]),
+		Bits:          binary.LittleEndian.Uint32(header[104:]),
+		Nonce:         binary.LittleEndian.Uint32(header[108:]),
+		BlockHeight:   height,
+	}
+}
+
 type BlockGetServerHeightReq struct{}
 type BlockGetServerHeightResp uint32
 
-func (s *BlockchainService) Get_server_height(r *http.Request, req *BlockGetServerHeightReq, resp **BlockGetServerHeightResp) error {
+func (s *BlockchainBlockService) Get_server_height(req *BlockGetServerHeightReq, resp **BlockGetServerHeightResp) error {
 	if s.DB == nil || s.DB.LastState == nil {
 		return fmt.Errorf("unknown height")
 	}
@@ -103,7 +116,7 @@ type BlockGetChunkReq uint32
 type BlockGetChunkResp string
 
 // 'blockchain.block.get_chunk'
-func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, resp **BlockGetChunkResp) error {
+func (s *BlockchainBlockService) Get_chunk(req *BlockGetChunkReq, resp **BlockGetChunkResp) error {
 	index := uint32(*req)
 	db_headers, err := s.DB.GetHeaders(index*CHUNK_SIZE, CHUNK_SIZE)
 	if err != nil {
@@ -120,18 +133,11 @@ func (s *BlockchainService) Get_chunk(r *http.Request, req *BlockGetChunkReq, re
 
 type BlockGetHeaderReq uint32
 type BlockGetHeaderResp struct {
-	Version       uint32 `json:"version"`
-	PrevBlockHash string `json:"prev_block_hash"`
-	MerkleRoot    string `json:"merkle_root"`
-	ClaimTrieRoot string `json:"claim_trie_root"`
-	Timestamp     uint32 `json:"timestamp"`
-	Bits          uint32 `json:"bits"`
-	Nonce         uint32 `json:"nonce"`
-	BlockHeight   uint32 `json:"block_height"`
+	BlockHeaderElectrum
 }
 
 // 'blockchain.block.get_header'
-func (s *BlockchainService) Get_header(r *http.Request, req *BlockGetHeaderReq, resp **BlockGetHeaderResp) error {
+func (s *BlockchainBlockService) Get_header(req *BlockGetHeaderReq, resp **BlockGetHeaderResp) error {
 	height := uint32(*req)
 	headers, err := s.DB.GetHeaders(height, 1)
 	if err != nil {
@@ -140,23 +146,7 @@ func (s *BlockchainService) Get_header(r *http.Request, req *BlockGetHeaderReq, 
 	if len(headers) < 1 {
 		return errors.New("not found")
 	}
-	decode := func(header *[HEADER_SIZE]byte, height uint32) *BlockGetHeaderResp {
-		var h1, h2, h3 chainhash.Hash
-		h1.SetBytes(header[4:36])
-		h2.SetBytes(header[36:68])
-		h3.SetBytes(header[68:100])
-		return &BlockGetHeaderResp{
-			Version:       binary.LittleEndian.Uint32(header[0:]),
-			PrevBlockHash: h1.String(),
-			MerkleRoot:    h2.String(),
-			ClaimTrieRoot: h3.String(),
-			Timestamp:     binary.LittleEndian.Uint32(header[100:]),
-			Bits:          binary.LittleEndian.Uint32(header[104:]),
-			Nonce:         binary.LittleEndian.Uint32(header[108:]),
-			BlockHeight:   height,
-		}
-	}
-	*resp = decode(&headers[0], height)
+	*resp = &BlockGetHeaderResp{*newBlockHeaderElectrum(&headers[0], height)}
 	return err
 }
 
@@ -177,7 +167,7 @@ type BlockHeadersResp struct {
 }
 
 // 'blockchain.block.headers'
-func (s *BlockchainService) Headers(r *http.Request, req *BlockHeadersReq, resp **BlockHeadersResp) error {
+func (s *BlockchainBlockService) Headers(req *BlockHeadersReq, resp **BlockHeadersResp) error {
 	count := min(req.Count, MAX_CHUNK_SIZE)
 	db_headers, err := s.DB.GetHeaders(req.StartHeight, count)
 	if err != nil {
@@ -206,6 +196,47 @@ func (s *BlockchainService) Headers(r *http.Request, req *BlockHeadersReq, resp 
 		//last_height := height + count - 1
 	}
 	*resp = result
+	return err
+}
+
+type HeadersSubscribeReq struct {
+	Raw bool `json:"raw"`
+}
+
+type HeadersSubscribeResp struct {
+	BlockHeaderElectrum
+}
+type HeadersSubscribeRawResp struct {
+	Hex    string `json:"hex"`
+	Height uint32 `json:"height"`
+}
+
+// 'blockchain.headers.subscribe'
+func (s *BlockchainHeadersService) Subscribe(req *HeadersSubscribeReq, resp *interface{}) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	s.sessionMgr.headersSubscribe(s.session, req.Raw, true /*subscribe*/)
+	height := s.DB.Height
+	if s.DB.LastState != nil {
+		height = s.DB.LastState.Height
+	}
+	headers, err := s.DB.GetHeaders(height, 1)
+	if err != nil {
+		s.sessionMgr.headersSubscribe(s.session, req.Raw, false /*subscribe*/)
+		return err
+	}
+	if len(headers) < 1 {
+		return errors.New("not found")
+	}
+	if req.Raw {
+		*resp = &HeadersSubscribeRawResp{
+			Hex:    hex.EncodeToString(headers[0][:]),
+			Height: height,
+		}
+	} else {
+		*resp = &HeadersSubscribeResp{*newBlockHeaderElectrum(&headers[0], height)}
+	}
 	return err
 }
 
@@ -249,7 +280,7 @@ type AddressGetBalanceResp struct {
 }
 
 // 'blockchain.address.get_balance'
-func (s *BlockchainAddressService) Get_balance(r *http.Request, req *AddressGetBalanceReq, resp **AddressGetBalanceResp) error {
+func (s *BlockchainAddressService) Get_balance(req *AddressGetBalanceReq, resp **AddressGetBalanceResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return err
@@ -276,7 +307,7 @@ type ScripthashGetBalanceResp struct {
 }
 
 // 'blockchain.scripthash.get_balance'
-func (s *BlockchainScripthashService) Get_balance(r *http.Request, req *scripthashGetBalanceReq, resp **ScripthashGetBalanceResp) error {
+func (s *BlockchainScripthashService) Get_balance(req *scripthashGetBalanceReq, resp **ScripthashGetBalanceResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
 		return err
@@ -307,7 +338,7 @@ type AddressGetHistoryResp struct {
 }
 
 // 'blockchain.address.get_history'
-func (s *BlockchainAddressService) Get_history(r *http.Request, req *AddressGetHistoryReq, resp **AddressGetHistoryResp) error {
+func (s *BlockchainAddressService) Get_history(req *AddressGetHistoryReq, resp **AddressGetHistoryResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return err
@@ -346,7 +377,7 @@ type ScripthashGetHistoryResp struct {
 }
 
 // 'blockchain.scripthash.get_history'
-func (s *BlockchainScripthashService) Get_history(r *http.Request, req *ScripthashGetHistoryReq, resp **ScripthashGetHistoryResp) error {
+func (s *BlockchainScripthashService) Get_history(req *ScripthashGetHistoryReq, resp **ScripthashGetHistoryResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
 		return err
@@ -378,7 +409,7 @@ type AddressGetMempoolReq struct {
 type AddressGetMempoolResp []TxInfoFee
 
 // 'blockchain.address.get_mempool'
-func (s *BlockchainAddressService) Get_mempool(r *http.Request, req *AddressGetMempoolReq, resp **AddressGetMempoolResp) error {
+func (s *BlockchainAddressService) Get_mempool(req *AddressGetMempoolReq, resp **AddressGetMempoolResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return err
@@ -402,7 +433,7 @@ type ScripthashGetMempoolReq struct {
 type ScripthashGetMempoolResp []TxInfoFee
 
 // 'blockchain.scripthash.get_mempool'
-func (s *BlockchainScripthashService) Get_mempool(r *http.Request, req *ScripthashGetMempoolReq, resp **ScripthashGetMempoolResp) error {
+func (s *BlockchainScripthashService) Get_mempool(req *ScripthashGetMempoolReq, resp **ScripthashGetMempoolResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
 		return err
@@ -428,7 +459,7 @@ type TXOInfo struct {
 type AddressListUnspentResp []TXOInfo
 
 // 'blockchain.address.listunspent'
-func (s *BlockchainAddressService) Listunspent(r *http.Request, req *AddressListUnspentReq, resp **AddressListUnspentResp) error {
+func (s *BlockchainAddressService) Listunspent(req *AddressListUnspentReq, resp **AddressListUnspentResp) error {
 	address, err := lbcutil.DecodeAddress(req.Address, s.Chain)
 	if err != nil {
 		return err
@@ -460,7 +491,7 @@ type ScripthashListUnspentReq struct {
 type ScripthashListUnspentResp []TXOInfo
 
 // 'blockchain.scripthash.listunspent'
-func (s *BlockchainScripthashService) Listunspent(r *http.Request, req *ScripthashListUnspentReq, resp **ScripthashListUnspentResp) error {
+func (s *BlockchainScripthashService) Listunspent(req *ScripthashListUnspentReq, resp **ScripthashListUnspentResp) error {
 	scripthash, err := decodeScriptHash(req.ScriptHash)
 	if err != nil {
 		return err
@@ -480,4 +511,95 @@ func (s *BlockchainScripthashService) Listunspent(r *http.Request, req *Scriptha
 	result := ScripthashListUnspentResp(unspent)
 	*resp = &result
 	return err
+}
+
+type AddressSubscribeReq []string
+type AddressSubscribeResp []string
+
+// 'blockchain.address.subscribe'
+func (s *BlockchainAddressService) Subscribe(req *AddressSubscribeReq, resp **AddressSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	result := make([]string, 0, len(*req))
+	for _, addr := range *req {
+		address, err := lbcutil.DecodeAddress(addr, s.Chain)
+		if err != nil {
+			return err
+		}
+		script, err := txscript.PayToAddrScript(address)
+		if err != nil {
+			return err
+		}
+		hashX := hashXScript(script, s.Chain)
+		s.sessionMgr.hashXSubscribe(s.session, hashX, addr, true /*subscribe*/)
+		status, err := s.DB.GetStatus(hashX)
+		if err != nil {
+			return err
+		}
+		result = append(result, hex.EncodeToString(status))
+	}
+	*resp = (*AddressSubscribeResp)(&result)
+	return nil
+}
+
+// 'blockchain.address.unsubscribe'
+func (s *BlockchainAddressService) Unsubscribe(req *AddressSubscribeReq, resp **AddressSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	for _, addr := range *req {
+		address, err := lbcutil.DecodeAddress(addr, s.Chain)
+		if err != nil {
+			return err
+		}
+		script, err := txscript.PayToAddrScript(address)
+		if err != nil {
+			return err
+		}
+		hashX := hashXScript(script, s.Chain)
+		s.sessionMgr.hashXSubscribe(s.session, hashX, addr, false /*subscribe*/)
+	}
+	*resp = (*AddressSubscribeResp)(nil)
+	return nil
+}
+
+type ScripthashSubscribeReq string
+type ScripthashSubscribeResp string
+
+// 'blockchain.scripthash.subscribe'
+func (s *BlockchainScripthashService) Subscribe(req *ScripthashSubscribeReq, resp **ScripthashSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	var result string
+	scripthash, err := decodeScriptHash(string(*req))
+	if err != nil {
+		return err
+	}
+	hashX := hashX(scripthash)
+	s.sessionMgr.hashXSubscribe(s.session, hashX, string(*req), true /*subscribe*/)
+
+	status, err := s.DB.GetStatus(hashX)
+	if err != nil {
+		return err
+	}
+	result = hex.EncodeToString(status)
+	*resp = (*ScripthashSubscribeResp)(&result)
+	return nil
+}
+
+// 'blockchain.scripthash.unsubscribe'
+func (s *BlockchainScripthashService) Unsubscribe(req *ScripthashSubscribeReq, resp **ScripthashSubscribeResp) error {
+	if s.sessionMgr == nil || s.session == nil {
+		return errors.New("no session, rpc not supported")
+	}
+	scripthash, err := decodeScriptHash(string(*req))
+	if err != nil {
+		return err
+	}
+	hashX := hashX(scripthash)
+	s.sessionMgr.hashXSubscribe(s.session, hashX, string(*req), false /*subscribe*/)
+	*resp = (*ScripthashSubscribeResp)(nil)
+	return nil
 }

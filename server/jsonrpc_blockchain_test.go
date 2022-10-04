@@ -1,12 +1,18 @@
 package server
 
 import (
+	"encoding/hex"
 	"encoding/json"
+	"net"
 	"strconv"
+	"sync"
 	"testing"
 
 	"github.com/lbryio/herald.go/db"
+	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbcd/txscript"
+	"github.com/lbryio/lbcutil"
 )
 
 // Source: test_variety_of_transactions_and_longish_history (lbry-sdk/tests/integration/transactions)
@@ -58,14 +64,14 @@ func TestServerGetHeight(t *testing.T) {
 		return
 	}
 
-	s := &BlockchainService{
+	s := &BlockchainBlockService{
 		DB:    db,
 		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	req := BlockGetServerHeightReq{}
 	var resp *BlockGetServerHeightResp
-	err = s.Get_server_height(nil, &req, &resp)
+	err = s.Get_server_height(&req, &resp)
 	if err != nil {
 		t.Errorf("handler err: %v", err)
 	}
@@ -88,7 +94,7 @@ func TestGetChunk(t *testing.T) {
 		return
 	}
 
-	s := &BlockchainService{
+	s := &BlockchainBlockService{
 		DB:    db,
 		Chain: &chaincfg.RegressionNetParams,
 	}
@@ -96,7 +102,7 @@ func TestGetChunk(t *testing.T) {
 	for index := 0; index < 10; index++ {
 		req := BlockGetChunkReq(index)
 		var resp *BlockGetChunkResp
-		err := s.Get_chunk(nil, &req, &resp)
+		err := s.Get_chunk(&req, &resp)
 		if err != nil {
 			t.Errorf("index: %v handler err: %v", index, err)
 		}
@@ -131,7 +137,7 @@ func TestGetHeader(t *testing.T) {
 		return
 	}
 
-	s := &BlockchainService{
+	s := &BlockchainBlockService{
 		DB:    db,
 		Chain: &chaincfg.RegressionNetParams,
 	}
@@ -139,7 +145,7 @@ func TestGetHeader(t *testing.T) {
 	for height := 0; height < 700; height += 100 {
 		req := BlockGetHeaderReq(height)
 		var resp *BlockGetHeaderResp
-		err := s.Get_header(nil, &req, &resp)
+		err := s.Get_header(&req, &resp)
 		if err != nil && height <= 500 {
 			t.Errorf("height: %v handler err: %v", height, err)
 		}
@@ -149,6 +155,128 @@ func TestGetHeader(t *testing.T) {
 		}
 		t.Logf("height: %v resp: %v", height, string(marshalled))
 	}
+}
+
+func TestHeaders(t *testing.T) {
+	secondaryPath := "asdf"
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	defer toDefer()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	s := &BlockchainBlockService{
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
+	}
+
+	for height := uint32(0); height < 700; height += 100 {
+		req := BlockHeadersReq{
+			StartHeight: height,
+			Count:       1,
+			CpHeight:    0,
+			B64:         false,
+		}
+		var resp *BlockHeadersResp
+		err := s.Headers(&req, &resp)
+		marshalled, err := json.MarshalIndent(resp, "", "    ")
+		if err != nil {
+			t.Errorf("height: %v unmarshal err: %v", height, err)
+		}
+		t.Logf("height: %v resp: %v", height, string(marshalled))
+	}
+}
+
+func TestHeadersSubscribe(t *testing.T) {
+	secondaryPath := "asdf"
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	defer toDefer()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	sm := newSessionManager(db, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
+	sm.start()
+	defer sm.stop()
+
+	client1, server1 := net.Pipe()
+	sess1 := sm.addSession(server1)
+	client2, server2 := net.Pipe()
+	sess2 := sm.addSession(server2)
+
+	// Set up logic to read a notification.
+	var received sync.WaitGroup
+	recv := func(client net.Conn) {
+		buf := make([]byte, 1024)
+		len, err := client.Read(buf)
+		if err != nil {
+			t.Errorf("read err: %v", err)
+		}
+		t.Logf("len: %v notification: %v", len, string(buf))
+		received.Done()
+	}
+	received.Add(2)
+	go recv(client1)
+	go recv(client2)
+
+	s1 := &BlockchainHeadersService{
+		DB:         db,
+		Chain:      &chaincfg.RegressionNetParams,
+		sessionMgr: sm,
+		session:    sess1,
+	}
+	s2 := &BlockchainHeadersService{
+		DB:         db,
+		Chain:      &chaincfg.RegressionNetParams,
+		sessionMgr: sm,
+		session:    sess2,
+	}
+
+	// Subscribe with Raw: false.
+	req1 := HeadersSubscribeReq{Raw: false}
+	var r any
+	err = s1.Subscribe(&req1, &r)
+	if err != nil {
+		t.Errorf("handler err: %v", err)
+	}
+	resp1 := r.(*HeadersSubscribeResp)
+	marshalled1, err := json.MarshalIndent(resp1, "", "    ")
+	if err != nil {
+		t.Errorf("unmarshal err: %v", err)
+	}
+	// Subscribe with Raw: true.
+	t.Logf("resp: %v", string(marshalled1))
+	req2 := HeadersSubscribeReq{Raw: true}
+	err = s2.Subscribe(&req2, &r)
+	if err != nil {
+		t.Errorf("handler err: %v", err)
+	}
+	resp2 := r.(*HeadersSubscribeRawResp)
+	marshalled2, err := json.MarshalIndent(resp2, "", "    ")
+	if err != nil {
+		t.Errorf("unmarshal err: %v", err)
+	}
+	t.Logf("resp: %v", string(marshalled2))
+
+	// Now send a notification.
+	header500, err := hex.DecodeString("00000020e9537f98ae80a3aa0936dd424439b2b9305e5e9d9d5c7aa571b4422c447741e739b3109304ed4f0330d6854271db17da221559a46b68db4ceecfebd9f0c75dbe0100000000000000000000000000000000000000000000000000000000000000b3e02063ffff7f2001000000")
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	note1 := headerNotification{
+		HeightHash:          internal.HeightHash{Height: 500},
+		blockHeader:         [112]byte{},
+		blockHeaderElectrum: nil,
+		blockHeaderStr:      "",
+	}
+	copy(note1.blockHeader[:], header500)
+	t.Logf("sending notification")
+	sm.doNotify(note1)
+
+	t.Logf("waiting to receive notification(s)...")
+	received.Wait()
 }
 
 func TestGetBalance(t *testing.T) {
@@ -161,16 +289,14 @@ func TestGetBalance(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainService{
-			DB:    db,
-			Chain: &chaincfg.RegressionNetParams,
-		},
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	for _, addr := range regTestAddrs {
 		req := AddressGetBalanceReq{addr}
 		var resp *AddressGetBalanceResp
-		err := s.Get_balance(nil, &req, &resp)
+		err := s.Get_balance(&req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -192,16 +318,14 @@ func TestGetHistory(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainService{
-			DB:    db,
-			Chain: &chaincfg.RegressionNetParams,
-		},
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	for _, addr := range regTestAddrs {
 		req := AddressGetHistoryReq{addr}
 		var resp *AddressGetHistoryResp
-		err := s.Get_history(nil, &req, &resp)
+		err := s.Get_history(&req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -223,16 +347,14 @@ func TestListUnspent(t *testing.T) {
 	}
 
 	s := &BlockchainAddressService{
-		BlockchainService{
-			DB:    db,
-			Chain: &chaincfg.RegressionNetParams,
-		},
+		DB:    db,
+		Chain: &chaincfg.RegressionNetParams,
 	}
 
 	for _, addr := range regTestAddrs {
 		req := AddressListUnspentReq{addr}
 		var resp *AddressListUnspentResp
-		err := s.Listunspent(nil, &req, &resp)
+		err := s.Listunspent(&req, &resp)
 		if err != nil {
 			t.Errorf("address: %v handler err: %v", addr, err)
 		}
@@ -242,4 +364,93 @@ func TestListUnspent(t *testing.T) {
 		}
 		t.Logf("address: %v resp: %v", addr, string(marshalled))
 	}
+}
+
+func TestAddressSubscribe(t *testing.T) {
+	secondaryPath := "asdf"
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	defer toDefer()
+	if err != nil {
+		t.Error(err)
+		return
+	}
+
+	sm := newSessionManager(db, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
+	sm.start()
+	defer sm.stop()
+
+	client1, server1 := net.Pipe()
+	sess1 := sm.addSession(server1)
+	client2, server2 := net.Pipe()
+	sess2 := sm.addSession(server2)
+
+	// Set up logic to read a notification.
+	var received sync.WaitGroup
+	recv := func(client net.Conn) {
+		buf := make([]byte, 1024)
+		len, err := client.Read(buf)
+		if err != nil {
+			t.Errorf("read err: %v", err)
+		}
+		t.Logf("len: %v notification: %v", len, string(buf))
+		received.Done()
+	}
+	received.Add(2)
+	go recv(client1)
+	go recv(client2)
+
+	s1 := &BlockchainAddressService{
+		DB:         db,
+		Chain:      &chaincfg.RegressionNetParams,
+		sessionMgr: sm,
+		session:    sess1,
+	}
+	s2 := &BlockchainAddressService{
+		DB:         db,
+		Chain:      &chaincfg.RegressionNetParams,
+		sessionMgr: sm,
+		session:    sess2,
+	}
+
+	addr1, addr2 := regTestAddrs[1], regTestAddrs[2]
+	// Subscribe to addr1 and addr2.
+	req1 := AddressSubscribeReq{addr1, addr2}
+	var resp1 *AddressSubscribeResp
+	err = s1.Subscribe(&req1, &resp1)
+	if err != nil {
+		t.Errorf("handler err: %v", err)
+	}
+	marshalled1, err := json.MarshalIndent(resp1, "", "    ")
+	if err != nil {
+		t.Errorf("unmarshal err: %v", err)
+	}
+	// Subscribe to addr2 only.
+	t.Logf("resp: %v", string(marshalled1))
+	req2 := AddressSubscribeReq{addr2}
+	var resp2 *AddressSubscribeResp
+	err = s2.Subscribe(&req2, &resp2)
+	if err != nil {
+		t.Errorf("handler err: %v", err)
+	}
+	marshalled2, err := json.MarshalIndent(resp2, "", "    ")
+	if err != nil {
+		t.Errorf("unmarshal err: %v", err)
+	}
+	t.Logf("resp: %v", string(marshalled2))
+
+	// Now send a notification for addr2.
+	address, _ := lbcutil.DecodeAddress(addr2, sm.chain)
+	script, _ := txscript.PayToAddrScript(address)
+	note := hashXNotification{}
+	copy(note.hashX[:], hashXScript(script, sm.chain))
+	status, err := hex.DecodeString((*resp1)[1])
+	if err != nil {
+		t.Errorf("decode err: %v", err)
+	}
+	note.status = append(note.status, []byte(status)...)
+	t.Logf("sending notification")
+	sm.doNotify(note)
+
+	t.Logf("waiting to receive notification(s)...")
+	received.Wait()
 }
