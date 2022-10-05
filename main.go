@@ -40,12 +40,15 @@ func main() {
 			log.Println("Shutting down server...")
 
 			if s.EsClient != nil {
+				log.Println("Stopping es client...")
 				s.EsClient.Stop()
 			}
 			if s.GrpcServer != nil {
+				log.Println("Stopping grpc server...")
 				s.GrpcServer.GracefulStop()
 			}
 			if s.DB != nil {
+				log.Println("Stopping database connection...")
 				s.DB.Shutdown()
 			}
 

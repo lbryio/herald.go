@@ -556,7 +556,6 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	}
 
 	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
-	db.OpenIterators = make(map[string][]chan struct{})
 
 	cleanupFiles := func() {
 		err = os.RemoveAll(secondaryPath)
@@ -688,18 +687,27 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
+	log.Println("Sending message to ShutdownChan...")
 	db.ShutdownChan <- struct{}{}
+	log.Println("Locking iterator mutex...")
 	db.ItMut.Lock()
+	log.Println("Setting ShutdownCalled to true...")
 	db.ShutdownCalled = true
+	log.Println("Notifying iterators to shutdown...")
 	for _, it := range db.OpenIterators {
 		it[1] <- struct{}{}
 	}
+	log.Println("Waiting for iterators to shutdown...")
 	for _, it := range db.OpenIterators {
 		<-it[0]
 	}
+	log.Println("Unlocking iterator mutex...")
 	db.ItMut.Unlock()
+	log.Println("Sending message to DoneChan...")
 	<-db.DoneChan
+	log.Println("Calling cleanup...")
 	db.Cleanup()
+	log.Println("Leaving Shutdown...")
 }
 
 // RunDetectChanges Go routine the runs continuously while the hub is active
