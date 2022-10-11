@@ -121,6 +121,14 @@ fail1:
 			goto fail2
 		}
 
+		// Register "server.{features,version}"" handlers.
+		serverSvc := &ServerService{s.DB, s.Args}
+		err = s1.RegisterTCPService(serverSvc, "server")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+
 		r := gorilla_mux.NewRouter()
 		r.Handle("/rpc", s1)
 		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCHTTPPort), 10)

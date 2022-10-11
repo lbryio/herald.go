@@ -44,43 +44,10 @@ func removeFile(fileName string) {
 	}
 }
 
-// makeDefaultArgs creates a default set of arguments for testing the server.
-func makeDefaultArgs() *server.Args {
-	args := &server.Args{
-		CmdType:                     server.ServeCmd,
-		Host:                        server.DefaultHost,
-		Port:                        server.DefaultPort,
-		DBPath:                      server.DefaultDBPath,
-		EsHost:                      server.DefaultEsHost,
-		EsPort:                      server.DefaultEsPort,
-		PrometheusPort:              server.DefaultPrometheusPort,
-		NotifierPort:                server.DefaultNotifierPort,
-		JSONRPCPort:                 server.DefaultJSONRPCPort,
-		EsIndex:                     server.DefaultEsIndex,
-		RefreshDelta:                server.DefaultRefreshDelta,
-		CacheTTL:                    server.DefaultCacheTTL,
-		PeerFile:                    server.DefaultPeerFile,
-		Country:                     server.DefaultCountry,
-		DisableEs:                   true,
-		Debug:                       true,
-		DisableLoadPeers:            true,
-		DisableStartPrometheus:      true,
-		DisableStartUDP:             true,
-		DisableWritePeers:           true,
-		DisableRocksDBRefresh:       true,
-		DisableResolve:              true,
-		DisableBlockingAndFiltering: true,
-		DisableStartNotifier:        true,
-		DisableStartJSONRPC:         true,
-	}
-
-	return args
-}
-
 // TestAddPeer tests the ability to add peers
 func TestAddPeer(t *testing.T) {
 	ctx := context.Background()
-	args := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
 
 	tests := []struct {
 		name string
@@ -138,7 +105,7 @@ func TestAddPeer(t *testing.T) {
 // TestPeerWriter tests that peers get written properly
 func TestPeerWriter(t *testing.T) {
 	ctx := context.Background()
-	args := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
 	args.DisableWritePeers = false
 
 	tests := []struct {
@@ -194,8 +161,8 @@ func TestPeerWriter(t *testing.T) {
 // TestAddPeerEndpoint tests the ability to add peers
 func TestAddPeerEndpoint(t *testing.T) {
 	ctx := context.Background()
-	args := makeDefaultArgs()
-	args2 := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 
 	tests := []struct {
@@ -265,9 +232,9 @@ func TestAddPeerEndpoint(t *testing.T) {
 // TestAddPeerEndpoint2 tests the ability to add peers
 func TestAddPeerEndpoint2(t *testing.T) {
 	ctx := context.Background()
-	args := makeDefaultArgs()
-	args2 := makeDefaultArgs()
-	args3 := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
+	args3 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 	args3.Port = "50053"
 
@@ -346,9 +313,9 @@ func TestAddPeerEndpoint2(t *testing.T) {
 // TestAddPeerEndpoint3 tests the ability to add peers
 func TestAddPeerEndpoint3(t *testing.T) {
 	ctx := context.Background()
-	args := makeDefaultArgs()
-	args2 := makeDefaultArgs()
-	args3 := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
+	args3 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 	args3.Port = "50053"
 
@@ -435,9 +402,9 @@ func TestAddPeerEndpoint3(t *testing.T) {
 // TestAddPeer tests the ability to add peers
 func TestUDPServer(t *testing.T) {
 	ctx := context.Background()
-	args := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
 	args.DisableStartUDP = false
-	args2 := makeDefaultArgs()
+	args2 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 	args2.DisableStartUDP = false
 

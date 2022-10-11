@@ -47,7 +47,7 @@ func tcpRead(conn net.Conn) ([]byte, error) {
 }
 
 func TestNotifierServer(t *testing.T) {
-	args := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
 	ctx := context.Background()
 	hub := server.MakeHubServer(ctx, args)
 

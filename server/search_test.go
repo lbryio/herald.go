@@ -56,7 +56,7 @@ func TestSearch(t *testing.T) {
 	}
 
 	context := context.Background()
-	args := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
 	hubServer := server.MakeHubServer(context, args)
 	req := &pb.SearchRequest{
 		Text: "asdf",

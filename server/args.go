@@ -19,26 +19,36 @@ const (
 
 // Args struct contains the arguments to the hub server.
 type Args struct {
-	CmdType                     int
-	Host                        string
-	Port                        string
-	DBPath                      string
-	Chain                       *string
-	EsHost                      string
-	EsPort                      string
-	PrometheusPort              string
-	NotifierPort                string
-	JSONRPCPort                 int
-	JSONRPCHTTPPort             int
-	MaxSessions                 int
-	SessionTimeout              int
-	EsIndex                     string
-	RefreshDelta                int
-	CacheTTL                    int
-	PeerFile                    string
-	Country                     string
-	BlockingChannelIds          []string
-	FilteringChannelIds         []string
+	CmdType             int
+	Host                string
+	Port                string
+	DBPath              string
+	Chain               *string
+	EsHost              string
+	EsPort              string
+	PrometheusPort      string
+	NotifierPort        string
+	JSONRPCPort         int
+	JSONRPCHTTPPort     int
+	MaxSessions         int
+	SessionTimeout      int
+	EsIndex             string
+	RefreshDelta        int
+	CacheTTL            int
+	PeerFile            string
+	Country             string
+	BlockingChannelIds  []string
+	FilteringChannelIds []string
+
+	GenesisHash       string
+	ServerVersion     string
+	ProtocolMin       string
+	ProtocolMax       string
+	ServerDescription string
+	PaymentAddress    string
+	DonationAddress   string
+	DailyFee          string
+
 	Debug                       bool
 	DisableEs                   bool
 	DisableLoadPeers            bool
@@ -54,21 +64,31 @@ type Args struct {
 }
 
 const (
-	DefaultHost                        = "0.0.0.0"
-	DefaultPort                        = "50051"
-	DefaultDBPath                      = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
-	DefaultEsHost                      = "http://localhost"
-	DefaultEsIndex                     = "claims"
-	DefaultEsPort                      = "9200"
-	DefaultPrometheusPort              = "2112"
-	DefaultNotifierPort                = "18080"
-	DefaultJSONRPCPort                 = 50001
-	DefaultMaxSessions                 = 10000
-	DefaultSessionTimeout              = 300
-	DefaultRefreshDelta                = 5
-	DefaultCacheTTL                    = 5
-	DefaultPeerFile                    = "peers.txt"
-	DefaultCountry                     = "US"
+	DefaultHost           = "0.0.0.0"
+	DefaultPort           = "50051"
+	DefaultDBPath         = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
+	DefaultEsHost         = "http://localhost"
+	DefaultEsIndex        = "claims"
+	DefaultEsPort         = "9200"
+	DefaultPrometheusPort = "2112"
+	DefaultNotifierPort   = "18080"
+	DefaultJSONRPCPort    = 50001
+	DefaultMaxSessions    = 10000
+	DefaultSessionTimeout = 300
+	DefaultRefreshDelta   = 5
+	DefaultCacheTTL       = 5
+	DefaultPeerFile       = "peers.txt"
+	DefaultCountry        = "US"
+
+	GENESIS_HASH             = "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463"
+	HUB_PROTOCOL_VERSION     = "0.107.0"
+	PROTOCOL_MIN             = "0.54.0"
+	PROTOCOL_MAX             = "0.199.0"
+	DefaultServerDescription = "Herald"
+	DefaultPaymentAddress    = ""
+	DefaultDonationAddress   = ""
+	DefaultDailyFee          = "1.0"
+
 	DefaultDisableLoadPeers            = false
 	DefaultDisableStartPrometheus      = false
 	DefaultDisableStartUDP             = false
@@ -85,6 +105,49 @@ var (
 	DefaultBlockingChannelIds  = []string{}
 	DefaultFilteringChannelIds = []string{}
 )
+
+// MakeDefaultArgs creates a default set of arguments for testing the server.
+func MakeDefaultTestArgs() *Args {
+	args := &Args{
+		CmdType:        ServeCmd,
+		Host:           DefaultHost,
+		Port:           DefaultPort,
+		DBPath:         DefaultDBPath,
+		EsHost:         DefaultEsHost,
+		EsPort:         DefaultEsPort,
+		PrometheusPort: DefaultPrometheusPort,
+		NotifierPort:   DefaultNotifierPort,
+		JSONRPCPort:    DefaultJSONRPCPort,
+		EsIndex:        DefaultEsIndex,
+		RefreshDelta:   DefaultRefreshDelta,
+		CacheTTL:       DefaultCacheTTL,
+		PeerFile:       DefaultPeerFile,
+		Country:        DefaultCountry,
+
+		GenesisHash:       GENESIS_HASH,
+		ServerVersion:     HUB_PROTOCOL_VERSION,
+		ProtocolMin:       PROTOCOL_MIN,
+		ProtocolMax:       PROTOCOL_MAX,
+		ServerDescription: DefaultServerDescription,
+		PaymentAddress:    DefaultPaymentAddress,
+		DonationAddress:   DefaultDonationAddress,
+		DailyFee:          DefaultDailyFee,
+
+		DisableEs:                   true,
+		Debug:                       true,
+		DisableLoadPeers:            true,
+		DisableStartPrometheus:      true,
+		DisableStartUDP:             true,
+		DisableWritePeers:           true,
+		DisableRocksDBRefresh:       true,
+		DisableResolve:              true,
+		DisableBlockingAndFiltering: true,
+		DisableStartNotifier:        true,
+		DisableStartJSONRPC:         true,
+	}
+
+	return args
+}
 
 // GetEnvironment takes the environment variables as an array of strings
 // and a getkeyval function to turn it into a map.
@@ -111,7 +174,7 @@ func GetEnvironmentStandard() map[string]string {
 func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 
 	environment := GetEnvironmentStandard()
-	parser := argparse.NewParser("hub", "hub server and client")
+	parser := argparse.NewParser("herald", "herald server and client")
 
 	serveCmd := parser.NewCommand("serve", "start the hub server")
 	searchCmd := parser.NewCommand("search", "claim search")
@@ -122,6 +185,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		return err
 	}
 
+	// main server config arguments
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
 	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
 	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
@@ -143,6 +207,13 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	blockingChannelIds := parser.StringList("", "blocking-channel-ids", &argparse.Options{Required: false, Help: "Blocking channel ids", Default: DefaultBlockingChannelIds})
 	filteringChannelIds := parser.StringList("", "filtering-channel-ids", &argparse.Options{Required: false, Help: "Filtering channel ids", Default: DefaultFilteringChannelIds})
 
+	// arguments for server features
+	serverDescription := parser.String("", "server-description", &argparse.Options{Required: false, Help: "Server description", Default: DefaultServerDescription})
+	paymentAddress := parser.String("", "payment-address", &argparse.Options{Required: false, Help: "Payment address", Default: DefaultPaymentAddress})
+	donationAddress := parser.String("", "donation-address", &argparse.Options{Required: false, Help: "Donation address", Default: DefaultDonationAddress})
+	dailyFee := parser.String("", "daily-fee", &argparse.Options{Required: false, Help: "Daily fee", Default: DefaultDailyFee})
+
+	// flags for disabling features
 	debug := parser.Flag("", "debug", &argparse.Options{Required: false, Help: "enable debug logging", Default: false})
 	disableEs := parser.Flag("", "disable-es", &argparse.Options{Required: false, Help: "Disable elastic search, for running/testing independently", Default: false})
 	disableLoadPeers := parser.Flag("", "disable-load-peers", &argparse.Options{Required: false, Help: "Disable load peers from disk at startup", Default: DefaultDisableLoadPeers})
@@ -156,6 +227,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	disableStartNotifier := parser.Flag("", "disable-start-notifier", &argparse.Options{Required: false, Help: "Disable start notifier", Default: DisableStartNotifier})
 	disableStartJSONRPC := parser.Flag("", "disable-start-jsonrpc", &argparse.Options{Required: false, Help: "Disable start jsonrpc endpoint", Default: DisableStartJSONRPC})
 
+	// search command arguments
 	text := parser.String("", "text", &argparse.Options{Required: false, Help: "text query"})
 	name := parser.String("", "name", &argparse.Options{Required: false, Help: "name"})
 	claimType := parser.String("", "claim_type", &argparse.Options{Required: false, Help: "claim_type"})
@@ -178,26 +250,36 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	}
 
 	args := &Args{
-		CmdType:                     SearchCmd,
-		Host:                        *host,
-		Port:                        *port,
-		DBPath:                      *dbPath,
-		Chain:                       chain,
-		EsHost:                      *esHost,
-		EsPort:                      *esPort,
-		PrometheusPort:              *prometheusPort,
-		NotifierPort:                *notifierPort,
-		JSONRPCPort:                 *jsonRPCPort,
-		JSONRPCHTTPPort:             *jsonRPCHTTPPort,
-		MaxSessions:                 *maxSessions,
-		SessionTimeout:              *sessionTimeout,
-		EsIndex:                     *esIndex,
-		RefreshDelta:                *refreshDelta,
-		CacheTTL:                    *cacheTTL,
-		PeerFile:                    *peerFile,
-		Country:                     *country,
-		BlockingChannelIds:          *blockingChannelIds,
-		FilteringChannelIds:         *filteringChannelIds,
+		CmdType:             SearchCmd,
+		Host:                *host,
+		Port:                *port,
+		DBPath:              *dbPath,
+		Chain:               chain,
+		EsHost:              *esHost,
+		EsPort:              *esPort,
+		PrometheusPort:      *prometheusPort,
+		NotifierPort:        *notifierPort,
+		JSONRPCPort:         *jsonRPCPort,
+		JSONRPCHTTPPort:     *jsonRPCHTTPPort,
+		MaxSessions:         *maxSessions,
+		SessionTimeout:      *sessionTimeout,
+		EsIndex:             *esIndex,
+		RefreshDelta:        *refreshDelta,
+		CacheTTL:            *cacheTTL,
+		PeerFile:            *peerFile,
+		Country:             *country,
+		BlockingChannelIds:  *blockingChannelIds,
+		FilteringChannelIds: *filteringChannelIds,
+
+		GenesisHash:       GENESIS_HASH,
+		ServerVersion:     HUB_PROTOCOL_VERSION,
+		ProtocolMin:       PROTOCOL_MIN,
+		ProtocolMax:       PROTOCOL_MAX,
+		ServerDescription: *serverDescription,
+		PaymentAddress:    *paymentAddress,
+		DonationAddress:   *donationAddress,
+		DailyFee:          *dailyFee,
+
 		Debug:                       *debug,
 		DisableEs:                   *disableEs,
 		DisableLoadPeers:            *disableLoadPeers,
