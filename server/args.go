@@ -1,6 +1,7 @@
 package server
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"strconv"
@@ -36,6 +37,7 @@ type Args struct {
 	RefreshDelta        int
 	CacheTTL            int
 	PeerFile            string
+	Banner              *string
 	Country             string
 	BlockingChannelIds  []string
 	FilteringChannelIds []string
@@ -78,6 +80,7 @@ const (
 	DefaultRefreshDelta   = 5
 	DefaultCacheTTL       = 5
 	DefaultPeerFile       = "peers.txt"
+	DefaultBannerFile     = ""
 	DefaultCountry        = "US"
 
 	GENESIS_HASH             = "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463"
@@ -106,6 +109,26 @@ var (
 	DefaultFilteringChannelIds = []string{}
 )
 
+func loadBanner(bannerFile *string, serverVersion string) *string {
+	var banner string
+
+	data, err := os.ReadFile(*bannerFile)
+	if err != nil {
+		banner = fmt.Sprintf("You are connected to an %s server.", serverVersion)
+	} else {
+		banner = string(data)
+	}
+
+	/*
+		banner := os.Getenv("BANNER")
+		if banner == "" {
+			return nil
+		}
+	*/
+
+	return &banner
+}
+
 // MakeDefaultArgs creates a default set of arguments for testing the server.
 func MakeDefaultTestArgs() *Args {
 	args := &Args{
@@ -122,6 +145,7 @@ func MakeDefaultTestArgs() *Args {
 		RefreshDelta:   DefaultRefreshDelta,
 		CacheTTL:       DefaultCacheTTL,
 		PeerFile:       DefaultPeerFile,
+		Banner:         nil,
 		Country:        DefaultCountry,
 
 		GenesisHash:       GENESIS_HASH,
@@ -203,6 +227,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	refreshDelta := parser.Int("", "refresh-delta", &argparse.Options{Required: false, Help: "elasticsearch index refresh delta in seconds", Default: DefaultRefreshDelta})
 	cacheTTL := parser.Int("", "cachettl", &argparse.Options{Required: false, Help: "Cache TTL in minutes", Default: DefaultCacheTTL})
 	peerFile := parser.String("", "peerfile", &argparse.Options{Required: false, Help: "Initial peer file for federation", Default: DefaultPeerFile})
+	bannerFile := parser.String("", "bannerfile", &argparse.Options{Required: false, Help: "Banner file server.banner", Default: DefaultBannerFile})
 	country := parser.String("", "country", &argparse.Options{Required: false, Help: "Country this node is running in. Default US.", Default: DefaultCountry})
 	blockingChannelIds := parser.StringList("", "blocking-channel-ids", &argparse.Options{Required: false, Help: "Blocking channel ids", Default: DefaultBlockingChannelIds})
 	filteringChannelIds := parser.StringList("", "filtering-channel-ids", &argparse.Options{Required: false, Help: "Filtering channel ids", Default: DefaultFilteringChannelIds})
@@ -249,6 +274,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		*jsonRPCPort = DefaultJSONRPCPort
 	}
 
+	banner := loadBanner(bannerFile, HUB_PROTOCOL_VERSION)
+
 	args := &Args{
 		CmdType:             SearchCmd,
 		Host:                *host,
@@ -267,6 +294,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		RefreshDelta:        *refreshDelta,
 		CacheTTL:            *cacheTTL,
 		PeerFile:            *peerFile,
+		Banner:              banner,
 		Country:             *country,
 		BlockingChannelIds:  *blockingChannelIds,
 		FilteringChannelIds: *filteringChannelIds,
