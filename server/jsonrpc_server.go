@@ -1,12 +1,10 @@
 package server
 
 import (
-	"github.com/lbryio/herald.go/db"
 	log "github.com/sirupsen/logrus"
 )
 
-type ServerService struct {
-	DB   *db.ReadOnlyDBColumnFamily
+type ServerFeatureService struct {
 	Args *Args
 }
 
@@ -28,7 +26,7 @@ type ServerFeaturesRes struct {
 }
 
 // Features is the json rpc endpoint for 'server.features'.
-func (t *ServerService) Features(req *ServerFeaturesReq, res **ServerFeaturesRes) error {
+func (t *ServerFeatureService) Features(req *ServerFeaturesReq, res **ServerFeaturesRes) error {
 	log.Println("Features")
 
 	features := &ServerFeaturesRes{
@@ -50,15 +48,38 @@ func (t *ServerService) Features(req *ServerFeaturesReq, res **ServerFeaturesRes
 	return nil
 }
 
+type ServerBannerService struct {
+	Args *Args
+}
+
 type ServerBannerReq struct{}
 
 type ServerBannerRes string
 
 // Banner is the json rpc endpoint for 'server.banner'.
-func (t *ServerService) Banner(req *ServerBannerReq, res **ServerBannerRes) error {
+func (t *ServerBannerService) Banner(req *ServerBannerReq, res **ServerBannerRes) error {
 	log.Println("Banner")
 
 	*res = (*ServerBannerRes)(t.Args.Banner)
+
+	return nil
+}
+
+type ServerVersionService struct {
+	Args *Args
+}
+
+type ServerVersionReq struct{}
+
+type ServerVersionRes string
+
+// Banner is the json rpc endpoint for 'server.version'.
+// FIXME: This should return a struct with the version and the protocol version.
+// <<-- that comment was written by github, scary shit because it's true
+func (t *ServerVersionService) Version(req *ServerVersionReq, res **ServerVersionRes) error {
+	log.Println("Version")
+
+	*res = (*ServerVersionRes)(&t.Args.ServerVersion)
 
 	return nil
 }

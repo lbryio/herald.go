@@ -121,9 +121,23 @@ fail1:
 			goto fail2
 		}
 
-		// Register "server.{features,version}"" handlers.
-		serverSvc := &ServerService{s.DB, s.Args}
-		err = s1.RegisterTCPService(serverSvc, "server")
+		// Register "server.{features,banner,version}" handlers.
+		serverFeatureSvc := &ServerFeatureService{s.Args}
+		err = s1.RegisterTCPService(serverFeatureSvc, "server_features")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+
+		serverBannerSvc := &ServerBannerService{s.Args}
+		err = s1.RegisterTCPService(serverBannerSvc, "server_banner")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+
+		serverVersionSvc := &ServerVersionService{s.Args}
+		err = s1.RegisterTCPService(serverVersionSvc, "server_version")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
