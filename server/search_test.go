@@ -11,6 +11,7 @@ import (
 
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	server "github.com/lbryio/herald.go/server"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/olivere/elastic/v7"
 )
 
@@ -55,13 +56,14 @@ func TestSearch(t *testing.T) {
 		w.Write([]byte(resp))
 	}
 
-	context := context.Background()
+	ctx := context.Background()
+	stopGroup := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
-	hubServer := server.MakeHubServer(context, args)
+	hubServer := server.MakeHubServer(stopGroup, args)
 	req := &pb.SearchRequest{
 		Text: "asdf",
 	}
-	out, err := hubServer.Search(context, req)
+	out, err := hubServer.Search(ctx, req)
 	if err != nil {
 		log.Println(err)
 	}

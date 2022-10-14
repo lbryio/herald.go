@@ -6,6 +6,7 @@ import (
 	"bytes"
 
 	"github.com/lbryio/herald.go/db/prefixes"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"
@@ -22,12 +23,13 @@ type IterOptions struct {
 	IncludeValue bool
 	RawKey       bool
 	RawValue     bool
-	ShutdownChan chan struct{}
-	DoneChan     chan struct{}
-	DB           *ReadOnlyDBColumnFamily
-	CfHandle     *grocksdb.ColumnFamilyHandle
-	It           *grocksdb.Iterator
-	Serializer   *prefixes.SerializationAPI
+	Grp          *stop.Group
+	// ShutdownChan chan struct{}
+	// DoneChan     chan struct{}
+	DB         *ReadOnlyDBColumnFamily
+	CfHandle   *grocksdb.ColumnFamilyHandle
+	It         *grocksdb.Iterator
+	Serializer *prefixes.SerializationAPI
 }
 
 // NewIterateOptions creates a defualt options structure for a db iterator.
@@ -43,12 +45,13 @@ func NewIterateOptions() *IterOptions {
 		IncludeValue: false,
 		RawKey:       false,
 		RawValue:     false,
-		ShutdownChan: make(chan struct{}, 1),
-		DoneChan:     make(chan struct{}, 1),
-		DB:           nil,
-		CfHandle:     nil,
-		It:           nil,
-		Serializer:   prefixes.ProductionAPI,
+		Grp:          nil,
+		// ShutdownChan: make(chan struct{}, 1),
+		// DoneChan:     make(chan struct{}, 1),
+		DB:         nil,
+		CfHandle:   nil,
+		It:         nil,
+		Serializer: prefixes.ProductionAPI,
 	}
 }
 
@@ -109,6 +112,11 @@ func (o *IterOptions) WithRawValue(rawValue bool) *IterOptions {
 
 func (o *IterOptions) WithDB(db *ReadOnlyDBColumnFamily) *IterOptions {
 	o.DB = db
+	// o.Grp = stop.NewDebug(db.Grp)
+	// iterKey := fmt.Sprintf("%p", o)
+	// o.Grp.AddNamed(1, iterKey)
+	o.Grp = stop.New(db.Grp)
+	o.Grp.Add(1)
 	return o
 }
 

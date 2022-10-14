@@ -8,12 +8,13 @@ import (
 	"os"
 	"os/signal"
 
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
 
 // shutdownRequestChannel is used to initiate shutdown from one of the
 // subsystems using the same code paths as when an interrupt signal is received.
-var shutdownRequestChannel = make(chan struct{})
+var shutdownRequestChannel = make(stop.Chan)
 
 // interruptSignals defines the default signals to catch in order to do a proper
 // shutdown.  This may be modified during init depending on the platform.

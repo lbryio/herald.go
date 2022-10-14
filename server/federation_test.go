@@ -13,6 +13,7 @@ import (
 	"github.com/lbryio/herald.go/internal/metrics"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	server "github.com/lbryio/herald.go/server"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	dto "github.com/prometheus/client_model/go"
 	"google.golang.org/grpc"
 )
@@ -46,7 +47,8 @@ func removeFile(fileName string) {
 
 // TestAddPeer tests the ability to add peers
 func TestAddPeer(t *testing.T) {
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 
 	tests := []struct {
@@ -104,7 +106,8 @@ func TestAddPeer(t *testing.T) {
 
 // TestPeerWriter tests that peers get written properly
 func TestPeerWriter(t *testing.T) {
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args.DisableWritePeers = false
 
@@ -160,7 +163,8 @@ func TestPeerWriter(t *testing.T) {
 
 // TestAddPeerEndpoint tests the ability to add peers
 func TestAddPeerEndpoint(t *testing.T) {
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args2 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
@@ -231,7 +235,8 @@ func TestAddPeerEndpoint(t *testing.T) {
 
 // TestAddPeerEndpoint2 tests the ability to add peers
 func TestAddPeerEndpoint2(t *testing.T) {
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args2 := server.MakeDefaultTestArgs()
 	args3 := server.MakeDefaultTestArgs()
@@ -312,7 +317,8 @@ func TestAddPeerEndpoint2(t *testing.T) {
 
 // TestAddPeerEndpoint3 tests the ability to add peers
 func TestAddPeerEndpoint3(t *testing.T) {
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args2 := server.MakeDefaultTestArgs()
 	args3 := server.MakeDefaultTestArgs()
@@ -401,7 +407,8 @@ func TestAddPeerEndpoint3(t *testing.T) {
 
 // TestAddPeer tests the ability to add peers
 func TestUDPServer(t *testing.T) {
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args.DisableStartUDP = false
 	args2 := server.MakeDefaultTestArgs()

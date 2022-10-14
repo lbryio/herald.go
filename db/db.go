@@ -16,6 +16,7 @@ import (
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/herald.go/internal/metrics"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"
@@ -61,6 +62,7 @@ type ReadOnlyDBColumnFamily struct {
 	FilteredChannels       map[string][]byte
 	OpenIterators          map[string][]chan struct{}
 	ItMut                  sync.RWMutex
+	Grp                    *stop.Group
 	ShutdownChan           chan struct{}
 	DoneChan               chan struct{}
 	ShutdownCalled         bool
@@ -339,17 +341,22 @@ func interruptRequested(interrupted <-chan struct{}) bool {
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
 
-	iterKey := fmt.Sprintf("%p", opts)
+	// iterKey := fmt.Sprintf("%p", opts)
 	if opts.DB != nil {
-		opts.DB.ItMut.Lock()
-		// There is a tiny chance that we were wating on the above lock while shutdown was
-		// being called and by the time we get it the db has already notified all active
-		// iterators to shutdown. In this case we go to the else branch.
-		if !opts.DB.ShutdownCalled {
-			opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
-			opts.DB.ItMut.Unlock()
-		} else {
-			opts.DB.ItMut.Unlock()
+		// opts.DB.ItMut.Lock()
+		// // There is a tiny chance that we were wating on the above lock while shutdown was
+		// // being called and by the time we get it the db has already notified all active
+		// // iterators to shutdown. In this case we go to the else branch.
+		// if !opts.DB.ShutdownCalled {
+		// 	opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
+		// 	opts.DB.ItMut.Unlock()
+		// } else {
+		// 	opts.DB.ItMut.Unlock()
+		// 	return ch
+		// }
+		if opts.DB.ShutdownCalled && opts.Grp != nil {
+			// opts.Grp.DoneNamed(iterKey)
+			opts.Grp.Done()
 			return ch
 		}
 	}
@@ -369,11 +376,13 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			it.Close()
 			close(ch)
 			ro.Destroy()
-			if opts.DB != nil {
-				opts.DoneChan <- struct{}{}
-				opts.DB.ItMut.Lock()
-				delete(opts.DB.OpenIterators, iterKey)
-				opts.DB.ItMut.Unlock()
+			if opts.DB != nil && opts.Grp != nil {
+				// opts.Grp.DoneNamed(iterKey)
+				opts.Grp.Done()
+				// opts.DoneChan <- struct{}{}
+				// opts.DB.ItMut.Lock()
+				// delete(opts.DB.OpenIterators, iterKey)
+				// opts.DB.ItMut.Unlock()
 			}
 		}()
 
@@ -394,7 +403,7 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			if kv = opts.ReadRow(&prevKey); kv != nil {
 				ch <- kv
 			}
-			if interruptRequested(opts.ShutdownChan) {
+			if opts.Grp != nil && interruptRequested(opts.Grp.Ch()) {
 				return
 			}
 		}
@@ -687,24 +696,26 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
-	log.Println("Sending message to ShutdownChan...")
-	db.ShutdownChan <- struct{}{}
-	log.Println("Locking iterator mutex...")
-	db.ItMut.Lock()
-	log.Println("Setting ShutdownCalled to true...")
 	db.ShutdownCalled = true
-	log.Println("Notifying iterators to shutdown...")
-	for _, it := range db.OpenIterators {
-		it[1] <- struct{}{}
-	}
-	log.Println("Waiting for iterators to shutdown...")
-	for _, it := range db.OpenIterators {
-		<-it[0]
-	}
-	log.Println("Unlocking iterator mutex...")
-	db.ItMut.Unlock()
-	log.Println("Sending message to DoneChan...")
-	<-db.DoneChan
+	db.Grp.StopAndWait()
+	// log.Println("Sending message to ShutdownChan...")
+	// db.ShutdownChan <- struct{}{}
+	// log.Println("Locking iterator mutex...")
+	// db.ItMut.Lock()
+	// log.Println("Setting ShutdownCalled to true...")
+	// db.ShutdownCalled = true
+	// log.Println("Notifying iterators to shutdown...")
+	// for _, it := range db.OpenIterators {
+	// 	it[1] <- struct{}{}
+	// }
+	// log.Println("Waiting for iterators to shutdown...")
+	// for _, it := range db.OpenIterators {
+	// 	<-it[0]
+	// }
+	// log.Println("Unlocking iterator mutex...")
+	// db.ItMut.Unlock()
+	// log.Println("Sending message to DoneChan...")
+	// <-db.DoneChan
 	log.Println("Calling cleanup...")
 	db.Cleanup()
 	log.Println("Leaving Shutdown...")

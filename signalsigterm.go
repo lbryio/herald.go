@@ -10,9 +10,12 @@ package main
 import (
 	"os"
 	"syscall"
+
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 )
 
 // initsignals sets the signals to be caught by the signal handler
-func initsignals() {
+func initsignals(stopCh stop.Chan) {
+	shutdownRequestChannel = stopCh
 	interruptSignals = []os.Signal{os.Interrupt, syscall.SIGTERM}
 }

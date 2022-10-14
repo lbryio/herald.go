@@ -22,6 +22,7 @@ import (
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -53,6 +54,7 @@ type Server struct {
 	HeightSubs       map[net.Addr]net.Conn
 	HeightSubsMut    sync.RWMutex
 	NotifierChan     chan interface{}
+	Grp              *stop.Group
 	sessionManager   *sessionManager
 	pb.UnimplementedHubServer
 }
@@ -217,7 +219,7 @@ func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
 // MakeHubServer takes the arguments given to a hub when it's started and
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
-func MakeHubServer(ctx context.Context, args *Args) *Server {
+func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(0))
 
 	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
@@ -272,6 +274,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		if err != nil {
 			logrus.Warning(err)
 		}
+		myDB.Grp = stop.NewDebug(grp)
 	}
 
 	dbChain := (*chaincfg.Params)(nil)
@@ -333,6 +336,7 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		HeightSubs:       make(map[net.Addr]net.Conn),
 		HeightSubsMut:    sync.RWMutex{},
 		NotifierChan:     make(chan interface{}),
+		Grp:              grp,
 		sessionManager:   newSessionManager(myDB, &chain, args.MaxSessions, args.SessionTimeout),
 	}
 
