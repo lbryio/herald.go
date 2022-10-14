@@ -277,6 +277,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		myDB.Grp = stop.NewDebug(grp)
 	}
 
+	// Determine which chain to use based on db and cli values
 	dbChain := (*chaincfg.Params)(nil)
 	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
 		// The chain params can be inferred from DBStateValue.
@@ -312,6 +313,8 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		chain = *cliChain
 	}
 	logrus.Infof("network: %v", chain.Name)
+
+	args.GenesisHash = chain.GenesisHash.String()
 
 	s := &Server{
 		GrpcServer:       grpcServer,

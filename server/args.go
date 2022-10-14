@@ -148,7 +148,7 @@ func MakeDefaultTestArgs() *Args {
 		Banner:         nil,
 		Country:        DefaultCountry,
 
-		GenesisHash:       GENESIS_HASH,
+		GenesisHash:       chaincfg.TestNet3Params.GenesisHash.String(),
 		ServerVersion:     HUB_PROTOCOL_VERSION,
 		ProtocolMin:       PROTOCOL_MIN,
 		ProtocolMax:       PROTOCOL_MAX,
