@@ -59,7 +59,6 @@ type ReadOnlyDBColumnFamily struct {
 	BlockedChannels        map[string][]byte
 	FilteredStreams        map[string][]byte
 	FilteredChannels       map[string][]byte
-	OpenIterators          map[string][]chan struct{}
 	Grp                    *stop.Group
 	ShutdownChan           chan struct{}
 	DoneChan               chan struct{}
@@ -602,7 +601,6 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		OpenIterators:    make(map[string][]chan struct{}),
 		ShutdownChan:     make(chan struct{}, 1),
 		DoneChan:         make(chan struct{}, 1),
 	}

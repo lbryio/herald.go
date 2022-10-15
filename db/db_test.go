@@ -93,7 +93,6 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		OpenIterators:    make(map[string][]chan struct{}),
 		ShutdownChan:     make(chan struct{}, 1),
 		DoneChan:         make(chan struct{}, 1),
 	}
