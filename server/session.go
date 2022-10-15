@@ -121,6 +121,7 @@ type sessionManager struct {
 	sessionTimeout time.Duration
 	manageTicker   *time.Ticker
 	db             *db.ReadOnlyDBColumnFamily
+	args           *Args
 	chain          *chaincfg.Params
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
 	headerSubs sessionMap
@@ -128,13 +129,14 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(db *db.ReadOnlyDBColumnFamily, chain *chaincfg.Params, sessionsMax, sessionTimeout int) *sessionManager {
+func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, chain *chaincfg.Params, sessionsMax, sessionTimeout int) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
 		sessionsMax:    sessionsMax,
 		sessionTimeout: time.Duration(sessionTimeout) * time.Second,
 		manageTicker:   time.NewTicker(time.Duration(max(5, sessionTimeout/20)) * time.Second),
 		db:             db,
+		args:           args,
 		chain:          chain,
 		headerSubs:     make(sessionMap),
 		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
@@ -190,9 +192,16 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	// each request and update subscriptions.
 	s1 := rpc.NewServer()
 
+	// Register "server.{features,banner,version}" handlers.
+	serverSvc := &ServerService{sm.args}
+	err := s1.RegisterName("server", serverSvc)
+	if err != nil {
+		log.Errorf("RegisterTCPService: %v\n", err)
+	}
+
 	// Register "blockchain.claimtrie.*"" handlers.
 	claimtrieSvc := &ClaimtrieService{sm.db}
-	err := s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
+	err = s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
 	if err != nil {
 		log.Errorf("RegisterService: %v\n", err)
 	}

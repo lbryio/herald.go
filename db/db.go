@@ -341,24 +341,10 @@ func interruptRequested(interrupted <-chan struct{}) bool {
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
 
-	// iterKey := fmt.Sprintf("%p", opts)
-	if opts.DB != nil {
-		// opts.DB.ItMut.Lock()
-		// // There is a tiny chance that we were wating on the above lock while shutdown was
-		// // being called and by the time we get it the db has already notified all active
-		// // iterators to shutdown. In this case we go to the else branch.
-		// if !opts.DB.ShutdownCalled {
-		// 	opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
-		// 	opts.DB.ItMut.Unlock()
-		// } else {
-		// 	opts.DB.ItMut.Unlock()
-		// 	return ch
-		// }
-		if opts.DB.ShutdownCalled && opts.Grp != nil {
-			// opts.Grp.DoneNamed(iterKey)
-			opts.Grp.Done()
-			return ch
-		}
+	// Check if we've been told to shutdown in between getting created and getting here
+	if opts.Grp != nil && interruptRequested(opts.Grp.Ch()) {
+		opts.Grp.Done()
+		return ch
 	}
 
 	ro := grocksdb.NewDefaultReadOptions()
@@ -376,13 +362,9 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			it.Close()
 			close(ch)
 			ro.Destroy()
-			if opts.DB != nil && opts.Grp != nil {
+			if opts.Grp != nil {
 				// opts.Grp.DoneNamed(iterKey)
 				opts.Grp.Done()
-				// opts.DoneChan <- struct{}{}
-				// opts.DB.ItMut.Lock()
-				// delete(opts.DB.OpenIterators, iterKey)
-				// opts.DB.ItMut.Unlock()
 			}
 		}()
 

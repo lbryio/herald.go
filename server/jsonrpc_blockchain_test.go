@@ -189,6 +189,7 @@ func TestHeaders(t *testing.T) {
 }
 
 func TestHeadersSubscribe(t *testing.T) {
+	args := MakeDefaultTestArgs()
 	secondaryPath := "asdf"
 	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
 	defer toDefer()
@@ -197,7 +198,7 @@ func TestHeadersSubscribe(t *testing.T) {
 		return
 	}
 
-	sm := newSessionManager(db, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
+	sm := newSessionManager(db, args, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
 	sm.start()
 	defer sm.stop()
 
@@ -367,6 +368,7 @@ func TestListUnspent(t *testing.T) {
 }
 
 func TestAddressSubscribe(t *testing.T) {
+	args := MakeDefaultTestArgs()
 	secondaryPath := "asdf"
 	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
 	defer toDefer()
@@ -375,7 +377,7 @@ func TestAddressSubscribe(t *testing.T) {
 		return
 	}
 
-	sm := newSessionManager(db, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
+	sm := newSessionManager(db, args, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
 	sm.start()
 	defer sm.stop()
 

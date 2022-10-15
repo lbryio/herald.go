@@ -274,7 +274,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		if err != nil {
 			logrus.Warning(err)
 		}
-		myDB.Grp = stop.NewDebug(grp)
+		myDB.Grp = stop.New(grp)
 	}
 
 	// Determine which chain to use based on db and cli values
@@ -340,7 +340,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		HeightSubsMut:    sync.RWMutex{},
 		NotifierChan:     make(chan interface{}),
 		Grp:              grp,
-		sessionManager:   newSessionManager(myDB, &chain, args.MaxSessions, args.SessionTimeout),
+		sessionManager:   newSessionManager(myDB, args, &chain, args.MaxSessions, args.SessionTimeout),
 	}
 
 	// Start up our background services
