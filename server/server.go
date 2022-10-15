@@ -275,6 +275,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 			logrus.Warning(err)
 		}
 		myDB.Grp = stop.New(grp)
+		myDB.Grp.Add(1)
 	}
 
 	// Determine which chain to use based on db and cli values

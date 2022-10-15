@@ -60,8 +60,6 @@ type ReadOnlyDBColumnFamily struct {
 	FilteredStreams        map[string][]byte
 	FilteredChannels       map[string][]byte
 	Grp                    *stop.Group
-	ShutdownChan           chan struct{}
-	DoneChan               chan struct{}
 	Cleanup                func()
 }
 
@@ -601,8 +599,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		ShutdownChan:     make(chan struct{}, 1),
-		DoneChan:         make(chan struct{}, 1),
+		Grp:              nil,
 	}
 
 	err = myDB.ReadDBState() //TODO: Figure out right place for this
@@ -694,8 +691,8 @@ func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan<- interface{}) {
 				log.Infof("Error detecting changes: %#v", err)
 			}
 			select {
-			case <-db.ShutdownChan:
-				db.DoneChan <- struct{}{}
+			case <-db.Grp.Ch():
+				db.Grp.Done()
 				return
 			case <-time.After(time.Millisecond * 10):
 			}
