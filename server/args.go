@@ -66,22 +66,23 @@ type Args struct {
 }
 
 const (
-	DefaultHost           = "0.0.0.0"
-	DefaultPort           = "50051"
-	DefaultDBPath         = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
-	DefaultEsHost         = "http://localhost"
-	DefaultEsIndex        = "claims"
-	DefaultEsPort         = "9200"
-	DefaultPrometheusPort = "2112"
-	DefaultNotifierPort   = "18080"
-	DefaultJSONRPCPort    = 50001
-	DefaultMaxSessions    = 10000
-	DefaultSessionTimeout = 300
-	DefaultRefreshDelta   = 5
-	DefaultCacheTTL       = 5
-	DefaultPeerFile       = "peers.txt"
-	DefaultBannerFile     = ""
-	DefaultCountry        = "US"
+	DefaultHost            = "0.0.0.0"
+	DefaultPort            = "50051"
+	DefaultDBPath          = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
+	DefaultEsHost          = "http://localhost"
+	DefaultEsIndex         = "claims"
+	DefaultEsPort          = "9200"
+	DefaultPrometheusPort  = "2112"
+	DefaultNotifierPort    = "18080"
+	DefaultJSONRPCPort     = 50001
+	DefaultJSONRPCHTTPPort = 50002
+	DefaultMaxSessions     = 10000
+	DefaultSessionTimeout  = 300
+	DefaultRefreshDelta    = 5
+	DefaultCacheTTL        = 5
+	DefaultPeerFile        = "peers.txt"
+	DefaultBannerFile      = ""
+	DefaultCountry         = "US"
 
 	GENESIS_HASH             = "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463"
 	HUB_PROTOCOL_VERSION     = "0.107.0"
@@ -141,7 +142,7 @@ func MakeDefaultTestArgs() *Args {
 		PrometheusPort:  DefaultPrometheusPort,
 		NotifierPort:    DefaultNotifierPort,
 		JSONRPCPort:     DefaultJSONRPCPort,
-		JSONRPCHTTPPort: 50002,
+		JSONRPCHTTPPort: DefaultJSONRPCHTTPPort,
 		MaxSessions:     DefaultMaxSessions,
 		SessionTimeout:  DefaultSessionTimeout,
 		EsIndex:         DefaultEsIndex,
@@ -222,8 +223,8 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	esPort := parser.String("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.String("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
 	notifierPort := parser.String("", "notifier-port", &argparse.Options{Required: false, Help: "notifier port", Default: DefaultNotifierPort})
-	jsonRPCPort := parser.Int("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Validate: validatePort})
-	jsonRPCHTTPPort := parser.Int("", "json-rpc-http-port", &argparse.Options{Required: false, Help: "JSON RPC over HTTP port", Validate: validatePort})
+	jsonRPCPort := parser.Int("", "json-rpc-port", &argparse.Options{Required: false, Help: "JSON RPC port", Validate: validatePort, Default: DefaultJSONRPCPort})
+	jsonRPCHTTPPort := parser.Int("", "json-rpc-http-port", &argparse.Options{Required: false, Help: "JSON RPC over HTTP port", Validate: validatePort, Default: DefaultJSONRPCHTTPPort})
 	maxSessions := parser.Int("", "max-sessions", &argparse.Options{Required: false, Help: "Maximum number of electrum clients that can be connected", Default: DefaultMaxSessions})
 	sessionTimeout := parser.Int("", "session-timeout", &argparse.Options{Required: false, Help: "Session inactivity timeout (seconds)", Default: DefaultSessionTimeout})
 	esIndex := parser.String("", "esindex", &argparse.Options{Required: false, Help: "elasticsearch index name", Default: DefaultEsIndex})

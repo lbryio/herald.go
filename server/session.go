@@ -241,7 +241,6 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	go func() {
 		s1.ServeCodec(&SessionServerCodec{jsonrpc.NewServerCodec(conn), sess})
 		log.Infof("session %v goroutine exit", sess.addr.String())
-		//sm.sessionsWait.Done()
 		sm.grp.Done()
 	}()
 	return sess
