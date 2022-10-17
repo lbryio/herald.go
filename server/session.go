@@ -14,6 +14,7 @@ import (
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -114,9 +115,10 @@ type sessionMap map[uintptr]*session
 
 type sessionManager struct {
 	// sessionsMut protects sessions, headerSubs, hashXSubs state
-	sessionsMut    sync.RWMutex
-	sessions       sessionMap
-	sessionsWait   sync.WaitGroup
+	sessionsMut sync.RWMutex
+	sessions    sessionMap
+	// sessionsWait   sync.WaitGroup
+	grp            *stop.Group
 	sessionsMax    int
 	sessionTimeout time.Duration
 	manageTicker   *time.Ticker
@@ -129,12 +131,13 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, chain *chaincfg.Params, sessionsMax, sessionTimeout int) *sessionManager {
+func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
-		sessionsMax:    sessionsMax,
-		sessionTimeout: time.Duration(sessionTimeout) * time.Second,
-		manageTicker:   time.NewTicker(time.Duration(max(5, sessionTimeout/20)) * time.Second),
+		grp:            grp,
+		sessionsMax:    args.MaxSessions,
+		sessionTimeout: time.Duration(args.SessionTimeout) * time.Second,
+		manageTicker:   time.NewTicker(time.Duration(max(5, args.SessionTimeout/20)) * time.Second),
 		db:             db,
 		args:           args,
 		chain:          chain,
@@ -170,7 +173,12 @@ func (sm *sessionManager) manage() {
 		}
 		sm.sessionsMut.Unlock()
 		// Wait for next management clock tick.
-		<-sm.manageTicker.C
+		select {
+		case <-sm.grp.Ch():
+			return
+		case <-sm.manageTicker.C:
+			continue
+		}
 	}
 }
 
@@ -229,11 +237,12 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		goto fail
 	}
 
-	sm.sessionsWait.Add(1)
+	sm.grp.Add(1)
 	go func() {
 		s1.ServeCodec(&SessionServerCodec{jsonrpc.NewServerCodec(conn), sess})
 		log.Infof("session %v goroutine exit", sess.addr.String())
-		sm.sessionsWait.Done()
+		//sm.sessionsWait.Done()
+		sm.grp.Done()
 	}()
 	return sess
 

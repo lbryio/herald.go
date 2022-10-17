@@ -12,6 +12,7 @@ import (
 	dbpkg "github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/db/prefixes"
 	"github.com/lbryio/herald.go/internal"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -93,7 +94,7 @@ func OpenAndFillTmpDBColumnFamlies(filePath string) (*dbpkg.ReadOnlyDBColumnFami
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		Grp:              nil,
+		Grp:              stop.New(),
 	}
 
 	// err = dbpkg.ReadDBState(myDB) //TODO: Figure out right place for this
@@ -242,17 +243,20 @@ func CatCSV(filePath string) {
 
 func TestCatFullDB(t *testing.T) {
 	t.Skip("Skipping full db test")
+	grp := stop.New()
 	// url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
 	// "lbry://@lbry", "lbry://@lbry#3", "lbry://@lbry3f", "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a", "lbry://@lbry:1", "lbry://@lbry$1"
 	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
 	// url := "lbry://@lbry"
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
-	dbPath := "/mnt/sda/wallet_server/_data/lbry-rocksdb/"
+	dbPath := "/mnt/sda1/wallet_server/_data/lbry-rocksdb/"
 	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	secondaryPath := "asdf"
-	db, toDefer, err := dbpkg.GetProdDB(dbPath, secondaryPath)
+	db, toDefer, err := dbpkg.GetProdDB(dbPath, secondaryPath, grp)
+	defer db.Shutdown()
 
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	if err != nil {
 		t.Error(err)
 		return
@@ -272,6 +276,7 @@ func TestCatFullDB(t *testing.T) {
 // TestOpenFullDB Tests running a resolve on a full db.
 func TestOpenFullDB(t *testing.T) {
 	t.Skip("Skipping full db test")
+	grp := stop.New()
 	// url := "lbry://@lothrop#2/lothrop-livestream-games-and-code#c"
 	// "lbry://@lbry", "lbry://@lbry#3", "lbry://@lbry3f", "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a", "lbry://@lbry:1", "lbry://@lbry$1"
 	// url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
@@ -279,11 +284,13 @@ func TestOpenFullDB(t *testing.T) {
 	// url := "lbry://@lbry#3fda836a92faaceedfe398225fb9b2ee2ed1f01a"
 	// url := "lbry://@lbry$1"
 	url := "https://lbry.tv/@lothrop:2/lothrop-livestream-games-and-code:c"
-	dbPath := "/mnt/sda/wallet_server/_data/lbry-rocksdb/"
+	dbPath := "/mnt/sda1/wallet_server/_data/lbry-rocksdb/"
 	// dbPath := "/mnt/d/data/snapshot_1072108/lbry-rocksdb/"
 	secondaryPath := "asdf"
-	db, toDefer, err := dbpkg.GetProdDB(dbPath, secondaryPath)
-	defer toDefer()
+	db, toDefer, err := dbpkg.GetProdDB(dbPath, secondaryPath, grp)
+	defer db.Shutdown()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	if err != nil {
 		t.Error(err)
 		return
@@ -298,11 +305,13 @@ func TestResolve(t *testing.T) {
 	url := "lbry://@Styxhexenhammer666#2/legacy-media-baron-les-moonves-(cbs#9"
 	filePath := "../testdata/FULL_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	expandedResolveResult := db.Resolve(url)
 	log.Printf("%#v\n", expandedResolveResult)
 	if expandedResolveResult != nil && expandedResolveResult.Channel != nil {
@@ -317,10 +326,12 @@ func TestGetDBState(t *testing.T) {
 	filePath := "../testdata/s_resolve.csv"
 	want := uint32(1072108)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	state, err := db.GetDBState()
 	if err != nil {
 		t.Error(err)
@@ -339,10 +350,12 @@ func TestGetRepostedClaim(t *testing.T) {
 	channelHash2, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bf")
 	filePath := "../testdata/W_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 
 	count, err := db.GetRepostedCount(channelHash)
 	if err != nil {
@@ -372,10 +385,12 @@ func TestGetRepostedCount(t *testing.T) {
 	channelHash2, _ := hex.DecodeString("2556ed1cab9d17f2a9392030a9ad7f5d138f11bf")
 	filePath := "../testdata/j_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 
 	count, err := db.GetRepostedCount(channelHash)
 	if err != nil {
@@ -409,10 +424,12 @@ func TestGetRepost(t *testing.T) {
 	filePath := "../testdata/V_resolve.csv"
 	// want := uint32(3670)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 
 	res, err := db.GetRepost(channelHash)
 	if err != nil {
@@ -443,10 +460,12 @@ func TestGetClaimsInChannelCount(t *testing.T) {
 	filePath := "../testdata/Z_resolve.csv"
 	want := uint32(3670)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	count, err := db.GetClaimsInChannelCount(channelHash)
 	if err != nil {
 		t.Error(err)
@@ -472,10 +491,12 @@ func TestGetShortClaimIdUrl(t *testing.T) {
 	filePath := "../testdata/F_resolve.csv"
 	log.Println(filePath)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	shortUrl, err := db.GetShortClaimIdUrl(name, normalName, claimHash, rootTxNum, position)
 	if err != nil {
 		t.Error(err)
@@ -490,10 +511,12 @@ func TestClaimShortIdIter(t *testing.T) {
 	normalName := "cat"
 	claimId := "0"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 
 	ch := db.ClaimShortIdIter(normalName, claimId)
 
@@ -520,10 +543,12 @@ func TestGetTXOToClaim(t *testing.T) {
 	var position uint16 = 0
 	filePath := "../testdata/G_2.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	val, err := db.GetCachedClaimHash(txNum, position)
 	if err != nil {
 		t.Error(err)
@@ -548,10 +573,12 @@ func TestGetClaimToChannel(t *testing.T) {
 
 	filePath := "../testdata/I_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 
 	val, err = db.GetChannelForClaim(claimHash, txNum, position)
 	if err != nil {
@@ -577,10 +604,12 @@ func TestGetEffectiveAmountSupportOnly(t *testing.T) {
 	claimHashStr := "00000324e40fcb63a0b517a3660645e9bd99244a"
 	claimHash, _ := hex.DecodeString(claimHashStr)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	db.Height = 999999999
 
 	amount, err := db.GetEffectiveAmount(claimHash, true)
@@ -607,10 +636,12 @@ func TestGetEffectiveAmount(t *testing.T) {
 	claimHashStr := "00000324e40fcb63a0b517a3660645e9bd99244a"
 	claimHash, _ := hex.DecodeString(claimHashStr)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	db.Height = 999999999
 
 	amount, err := db.GetEffectiveAmount(claimHash, false)
@@ -644,10 +675,12 @@ func TestGetSupportAmount(t *testing.T) {
 	}
 	filePath := "../testdata/a_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	res, err := db.GetSupportAmount(claimHash)
 	if err != nil {
 		t.Error(err)
@@ -664,10 +697,12 @@ func TestGetTxHash(t *testing.T) {
 
 	filePath := "../testdata/X_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	resHash, err := db.GetTxHash(txNum)
 	if err != nil {
 		t.Error(err)
@@ -706,10 +741,12 @@ func TestGetActivation(t *testing.T) {
 	position := uint16(0x0)
 	want := uint32(0xa6b65)
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	activation, err := db.GetActivation(txNum, position)
 	if err != nil {
 		t.Error(err)
@@ -737,11 +774,13 @@ func TestGetClaimToTXO(t *testing.T) {
 	}
 	filePath := "../testdata/E_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	res, err := db.GetCachedClaimTxo(claimHash, true)
 	if err != nil {
 		t.Error(err)
@@ -766,11 +805,13 @@ func TestGetControllingClaim(t *testing.T) {
 	claimHash := "2556ed1cab9d17f2a9392030a9ad7f5d138f11bd"
 	filePath := "../testdata/P_resolve.csv"
 	db, _, toDefer, err := OpenAndFillTmpDBColumnFamlies(filePath)
+	defer db.Shutdown()
 	if err != nil {
 		t.Error(err)
 		return
 	}
-	defer toDefer()
+	// defer toDefer()
+	db.Cleanup = toDefer
 	res, err := db.GetControllingClaim(claimName)
 	if err != nil {
 		t.Error(err)

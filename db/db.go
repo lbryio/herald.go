@@ -531,7 +531,8 @@ func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, er
 }
 
 // GetProdDB returns a db that is used for production.
-func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func(), error) {
+func GetProdDB(name string, secondaryPath string, grp *stop.Group) (*ReadOnlyDBColumnFamily, func(), error) {
+	grp.Add(1)
 	prefixNames := prefixes.GetPrefixes()
 	// additional prefixes that aren't in the code explicitly
 	cfNames := []string{"default", "e", "d", "c"}
@@ -540,7 +541,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 		cfNames = append(cfNames, cfName)
 	}
 
-	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
+	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames, grp)
 
 	cleanupFiles := func() {
 		err = os.RemoveAll(secondaryPath)
@@ -563,7 +564,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 }
 
 // GetDBColumnFamilies gets a db with the specified column families and secondary path.
-func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
+func GetDBColumnFamilies(name string, secondayPath string, cfNames []string, grp *stop.Group) (*ReadOnlyDBColumnFamily, error) {
 	opts := grocksdb.NewDefaultOptions()
 	roOpts := grocksdb.NewDefaultReadOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -599,7 +600,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		Grp:              nil,
+		Grp:              grp,
 	}
 
 	err = myDB.ReadDBState() //TODO: Figure out right place for this

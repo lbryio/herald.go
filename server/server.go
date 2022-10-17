@@ -151,7 +151,7 @@ func (s *Server) Run() {
 	}
 }
 
-func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
+func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, error) {
 	tmpName, err := ioutil.TempDir("", "go-lbry-hub")
 	if err != nil {
 		logrus.Info(err)
@@ -161,7 +161,7 @@ func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
 	if err != nil {
 		logrus.Info(err)
 	}
-	myDB, _, err := db.GetProdDB(args.DBPath, tmpName)
+	myDB, _, err := db.GetProdDB(args.DBPath, tmpName, grp)
 	// dbShutdown = func() {
 	// 	db.Shutdown(myDB)
 	// }
@@ -270,12 +270,12 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	var myDB *db.ReadOnlyDBColumnFamily
 	// var dbShutdown = func() {}
 	if !args.DisableResolve {
-		myDB, err = LoadDatabase(args)
+		myDB, err = LoadDatabase(args, grp)
 		if err != nil {
 			logrus.Warning(err)
 		}
-		myDB.Grp = stop.New(grp)
-		myDB.Grp.Add(1)
+		// myDB.Grp = stop.New(grp)
+		// myDB.Grp.Add(1)
 	}
 
 	// Determine which chain to use based on db and cli values
@@ -317,6 +317,8 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	args.GenesisHash = chain.GenesisHash.String()
 
+	sessionGrp := stop.New(grp)
+
 	s := &Server{
 		GrpcServer:       grpcServer,
 		Args:             args,
@@ -341,7 +343,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		HeightSubsMut:    sync.RWMutex{},
 		NotifierChan:     make(chan interface{}),
 		Grp:              grp,
-		sessionManager:   newSessionManager(myDB, args, &chain, args.MaxSessions, args.SessionTimeout),
+		sessionManager:   newSessionManager(myDB, args, sessionGrp, &chain),
 	}
 
 	// Start up our background services

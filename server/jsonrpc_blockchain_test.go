@@ -13,6 +13,7 @@ import (
 	"github.com/lbryio/lbcd/chaincfg"
 	"github.com/lbryio/lbcd/txscript"
 	"github.com/lbryio/lbcutil"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 )
 
 // Source: test_variety_of_transactions_and_longish_history (lbry-sdk/tests/integration/transactions)
@@ -57,7 +58,8 @@ var regTestAddrs = [30]string{
 
 func TestServerGetHeight(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -87,7 +89,8 @@ func TestServerGetHeight(t *testing.T) {
 
 func TestGetChunk(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -130,7 +133,8 @@ func TestGetChunk(t *testing.T) {
 
 func TestGetHeader(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -159,7 +163,8 @@ func TestGetHeader(t *testing.T) {
 
 func TestHeaders(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -190,15 +195,19 @@ func TestHeaders(t *testing.T) {
 
 func TestHeadersSubscribe(t *testing.T) {
 	args := MakeDefaultTestArgs()
+	grp := stop.New()
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
-	defer toDefer()
+	db, _, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
+	// defer toDefer()
+	defer db.Shutdown()
+	defer db.Grp.Done()
+	// db.Cleanup = toDefer
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	sm := newSessionManager(db, args, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
+	sm := newSessionManager(db, args, grp, &chaincfg.RegressionNetParams)
 	sm.start()
 	defer sm.stop()
 
@@ -210,13 +219,13 @@ func TestHeadersSubscribe(t *testing.T) {
 	// Set up logic to read a notification.
 	var received sync.WaitGroup
 	recv := func(client net.Conn) {
+		defer received.Done()
 		buf := make([]byte, 1024)
 		len, err := client.Read(buf)
 		if err != nil {
 			t.Errorf("read err: %v", err)
 		}
 		t.Logf("len: %v notification: %v", len, string(buf))
-		received.Done()
 	}
 	received.Add(2)
 	go recv(client1)
@@ -282,7 +291,8 @@ func TestHeadersSubscribe(t *testing.T) {
 
 func TestGetBalance(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -311,7 +321,8 @@ func TestGetBalance(t *testing.T) {
 
 func TestGetHistory(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -340,7 +351,8 @@ func TestGetHistory(t *testing.T) {
 
 func TestListUnspent(t *testing.T) {
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	grp := stop.New()
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
@@ -369,15 +381,16 @@ func TestListUnspent(t *testing.T) {
 
 func TestAddressSubscribe(t *testing.T) {
 	args := MakeDefaultTestArgs()
+	grp := stop.New()
 	secondaryPath := "asdf"
-	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath)
+	db, toDefer, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer toDefer()
 	if err != nil {
 		t.Error(err)
 		return
 	}
 
-	sm := newSessionManager(db, args, &chaincfg.RegressionNetParams, DefaultMaxSessions, DefaultSessionTimeout)
+	sm := newSessionManager(db, args, grp, &chaincfg.RegressionNetParams)
 	sm.start()
 	defer sm.stop()
 
