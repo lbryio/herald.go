@@ -1050,84 +1050,6 @@ func TxNumValueUnpack(value []byte) *TxNumValue {
 	}
 }
 
-type TxKey struct {
-	Prefix []byte          `struct:"[1]byte" json:"prefix"`
-	TxHash *chainhash.Hash `struct:"*[32]byte" json:"tx_hash"`
-}
-
-type TxValue struct {
-	RawTx []byte `struct-while:"!_eof" json:"raw_tx"`
-}
-
-func (k *TxKey) PackKey() []byte {
-	prefixLen := 1
-	// b'>L'
-	n := prefixLen + 32
-	key := make([]byte, n)
-	copy(key, k.Prefix)
-	copy(key[prefixLen:], k.TxHash[:32])
-
-	return key
-}
-
-func (v *TxValue) PackValue() []byte {
-	value := make([]byte, len(v.RawTx))
-	copy(value, v.RawTx)
-
-	return value
-}
-
-func (kv *TxKey) NumFields() int {
-	return 1
-}
-
-func (k *TxKey) PartialPack(fields int) []byte {
-	// Limit fields between 0 and number of fields, we always at least need
-	// the prefix, and we never need to iterate past the number of fields.
-	if fields > 1 {
-		fields = 1
-	}
-	if fields < 0 {
-		fields = 0
-	}
-
-	prefixLen := 1
-	var n = prefixLen
-	for i := 0; i <= fields; i++ {
-		switch i {
-		case 1:
-			n += 32
-		}
-	}
-
-	key := make([]byte, n)
-
-	for i := 0; i <= fields; i++ {
-		switch i {
-		case 0:
-			copy(key, k.Prefix)
-		case 1:
-			copy(key[prefixLen:], k.TxHash[:32])
-		}
-	}
-
-	return key
-}
-
-func TxKeyUnpack(key []byte) *TxKey {
-	prefixLen := 1
-	return &TxKey{
-		Prefix: key[:prefixLen],
-		TxHash: (*chainhash.Hash)(key[prefixLen : prefixLen+32]),
-	}
-}
-
-func TxValueUnpack(value []byte) *TxValue {
-	return &TxValue{
-		RawTx: value,
-	}
-}
-
 type BlockHeaderKey struct {
 	Prefix []byte `struct:"[1]byte" json:"prefix"`
 	Height uint32 `json:"height"`
@@ -3351,9 +3273,12 @@ func (kv *TrendingNotificationValue) UnpackValue(buf []byte) {
 	offset += 8
 }
 
+type TxKey = MempoolTxKey
+type TxValue = MempoolTxValue
+
 type MempoolTxKey struct {
-	Prefix []byte `struct:"[1]byte"  json:"prefix"`
-	TxHash []byte `struct:"[32]byte" json:"tx_hash"`
+	Prefix []byte          `struct:"[1]byte" json:"prefix"`
+	TxHash *chainhash.Hash `struct:"*[32]byte" json:"tx_hash"`
 }
 
 type MempoolTxValue struct {
@@ -3386,7 +3311,7 @@ func (kv *MempoolTxKey) UnpackKey(buf []byte) {
 	offset := 0
 	kv.Prefix = buf[offset : offset+1]
 	offset += 1
-	kv.TxHash = buf[offset : offset+32]
+	kv.TxHash = (*chainhash.Hash)(buf[offset : offset+32])
 	offset += 32
 }
 
@@ -3924,12 +3849,6 @@ var prefixRegistry = map[byte]prefixMeta{
 		},
 		newValue: func() interface{} {
 			return &TxValue{}
-		},
-		newKeyUnpack: func(buf []byte) interface{} {
-			return TxKeyUnpack(buf)
-		},
-		newValueUnpack: func(buf []byte) interface{} {
-			return TxValueUnpack(buf)
 		},
 	},
 	BlockHash: {

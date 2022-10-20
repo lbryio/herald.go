@@ -3,6 +3,7 @@ package db
 // db_get.go contains the basic access functions to the database.
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"github.com/lbryio/herald.go/db/prefixes"
 	"github.com/lbryio/herald.go/db/stack"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
+	"github.com/lbryio/lbcd/wire"
 	"github.com/linxGnu/grocksdb"
 )
 
@@ -731,6 +733,71 @@ func (db *ReadOnlyDBColumnFamily) FsGetClaimByHash(claimHash []byte) (*ResolveRe
 	)
 }
 
+func (db *ReadOnlyDBColumnFamily) GetTx(txhash *chainhash.Hash) ([]byte, *wire.MsgTx, error) {
+	// Lookup in MempoolTx first.
+	raw, tx, err := db.getMempoolTx(txhash)
+	if err == nil && raw != nil && tx != nil {
+		return raw, tx, err
+	}
+
+	handle, err := db.EnsureHandle(prefixes.Tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key := prefixes.TxKey{Prefix: []byte{prefixes.Tx}, TxHash: txhash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return nil, nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.TxValue{}
+	value.UnpackValue(rawValue)
+	var msgTx wire.MsgTx
+	err = msgTx.Deserialize(bytes.NewReader(value.RawTx))
+	if err != nil {
+		return nil, nil, err
+	}
+	return value.RawTx, &msgTx, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) getMempoolTx(txhash *chainhash.Hash) ([]byte, *wire.MsgTx, error) {
+	handle, err := db.EnsureHandle(prefixes.MempoolTx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key := prefixes.MempoolTxKey{Prefix: []byte{prefixes.Tx}, TxHash: txhash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return nil, nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.MempoolTxValue{}
+	value.UnpackValue(rawValue)
+	var msgTx wire.MsgTx
+	err = msgTx.Deserialize(bytes.NewReader(value.RawTx))
+	if err != nil {
+		return nil, nil, err
+	}
+	return value.RawTx, &msgTx, nil
+}
+
+
 func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountValue, error) {
 	handle, err := db.EnsureHandle(prefixes.TxCount)
 	if err != nil {
@@ -752,6 +819,29 @@ func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountVa
 	copy(rawValue, slice.Data())
 	value := prefixes.TxCountValueUnpack(rawValue)
 	return value, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetTxHeight(txhash *chainhash.Hash) (uint32, error) {
+	handle, err := db.EnsureHandle(prefixes.TxNum)
+	if err != nil {
+		return 0, err
+	}
+
+	key := prefixes.TxNumKey{Prefix: []byte{prefixes.TxNum}, TxHash: txhash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return 0, err
+	}
+	if slice.Size() == 0 {
+		return 0, nil
+	}
+
+	// No slice copy needed. Value will be abandoned.
+	value := prefixes.TxNumValueUnpack(slice.Data())
+	height := stack.BisectRight(db.TxCounts, []uint32{value.TxNum})[0]
+	return height, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {

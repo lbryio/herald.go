@@ -16,6 +16,7 @@ import (
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbcd/chaincfg/chainhash"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
@@ -274,6 +275,11 @@ func (sm *sessionManager) removeSessionLocked(sess *session) {
 	delete(sm.sessions, sess.id)
 	sess.client.Close()
 	sess.conn.Close()
+}
+
+func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
+	// TODO
+	return nil, nil
 }
 
 func (sm *sessionManager) headersSubscribe(sess *session, raw bool, subscribe bool) {

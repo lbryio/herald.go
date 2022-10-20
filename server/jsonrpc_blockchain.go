@@ -55,6 +55,14 @@ type BlockchainScripthashService struct {
 	session    *session
 }
 
+// BlockchainTransactionService methods handle "blockchain.transaction.*" RPCs
+type BlockchainTransactionService struct {
+	DB    *db.ReadOnlyDBColumnFamily
+	Chain *chaincfg.Params
+	// needed for broadcast TX
+	sessionMgr *sessionManager
+}
+
 const CHUNK_SIZE = 96
 const MAX_CHUNK_SIZE = 40960
 const HEADER_SIZE = wire.MaxBlockHeaderPayload
@@ -625,4 +633,139 @@ func (s *BlockchainScripthashService) Unsubscribe(req *ScripthashSubscribeReq, r
 	s.sessionMgr.hashXSubscribe(s.session, hashX, string(*req), false /*subscribe*/)
 	*resp = (*ScripthashSubscribeResp)(nil)
 	return nil
+}
+
+type TransactionBroadcastReq string
+type TransactionBroadcastResp string
+
+// 'blockchain.transaction.broadcast'
+func (s *BlockchainTransactionService) Broadcast(req *TransactionBroadcastReq, resp **TransactionBroadcastResp) error {
+	strTx := string(*req)
+	rawTx, err := hex.DecodeString(strTx)
+	if err != nil {
+		return err
+	}
+	txhash, err := s.sessionMgr.broadcastTx(rawTx)
+	if err != nil {
+		return err
+	}
+	result := txhash.String()
+	*resp = (*TransactionBroadcastResp)(&result)
+	return nil
+}
+
+type TransactionGetReq string
+type TXFullDetail struct {
+	Height uint32 `json:"block_height"`
+	Merkle string `json:"merkle"`
+	Pos    uint64 `json:"pos"`
+}
+type TXDetail struct {
+	Height uint32 `json:"block_height"`
+}
+
+// TransactionResp is a pair consisting of:
+// resp[0]: Raw transaction as hex string
+// resp[1]: TXFullDetail or TXDetail structure
+type TXGetResp [2]interface{}
+type TransactionGetResp TXGetResp
+
+// 'blockchain.transaction.get'
+func (s *BlockchainTransactionService) Get(req *TransactionGetReq, resp **TransactionGetResp) error {
+	txids := [1]string{string(*req)}
+	request := TransactionGetBatchReq(txids[:])
+	var response *TransactionGetBatchResp
+	err := s.Get_batch(&request, &response)
+	if err != nil {
+		return err
+	}
+	if len(*response) < 1 {
+		return errors.New("tx not found")
+	}
+	switch (*response)[0][1].(type) {
+	case TXFullDetail:
+		break
+	case TXDetail:
+	default:
+		return errors.New("tx not confirmed")
+	}
+	*resp = (*TransactionGetResp)(&(*response)[0])
+	return err
+}
+
+type TransactionGetBatchReq []string
+type TransactionGetBatchResp []TXGetResp
+
+// 'blockchain.transaction.get_batch'
+func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, resp **TransactionGetBatchResp) error {
+	return nil
+}
+
+type TransactionGetMerkleReq string
+type TransactionGetMerkleResp TXGetResp
+
+// 'blockchain.transaction.get_merkle'
+func (s *BlockchainTransactionService) Get_merkle(req *TransactionGetMerkleReq, resp **TransactionGetMerkleResp) error {
+	txids := [1]string{string(*req)}
+	request := TransactionGetBatchReq(txids[:])
+	var response *TransactionGetBatchResp
+	err := s.Get_batch(&request, &response)
+	if err != nil {
+		return err
+	}
+	if len(*response) < 1 {
+		return errors.New("tx not found")
+	}
+	switch (*response)[0][1].(type) {
+	case TXFullDetail:
+		break
+	case TXDetail:
+	default:
+		return errors.New("tx not confirmed")
+	}
+	*resp = (*TransactionGetMerkleResp)(&(*response)[0])
+	return err
+}
+
+type TransactionGetHeightReq string
+type TransactionGetHeightResp uint32
+
+// 'blockchain.transaction.get_height'
+func (s *BlockchainTransactionService) Get_height(req *TransactionGetHeightReq, resp **TransactionGetHeightResp) error {
+	txid := string(*(req))
+	txhash, err := chainhash.NewHashFromStr(txid)
+	if err != nil {
+		return err
+	}
+	height, err := s.DB.GetTxHeight(txhash)
+	*resp = (*TransactionGetHeightResp)(&height)
+	return err
+}
+
+type TransactionInfoReq string
+type TransactionInfoResp TXGetResp
+
+// 'blockchain.transaction.info'
+func (s *BlockchainTransactionService) Info(req *TransactionInfoReq, resp **TransactionInfoResp) error {
+	txids := [1]string{string(*req)}
+	request := TransactionGetBatchReq(txids[:])
+	var response *TransactionGetBatchResp
+	err := s.Get_batch(&request, &response)
+	if err != nil {
+		return err
+	}
+	if len(*response) < 1 {
+		return errors.New("tx not found")
+	}
+	switch (*response)[0][1].(type) {
+	case TXFullDetail:
+		break
+	case TXDetail:
+	default:
+		if (*response)[0][0] == nil {
+			return errors.New("no such mempool or blockchain transaction")
+		}
+	}
+	*resp = (*TransactionInfoResp)(&(*response)[0])
+	return err
 }
