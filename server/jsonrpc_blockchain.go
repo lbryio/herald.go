@@ -640,6 +640,9 @@ type TransactionBroadcastResp string
 
 // 'blockchain.transaction.broadcast'
 func (s *BlockchainTransactionService) Broadcast(req *TransactionBroadcastReq, resp **TransactionBroadcastResp) error {
+	if s.sessionMgr == nil {
+		return errors.New("no session manager, rpc not supported")
+	}
 	strTx := string(*req)
 	rawTx, err := hex.DecodeString(strTx)
 	if err != nil {

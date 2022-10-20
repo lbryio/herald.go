@@ -219,7 +219,7 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		log.Errorf("RegisterName: %v\n", err)
 	}
 
-	// Register other "blockchain.{block,address,scripthash}.*" handlers.
+	// Register "blockchain.{block,address,scripthash,transaction}.*" handlers.
 	blockchainSvc := &BlockchainBlockService{sm.db, sm.chain}
 	err = s1.RegisterName("blockchain.block", blockchainSvc)
 	if err != nil {
@@ -237,6 +237,11 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		goto fail
 	}
 	err = s1.RegisterName("blockchain.scripthash", &BlockchainScripthashService{sm.db, sm.chain, sm, sess})
+	if err != nil {
+		log.Errorf("RegisterName: %v\n", err)
+		goto fail
+	}
+	err = s1.RegisterName("blockchain.transaction", &BlockchainTransactionService{sm.db, sm.chain, sm})
 	if err != nil {
 		log.Errorf("RegisterName: %v\n", err)
 		goto fail

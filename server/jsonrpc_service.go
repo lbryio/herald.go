@@ -98,24 +98,29 @@ fail1:
 			goto fail2
 		}
 
-		// Register other "blockchain.{block,address,scripthash}.*" handlers.
+		// Register "blockchain.{block,address,scripthash,transaction}.*" handlers.
 		blockchainSvc := &BlockchainBlockService{s.DB, s.Chain}
 		err = s1.RegisterTCPService(blockchainSvc, "blockchain_block")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainHeadersService{s.DB, s.Chain, nil, nil}, "blockchain_headers")
+		err = s1.RegisterTCPService(&BlockchainHeadersService{s.DB, s.Chain, s.sessionManager, nil}, "blockchain_headers")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
+		err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, s.sessionManager, nil}, "blockchain_address")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain, nil, nil}, "blockchain_scripthash")
+		err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain, s.sessionManager, nil}, "blockchain_scripthash")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+		err = s1.RegisterTCPService(&BlockchainTransactionService{s.DB, s.Chain, s.sessionManager}, "blockchain_transaction")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
