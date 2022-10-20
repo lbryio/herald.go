@@ -52,9 +52,6 @@ func (cr *gorillaRpcCodecRequest) Method() (string, error) {
 
 // StartJsonRPC starts the json rpc server and registers the endpoints.
 func (s *Server) StartJsonRPC() error {
-	s.sessionManager.start()
-	defer s.sessionManager.stop()
-
 	// Set up the pure JSONRPC server with persistent connections/sessions.
 	if s.Args.JSONRPCPort != 0 {
 		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCPort), 10)
@@ -69,7 +66,9 @@ func (s *Server) StartJsonRPC() error {
 			goto fail1
 		}
 		log.Infof("JSONRPC server listening on %s", listener.Addr().String())
+		s.sessionManager.start()
 		acceptConnections := func(listener net.Listener) {
+			defer s.sessionManager.stop()
 			for {
 				conn, err := listener.Accept()
 				if err != nil {
@@ -78,6 +77,7 @@ func (s *Server) StartJsonRPC() error {
 				}
 				log.Infof("Accepted: %v", conn.RemoteAddr())
 				s.sessionManager.addSession(conn)
+
 			}
 		}
 		go acceptConnections(netutil.LimitListener(listener, s.sessionManager.sessionsMax))
