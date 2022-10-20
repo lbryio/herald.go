@@ -39,7 +39,7 @@ func (t *ServerService) Features(req *ServerFeaturesReq, res **ServerFeaturesRes
 		ServerVersion:     HUB_PROTOCOL_VERSION,
 		ProtocolMin:       PROTOCOL_MIN,
 		ProtocolMax:       PROTOCOL_MAX,
-		GenesisHash:       GENESIS_HASH,
+		GenesisHash:       t.Args.GenesisHash,
 		Description:       t.Args.ServerDescription,
 		PaymentAddress:    t.Args.PaymentAddress,
 		DonationAddress:   t.Args.DonationAddress,

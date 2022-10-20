@@ -268,14 +268,11 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	//TODO: is this the right place to load the db?
 	var myDB *db.ReadOnlyDBColumnFamily
-	// var dbShutdown = func() {}
 	if !args.DisableResolve {
 		myDB, err = LoadDatabase(args, grp)
 		if err != nil {
 			logrus.Warning(err)
 		}
-		// myDB.Grp = stop.New(grp)
-		// myDB.Grp.Add(1)
 	}
 
 	// Determine which chain to use based on db and cli values

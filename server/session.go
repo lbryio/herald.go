@@ -147,6 +147,7 @@ func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Grou
 }
 
 func (sm *sessionManager) start() {
+	sm.grp.Add(1)
 	go sm.manage()
 }
 
@@ -175,6 +176,7 @@ func (sm *sessionManager) manage() {
 		// Wait for next management clock tick.
 		select {
 		case <-sm.grp.Ch():
+			sm.grp.Done()
 			return
 		case <-sm.manageTicker.C:
 			continue

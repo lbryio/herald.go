@@ -84,7 +84,6 @@ const (
 	DefaultBannerFile      = ""
 	DefaultCountry         = "US"
 
-	GENESIS_HASH             = "9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463"
 	HUB_PROTOCOL_VERSION     = "0.107.0"
 	PROTOCOL_MIN             = "0.54.0"
 	PROTOCOL_MAX             = "0.199.0"
@@ -303,7 +302,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		BlockingChannelIds:  *blockingChannelIds,
 		FilteringChannelIds: *filteringChannelIds,
 
-		GenesisHash:       GENESIS_HASH,
+		GenesisHash:       "",
 		ServerVersion:     HUB_PROTOCOL_VERSION,
 		ProtocolMin:       PROTOCOL_MIN,
 		ProtocolMax:       PROTOCOL_MAX,
