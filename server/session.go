@@ -206,14 +206,14 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	serverSvc := &ServerService{sm.args}
 	err := s1.RegisterName("server", serverSvc)
 	if err != nil {
-		log.Errorf("RegisterTCPService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
 	}
 
 	// Register "blockchain.claimtrie.*"" handlers.
 	claimtrieSvc := &ClaimtrieService{sm.db}
 	err = s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
 	if err != nil {
-		log.Errorf("RegisterService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
 	}
 
 	// Register other "blockchain.{block,address,scripthash}.*" handlers.

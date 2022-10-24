@@ -161,10 +161,7 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	if err != nil {
 		logrus.Info(err)
 	}
-	myDB, _, err := db.GetProdDB(args.DBPath, tmpName, grp)
-	// dbShutdown = func() {
-	// 	db.Shutdown(myDB)
-	// }
+	myDB, err := db.GetProdDB(args.DBPath, tmpName, grp)
 	if err != nil {
 		// Can't load the db, fail loudly
 		logrus.Info(err)

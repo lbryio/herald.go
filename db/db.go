@@ -531,8 +531,7 @@ func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, er
 }
 
 // GetProdDB returns a db that is used for production.
-func GetProdDB(name string, secondaryPath string, grp *stop.Group) (*ReadOnlyDBColumnFamily, func(), error) {
-	grp.Add(1)
+func GetProdDB(name string, secondaryPath string, grp *stop.Group) (*ReadOnlyDBColumnFamily, error) {
 	prefixNames := prefixes.GetPrefixes()
 	// additional prefixes that aren't in the code explicitly
 	cfNames := []string{"default", "e", "d", "c"}
@@ -551,7 +550,8 @@ func GetProdDB(name string, secondaryPath string, grp *stop.Group) (*ReadOnlyDBC
 	}
 
 	if err != nil {
-		return nil, cleanupFiles, err
+		cleanupFiles()
+		return nil, err
 	}
 
 	cleanupDB := func() {
@@ -560,7 +560,7 @@ func GetProdDB(name string, secondaryPath string, grp *stop.Group) (*ReadOnlyDBC
 	}
 	db.Cleanup = cleanupDB
 
-	return db, cleanupDB, nil
+	return db, nil
 }
 
 // GetDBColumnFamilies gets a db with the specified column families and secondary path.
@@ -679,6 +679,7 @@ func (db *ReadOnlyDBColumnFamily) Shutdown() {
 // to keep the db readonly view up to date and handle reorgs on the
 // blockchain.
 func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan<- interface{}) {
+	db.Grp.Add(1)
 	go func() {
 		lastPrint := time.Now()
 		for {

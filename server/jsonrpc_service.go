@@ -128,26 +128,6 @@ fail1:
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		// serverFeatureSvc := &ServerFeatureService{s.Args}
-		// err = s1.RegisterTCPService(serverFeatureSvc, "server_features")
-		// if err != nil {
-		// 	log.Errorf("RegisterTCPService: %v\n", err)
-		// 	goto fail2
-		// }
-
-		// serverBannerSvc := &ServerBannerService{s.Args}
-		// err = s1.RegisterTCPService(serverBannerSvc, "server_banner")
-		// if err != nil {
-		// 	log.Errorf("RegisterTCPService: %v\n", err)
-		// 	goto fail2
-		// }
-
-		// serverVersionSvc := &ServerVersionService{s.Args}
-		// err = s1.RegisterTCPService(serverVersionSvc, "server_version")
-		// if err != nil {
-		// 	log.Errorf("RegisterTCPService: %v\n", err)
-		// 	goto fail2
-		// }
 
 		r := gorilla_mux.NewRouter()
 		r.Handle("/rpc", s1)
