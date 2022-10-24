@@ -58,7 +58,7 @@ func TestSearch(t *testing.T) {
 
 	ctx := context.Background()
 	stopGroup := stop.NewDebug()
-	args := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
 	hubServer := server.MakeHubServer(stopGroup, args)
 	req := &pb.SearchRequest{
 		Text: "asdf",

@@ -12,7 +12,7 @@ import (
 
 	"github.com/lbryio/herald.go/internal/metrics"
 	pb "github.com/lbryio/herald.go/protobuf/go"
-	server "github.com/lbryio/herald.go/server"
+	"github.com/lbryio/herald.go/server"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	dto "github.com/prometheus/client_model/go"
 	"google.golang.org/grpc"
@@ -49,7 +49,7 @@ func removeFile(fileName string) {
 func TestAddPeer(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
-	args := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
 
 	tests := []struct {
 		name string
@@ -108,7 +108,7 @@ func TestAddPeer(t *testing.T) {
 func TestPeerWriter(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
-	args := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
 	args.DisableWritePeers = false
 
 	tests := []struct {
@@ -165,8 +165,8 @@ func TestPeerWriter(t *testing.T) {
 func TestAddPeerEndpoint(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
-	args := MakeDefaultTestArgs()
-	args2 := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 
 	tests := []struct {
@@ -237,9 +237,9 @@ func TestAddPeerEndpoint(t *testing.T) {
 func TestAddPeerEndpoint2(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
-	args := MakeDefaultTestArgs()
-	args2 := MakeDefaultTestArgs()
-	args3 := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
+	args3 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 	args3.Port = "50053"
 
@@ -319,9 +319,9 @@ func TestAddPeerEndpoint2(t *testing.T) {
 func TestAddPeerEndpoint3(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
-	args := MakeDefaultTestArgs()
-	args2 := MakeDefaultTestArgs()
-	args3 := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
+	args3 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 	args3.Port = "50053"
 
@@ -409,9 +409,9 @@ func TestAddPeerEndpoint3(t *testing.T) {
 func TestUDPServer(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
-	args := MakeDefaultTestArgs()
+	args := server.MakeDefaultTestArgs()
 	args.DisableStartUDP = false
-	args2 := MakeDefaultTestArgs()
+	args2 := server.MakeDefaultTestArgs()
 	args2.Port = "50052"
 	args2.DisableStartUDP = false
 
