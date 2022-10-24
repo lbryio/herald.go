@@ -30,7 +30,7 @@ func main() {
 		// This will cancel goroutines with the server finishes.
 		// ctxWCancel, cancel := context.WithCancel(ctx)
 		// defer cancel()
-		stopGroup := stop.NewDebug()
+		stopGroup := stop.New()
 		// defer stopGroup.Stop()
 
 		initsignals(stopGroup.Ch())

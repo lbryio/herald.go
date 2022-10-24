@@ -58,7 +58,7 @@ var regTestAddrs = [30]string{
 
 func TestServerGetHeight(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -89,7 +89,7 @@ func TestServerGetHeight(t *testing.T) {
 
 func TestGetChunk(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -133,7 +133,7 @@ func TestGetChunk(t *testing.T) {
 
 func TestGetHeader(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -163,7 +163,7 @@ func TestGetHeader(t *testing.T) {
 
 func TestHeaders(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -195,7 +195,7 @@ func TestHeaders(t *testing.T) {
 
 func TestHeadersSubscribe(t *testing.T) {
 	args := MakeDefaultTestArgs()
-	grp := stop.New()
+	grp := stop.NewDebug()
 	secondaryPath := "asdf"
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
@@ -288,7 +288,7 @@ func TestHeadersSubscribe(t *testing.T) {
 
 func TestGetBalance(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -318,7 +318,7 @@ func TestGetBalance(t *testing.T) {
 
 func TestGetHistory(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -348,7 +348,7 @@ func TestGetHistory(t *testing.T) {
 
 func TestListUnspent(t *testing.T) {
 	secondaryPath := "asdf"
-	grp := stop.New()
+	grp := stop.NewDebug()
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
 	if err != nil {
@@ -378,7 +378,7 @@ func TestListUnspent(t *testing.T) {
 
 func TestAddressSubscribe(t *testing.T) {
 	args := MakeDefaultTestArgs()
-	grp := stop.New()
+	grp := stop.NewDebug()
 	secondaryPath := "asdf"
 	db, err := db.GetProdDB(regTestDBPath, secondaryPath, grp)
 	defer db.Shutdown()
