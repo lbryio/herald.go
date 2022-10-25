@@ -11,7 +11,7 @@ import (
 
 // TestUDPPing tests UDPPing correctness against prod server.
 func TestUDPPing(t *testing.T) {
-	args := makeDefaultArgs()
+	args := server.MakeDefaultTestArgs()
 	args.DisableStartUDP = true
 
 	tests := []struct {

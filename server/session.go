@@ -14,6 +14,7 @@ import (
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -114,13 +115,15 @@ type sessionMap map[uintptr]*session
 
 type sessionManager struct {
 	// sessionsMut protects sessions, headerSubs, hashXSubs state
-	sessionsMut    sync.RWMutex
-	sessions       sessionMap
-	sessionsWait   sync.WaitGroup
+	sessionsMut sync.RWMutex
+	sessions    sessionMap
+	// sessionsWait   sync.WaitGroup
+	grp            *stop.Group
 	sessionsMax    int
 	sessionTimeout time.Duration
 	manageTicker   *time.Ticker
 	db             *db.ReadOnlyDBColumnFamily
+	args           *Args
 	chain          *chaincfg.Params
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
 	headerSubs sessionMap
@@ -128,13 +131,15 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(db *db.ReadOnlyDBColumnFamily, chain *chaincfg.Params, sessionsMax, sessionTimeout int) *sessionManager {
+func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
-		sessionsMax:    sessionsMax,
-		sessionTimeout: time.Duration(sessionTimeout) * time.Second,
-		manageTicker:   time.NewTicker(time.Duration(max(5, sessionTimeout/20)) * time.Second),
+		grp:            grp,
+		sessionsMax:    args.MaxSessions,
+		sessionTimeout: time.Duration(args.SessionTimeout) * time.Second,
+		manageTicker:   time.NewTicker(time.Duration(max(5, args.SessionTimeout/20)) * time.Second),
 		db:             db,
+		args:           args,
 		chain:          chain,
 		headerSubs:     make(sessionMap),
 		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
@@ -142,6 +147,7 @@ func newSessionManager(db *db.ReadOnlyDBColumnFamily, chain *chaincfg.Params, se
 }
 
 func (sm *sessionManager) start() {
+	sm.grp.Add(1)
 	go sm.manage()
 }
 
@@ -168,7 +174,13 @@ func (sm *sessionManager) manage() {
 		}
 		sm.sessionsMut.Unlock()
 		// Wait for next management clock tick.
-		<-sm.manageTicker.C
+		select {
+		case <-sm.grp.Ch():
+			sm.grp.Done()
+			return
+		case <-sm.manageTicker.C:
+			continue
+		}
 	}
 }
 
@@ -190,11 +202,18 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	// each request and update subscriptions.
 	s1 := rpc.NewServer()
 
+	// Register "server.{features,banner,version}" handlers.
+	serverSvc := &ServerService{sm.args}
+	err := s1.RegisterName("server", serverSvc)
+	if err != nil {
+		log.Errorf("RegisterName: %v\n", err)
+	}
+
 	// Register "blockchain.claimtrie.*"" handlers.
 	claimtrieSvc := &ClaimtrieService{sm.db}
-	err := s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
+	err = s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
 	if err != nil {
-		log.Errorf("RegisterService: %v\n", err)
+		log.Errorf("RegisterName: %v\n", err)
 	}
 
 	// Register other "blockchain.{block,address,scripthash}.*" handlers.
@@ -220,11 +239,11 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		goto fail
 	}
 
-	sm.sessionsWait.Add(1)
+	sm.grp.Add(1)
 	go func() {
 		s1.ServeCodec(&SessionServerCodec{jsonrpc.NewServerCodec(conn), sess})
 		log.Infof("session %v goroutine exit", sess.addr.String())
-		sm.sessionsWait.Done()
+		sm.grp.Done()
 	}()
 	return sess
 

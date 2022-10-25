@@ -1,7 +1,6 @@
 package server_test
 
 import (
-	"context"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/herald.go/server"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/sirupsen/logrus"
 )
 
@@ -47,8 +47,9 @@ func tcpRead(conn net.Conn) ([]byte, error) {
 }
 
 func TestNotifierServer(t *testing.T) {
-	args := makeDefaultArgs()
-	ctx := context.Background()
+	args := server.MakeDefaultTestArgs()
+	// ctx := context.Background()
+	ctx := stop.NewDebug()
 	hub := server.MakeHubServer(ctx, args)
 
 	go hub.NotifierServer()

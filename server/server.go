@@ -22,6 +22,7 @@ import (
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -53,6 +54,7 @@ type Server struct {
 	HeightSubs       map[net.Addr]net.Conn
 	HeightSubsMut    sync.RWMutex
 	NotifierChan     chan interface{}
+	Grp              *stop.Group
 	sessionManager   *sessionManager
 	pb.UnimplementedHubServer
 }
@@ -149,7 +151,7 @@ func (s *Server) Run() {
 	}
 }
 
-func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
+func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, error) {
 	tmpName, err := ioutil.TempDir("", "go-lbry-hub")
 	if err != nil {
 		logrus.Info(err)
@@ -159,10 +161,7 @@ func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
 	if err != nil {
 		logrus.Info(err)
 	}
-	myDB, _, err := db.GetProdDB(args.DBPath, tmpName)
-	// dbShutdown = func() {
-	// 	db.Shutdown(myDB)
-	// }
+	myDB, err := db.GetProdDB(args.DBPath, tmpName, grp)
 	if err != nil {
 		// Can't load the db, fail loudly
 		logrus.Info(err)
@@ -217,7 +216,7 @@ func LoadDatabase(args *Args) (*db.ReadOnlyDBColumnFamily, error) {
 // MakeHubServer takes the arguments given to a hub when it's started and
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
-func MakeHubServer(ctx context.Context, args *Args) *Server {
+func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	grpcServer := grpc.NewServer(grpc.NumStreamWorkers(0))
 
 	multiSpaceRe, err := regexp.Compile(`\s{2,}`)
@@ -266,14 +265,14 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 
 	//TODO: is this the right place to load the db?
 	var myDB *db.ReadOnlyDBColumnFamily
-	// var dbShutdown = func() {}
 	if !args.DisableResolve {
-		myDB, err = LoadDatabase(args)
+		myDB, err = LoadDatabase(args, grp)
 		if err != nil {
 			logrus.Warning(err)
 		}
 	}
 
+	// Determine which chain to use based on db and cli values
 	dbChain := (*chaincfg.Params)(nil)
 	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
 		// The chain params can be inferred from DBStateValue.
@@ -310,6 +309,10 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 	}
 	logrus.Infof("network: %v", chain.Name)
 
+	args.GenesisHash = chain.GenesisHash.String()
+
+	sessionGrp := stop.New(grp)
+
 	s := &Server{
 		GrpcServer:       grpcServer,
 		Args:             args,
@@ -333,7 +336,8 @@ func MakeHubServer(ctx context.Context, args *Args) *Server {
 		HeightSubs:       make(map[net.Addr]net.Conn),
 		HeightSubsMut:    sync.RWMutex{},
 		NotifierChan:     make(chan interface{}),
-		sessionManager:   newSessionManager(myDB, &chain, args.MaxSessions, args.SessionTimeout),
+		Grp:              grp,
+		sessionManager:   newSessionManager(myDB, args, sessionGrp, &chain),
 	}
 
 	// Start up our background services

@@ -105,6 +105,7 @@ func newBlockHeaderElectrum(header *[HEADER_SIZE]byte, height uint32) *BlockHead
 type BlockGetServerHeightReq struct{}
 type BlockGetServerHeightResp uint32
 
+// blockchain.block.get_server_height
 func (s *BlockchainBlockService) Get_server_height(req *BlockGetServerHeightReq, resp **BlockGetServerHeightResp) error {
 	if s.DB == nil || s.DB.LastState == nil {
 		return fmt.Errorf("unknown height")

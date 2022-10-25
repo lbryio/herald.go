@@ -88,7 +88,7 @@ test_command_with_want
 
 ### blockchain.block.get_chunk
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.block.get_chunk", "params": [0]}'
 	| jq .result | sed 's/"//g' | head -c 100
 EOM
@@ -97,7 +97,7 @@ test_command_with_want
 
 ### blockchain.block.get_header
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.block.get_header", "params": []}'
 	| jq .result.timestamp
 EOM
@@ -106,7 +106,7 @@ test_command_with_want
 
 ### blockchain.block.headers
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.block.headers", "params": []}'
 	| jq .result.count
 EOM
@@ -116,7 +116,7 @@ test_command_with_want
 ## blockchain.claimtrie
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.claimtrie.resolve", "params":[{"Data": ["@Styxhexenhammer666:2"]}]}'
 	| jq .result.txos[0].tx_hash | sed 's/"//g'
 EOM
@@ -128,7 +128,7 @@ test_command_with_want
 ### blockchain.address.get_balance
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.address.get_balance", "params":[{"Address": "bGqWuXRVm5bBqLvLPEQQpvsNxJ5ubc6bwN"}]}'
 	| jq .result.confirmed
 EOM
@@ -138,7 +138,7 @@ test_command_with_want
 ## blockchain.address.get_history
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.address.get_history", "params":[{"Address": "bGqWuXRVm5bBqLvLPEQQpvsNxJ5ubc6bwN"}]}'
 	| jq '.result.confirmed | length'
 EOM
@@ -148,7 +148,7 @@ test_command_with_want
 ## blockchain.address.listunspent
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.address.listunspent", "params":[{"Address": "bGqWuXRVm5bBqLvLPEQQpvsNxJ5ubc6bwN"}]}'
 	| jq '.result | length'
 EOM
@@ -160,7 +160,7 @@ test_command_with_want
 ## blockchain.scripthash.get_mempool
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.scripthash.get_mempool", "params":[{"scripthash": "bGqWuXRVm5bBqLvLPEQQpvsNxJ5ubc6bwN"}]}'
 	| jq .error | sed 's/"//g'
 EOM
@@ -170,7 +170,7 @@ test_command_with_want
 ## blockchain.scripthash.get_history
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.scripthash.get_history", "params":[{"scripthash": "bGqWuXRVm5bBqLvLPEQQpvsNxJ5ubc6bwN"}]}'
 	| jq .error | sed 's/"//g'
 EOM
@@ -180,11 +180,40 @@ test_command_with_want
 ## blockchain.scripthash.listunspent
 
 read -r -d '' CMD <<- EOM
-	curl http://127.0.0.1:50001/rpc -s -H "Content-Type: application/json"
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
 	--data '{"id": 1, "method": "blockchain.scripthash.listunspent", "params":[{"scripthash": "bGqWuXRVm5bBqLvLPEQQpvsNxJ5ubc6bwN"}]}'
 	| jq .error | sed 's/"//g'
 EOM
 WANT="encoding/hex: invalid byte: U+0047 'G'"
+test_command_with_want
+
+## server.banner 
+
+read -r -d '' CMD <<- EOM
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
+	--data '{"id": 1, "method": "server.banner", "params":[]}'
+	| jq .result | sed 's/"//g'
+EOM
+WANT="You are connected to an 0.107.0 server."
+test_command_with_want
+
+## server.version
+
+read -r -d '' CMD <<- EOM
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
+	--data '{"id": 1, "method": "server.version", "params":[]}'
+	| jq .result | sed 's/"//g'
+EOM
+WANT="0.107.0"
+test_command_with_want
+
+## server.features
+
+read -r -d '' CMD <<- EOM
+	curl http://127.0.0.1:50002/rpc -s -H "Content-Type: application/json"
+	--data '{"id": 1, "method": "server.features", "params":[]}'
+EOM
+WANT='{"result":{"hosts":{},"pruning":"","server_version":"0.107.0","protocol_min":"0.54.0","protocol_max":"0.199.0","genesis_hash":"9c89283ba0f3227f6c03b70216b9f665f0118d5e0fa729cedf4fb34d6a34f463","description":"Herald","payment_address":"","donation_address":"","daily_fee":"1.0","hash_function":"sha256","trending_algorithm":"fast_ar"},"error":null,"id":1}'
 test_command_with_want
 
 # metrics endpoint testing

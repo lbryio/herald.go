@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
-	"sync"
 	"time"
 
 	"github.com/lbryio/herald.go/db/prefixes"
@@ -16,6 +15,7 @@ import (
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/herald.go/internal/metrics"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/linxGnu/grocksdb"
 
 	log "github.com/sirupsen/logrus"
@@ -59,11 +59,7 @@ type ReadOnlyDBColumnFamily struct {
 	BlockedChannels        map[string][]byte
 	FilteredStreams        map[string][]byte
 	FilteredChannels       map[string][]byte
-	OpenIterators          map[string][]chan struct{}
-	ItMut                  sync.RWMutex
-	ShutdownChan           chan struct{}
-	DoneChan               chan struct{}
-	ShutdownCalled         bool
+	Grp                    *stop.Group
 	Cleanup                func()
 }
 
@@ -339,19 +335,10 @@ func interruptRequested(interrupted <-chan struct{}) bool {
 func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 	ch := make(chan *prefixes.PrefixRowKV)
 
-	iterKey := fmt.Sprintf("%p", opts)
-	if opts.DB != nil {
-		opts.DB.ItMut.Lock()
-		// There is a tiny chance that we were wating on the above lock while shutdown was
-		// being called and by the time we get it the db has already notified all active
-		// iterators to shutdown. In this case we go to the else branch.
-		if !opts.DB.ShutdownCalled {
-			opts.DB.OpenIterators[iterKey] = []chan struct{}{opts.DoneChan, opts.ShutdownChan}
-			opts.DB.ItMut.Unlock()
-		} else {
-			opts.DB.ItMut.Unlock()
-			return ch
-		}
+	// Check if we've been told to shutdown in between getting created and getting here
+	if opts.Grp != nil && interruptRequested(opts.Grp.Ch()) {
+		opts.Grp.Done()
+		return ch
 	}
 
 	ro := grocksdb.NewDefaultReadOptions()
@@ -369,11 +356,9 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			it.Close()
 			close(ch)
 			ro.Destroy()
-			if opts.DB != nil {
-				opts.DoneChan <- struct{}{}
-				opts.DB.ItMut.Lock()
-				delete(opts.DB.OpenIterators, iterKey)
-				opts.DB.ItMut.Unlock()
+			if opts.Grp != nil {
+				// opts.Grp.DoneNamed(iterKey)
+				opts.Grp.Done()
 			}
 		}()
 
@@ -394,7 +379,7 @@ func IterCF(db *grocksdb.DB, opts *IterOptions) <-chan *prefixes.PrefixRowKV {
 			if kv = opts.ReadRow(&prevKey); kv != nil {
 				ch <- kv
 			}
-			if interruptRequested(opts.ShutdownChan) {
+			if opts.Grp != nil && interruptRequested(opts.Grp.Ch()) {
 				return
 			}
 		}
@@ -546,7 +531,7 @@ func GetWriteDBCF(name string) (*grocksdb.DB, []*grocksdb.ColumnFamilyHandle, er
 }
 
 // GetProdDB returns a db that is used for production.
-func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func(), error) {
+func GetProdDB(name string, secondaryPath string, grp *stop.Group) (*ReadOnlyDBColumnFamily, error) {
 	prefixNames := prefixes.GetPrefixes()
 	// additional prefixes that aren't in the code explicitly
 	cfNames := []string{"default", "e", "d", "c"}
@@ -555,7 +540,7 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 		cfNames = append(cfNames, cfName)
 	}
 
-	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames)
+	db, err := GetDBColumnFamilies(name, secondaryPath, cfNames, grp)
 
 	cleanupFiles := func() {
 		err = os.RemoveAll(secondaryPath)
@@ -565,7 +550,8 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	}
 
 	if err != nil {
-		return nil, cleanupFiles, err
+		cleanupFiles()
+		return nil, err
 	}
 
 	cleanupDB := func() {
@@ -574,11 +560,11 @@ func GetProdDB(name string, secondaryPath string) (*ReadOnlyDBColumnFamily, func
 	}
 	db.Cleanup = cleanupDB
 
-	return db, cleanupDB, nil
+	return db, nil
 }
 
 // GetDBColumnFamilies gets a db with the specified column families and secondary path.
-func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*ReadOnlyDBColumnFamily, error) {
+func GetDBColumnFamilies(name string, secondayPath string, cfNames []string, grp *stop.Group) (*ReadOnlyDBColumnFamily, error) {
 	opts := grocksdb.NewDefaultOptions()
 	roOpts := grocksdb.NewDefaultReadOptions()
 	cfOpt := grocksdb.NewDefaultOptions()
@@ -614,11 +600,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string) (*R
 		LastState:        nil,
 		Height:           0,
 		Headers:          nil,
-		OpenIterators:    make(map[string][]chan struct{}),
-		ItMut:            sync.RWMutex{},
-		ShutdownChan:     make(chan struct{}, 1),
-		ShutdownCalled:   false,
-		DoneChan:         make(chan struct{}, 1),
+		Grp:              grp,
 	}
 
 	err = myDB.ReadDBState() //TODO: Figure out right place for this
@@ -687,24 +669,7 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
-	log.Println("Sending message to ShutdownChan...")
-	db.ShutdownChan <- struct{}{}
-	log.Println("Locking iterator mutex...")
-	db.ItMut.Lock()
-	log.Println("Setting ShutdownCalled to true...")
-	db.ShutdownCalled = true
-	log.Println("Notifying iterators to shutdown...")
-	for _, it := range db.OpenIterators {
-		it[1] <- struct{}{}
-	}
-	log.Println("Waiting for iterators to shutdown...")
-	for _, it := range db.OpenIterators {
-		<-it[0]
-	}
-	log.Println("Unlocking iterator mutex...")
-	db.ItMut.Unlock()
-	log.Println("Sending message to DoneChan...")
-	<-db.DoneChan
+	db.Grp.StopAndWait()
 	log.Println("Calling cleanup...")
 	db.Cleanup()
 	log.Println("Leaving Shutdown...")
@@ -714,6 +679,7 @@ func (db *ReadOnlyDBColumnFamily) Shutdown() {
 // to keep the db readonly view up to date and handle reorgs on the
 // blockchain.
 func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan<- interface{}) {
+	db.Grp.Add(1)
 	go func() {
 		lastPrint := time.Now()
 		for {
@@ -727,8 +693,8 @@ func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan<- interface{}) {
 				log.Infof("Error detecting changes: %#v", err)
 			}
 			select {
-			case <-db.ShutdownChan:
-				db.DoneChan <- struct{}{}
+			case <-db.Grp.Ch():
+				db.Grp.Done()
 				return
 			case <-time.After(time.Millisecond * 10):
 			}

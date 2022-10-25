@@ -10,6 +10,7 @@ import (
 	"github.com/lbryio/herald.go/internal"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/lbryio/herald.go/server"
+	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 )
@@ -27,13 +28,16 @@ func main() {
 
 	if args.CmdType == server.ServeCmd {
 		// This will cancel goroutines with the server finishes.
-		ctxWCancel, cancel := context.WithCancel(ctx)
-		defer cancel()
+		// ctxWCancel, cancel := context.WithCancel(ctx)
+		// defer cancel()
+		stopGroup := stop.New()
+		// defer stopGroup.Stop()
 
-		initsignals()
+		initsignals(stopGroup.Ch())
 		interrupt := interruptListener()
 
-		s := server.MakeHubServer(ctxWCancel, args)
+		// s := server.MakeHubServer(ctxWCancel, args)
+		s := server.MakeHubServer(stopGroup, args)
 		go s.Run()
 
 		defer func() {
