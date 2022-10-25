@@ -659,12 +659,12 @@ func (s *BlockchainTransactionService) Broadcast(req *TransactionBroadcastReq, r
 
 type TransactionGetReq string
 type TXFullDetail struct {
-	Height uint32 `json:"block_height"`
-	Merkle string `json:"merkle"`
-	Pos    uint64 `json:"pos"`
+	Height int      `json:"block_height"`
+	Pos    uint32   `json:"pos"`
+	Merkle []string `json:"merkle"`
 }
 type TXDetail struct {
-	Height uint32 `json:"block_height"`
+	Height int `json:"block_height"`
 }
 
 // TransactionResp is a pair consisting of:
@@ -701,15 +701,45 @@ type TransactionGetBatchResp []TXGetResp
 
 // 'blockchain.transaction.get_batch'
 func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, resp **TransactionGetBatchResp) error {
-	return nil
+	if len(*req) > 100 {
+		return fmt.Errorf("too many tx hashes in request: %v", len(*req))
+	}
+	tx_hashes := make([]chainhash.Hash, len(*req))
+	for i, txid := range *req {
+		if err := chainhash.Decode(&tx_hashes[i], txid); err != nil {
+			return err
+		}
+	}
+	dbResult, err := s.DB.GetTxMerkle(tx_hashes)
+	if err != nil {
+		return err
+	}
+	result := make([]TXGetResp, 0, len(dbResult))
+	for _, r := range dbResult {
+		merkles := make([]string, len(r.Merkle))
+		for i, m := range r.Merkle {
+			merkles[i] = m.String()
+		}
+		detail := TXFullDetail{
+			Height: r.Height,
+			Pos:    r.Pos,
+			Merkle: merkles,
+		}
+		result = append(result, TXGetResp{hex.EncodeToString(r.RawTx), &detail})
+	}
+	*resp = (*TransactionGetBatchResp)(&result)
+	return err
 }
 
-type TransactionGetMerkleReq string
+type TransactionGetMerkleReq struct {
+	TxHash string `json:"tx_hash"`
+	Height uint32 `json:"height"`
+}
 type TransactionGetMerkleResp TXGetResp
 
 // 'blockchain.transaction.get_merkle'
 func (s *BlockchainTransactionService) Get_merkle(req *TransactionGetMerkleReq, resp **TransactionGetMerkleResp) error {
-	txids := [1]string{string(*req)}
+	txids := [1]string{string(req.TxHash)}
 	request := TransactionGetBatchReq(txids[:])
 	var response *TransactionGetBatchResp
 	err := s.Get_batch(&request, &response)

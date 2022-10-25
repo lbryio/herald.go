@@ -67,6 +67,31 @@ func (db *ReadOnlyDBColumnFamily) GetBlockHash(height uint32) ([]byte, error) {
 	return rawValue, nil
 }
 
+func (db *ReadOnlyDBColumnFamily) GetBlockTXs(height uint32) ([]*chainhash.Hash, error) {
+	handle, err := db.EnsureHandle(prefixes.BlockTXs)
+	if err != nil {
+		return nil, err
+	}
+
+	key := prefixes.BlockTxsKey{
+		Prefix: []byte{prefixes.BlockTXs},
+		Height: height,
+	}
+	slice, err := db.DB.GetCF(db.Opts, handle, key.PackKey())
+	defer slice.Free()
+	if err != nil {
+		return nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.BlockTxsValueUnpack(rawValue)
+	return value.TxHashes, nil
+}
+
 func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
 	handle, err := db.EnsureHandle(prefixes.Header)
 	if err != nil {
@@ -797,7 +822,6 @@ func (db *ReadOnlyDBColumnFamily) getMempoolTx(txhash *chainhash.Hash) ([]byte, 
 	return value.RawTx, &msgTx, nil
 }
 
-
 func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountValue, error) {
 	handle, err := db.EnsureHandle(prefixes.TxCount)
 	if err != nil {
@@ -842,6 +866,98 @@ func (db *ReadOnlyDBColumnFamily) GetTxHeight(txhash *chainhash.Hash) (uint32, e
 	value := prefixes.TxNumValueUnpack(slice.Data())
 	height := stack.BisectRight(db.TxCounts, []uint32{value.TxNum})[0]
 	return height, nil
+}
+
+type TxMerkle struct {
+	TxHash *chainhash.Hash
+	RawTx  []byte
+	Height int
+	Pos    uint32
+	Merkle []*chainhash.Hash
+}
+
+// merklePath selects specific transactions by position within blockTxs.
+// The resulting merkle path (aka merkle branch, or merkle) is a list of TX hashes
+// which are in sibling relationship with TX nodes on the path to the root.
+func merklePath(pos uint32, blockTxs, partial []*chainhash.Hash) []*chainhash.Hash {
+	parent := func(p uint32) uint32 {
+		return p >> 1
+	}
+	sibling := func(p uint32) uint32 {
+		if p%2 == 0 {
+			return p + 1
+		} else {
+			return p - 1
+		}
+	}
+	p := parent(pos)
+	if p == 0 {
+		// No parent, path is complete.
+		return partial
+	}
+	// Add sibling to partial path and proceed to parent TX.
+	return merklePath(p, blockTxs, append(partial, blockTxs[sibling(pos)]))
+}
+
+func (db *ReadOnlyDBColumnFamily) GetTxMerkle(tx_hashes []chainhash.Hash) ([]TxMerkle, error) {
+
+	selectedTxNum := make([]*IterOptions, 0, len(tx_hashes))
+	for _, txhash := range tx_hashes {
+		key := prefixes.TxNumKey{Prefix: []byte{prefixes.TxNum}, TxHash: &txhash}
+		opt, err := db.selectFrom(key.Prefix, &key, &key)
+		if err != nil {
+			return nil, err
+		}
+		selectedTxNum = append(selectedTxNum, opt...)
+	}
+
+	selectTxByTxNum := func(in []*prefixes.PrefixRowKV) ([]*IterOptions, error) {
+		txNumKey := in[0].Key.(*prefixes.TxNumKey)
+		out := make([]*IterOptions, 0, 100)
+		startKey := &prefixes.TxKey{
+			Prefix: []byte{prefixes.Tx},
+			TxHash: txNumKey.TxHash,
+		}
+		endKey := &prefixes.TxKey{
+			Prefix: []byte{prefixes.Tx},
+			TxHash: txNumKey.TxHash,
+		}
+		selectedTx, err := db.selectFrom([]byte{prefixes.Tx}, startKey, endKey)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, selectedTx...)
+		return out, nil
+	}
+
+	blockTxsCache := make(map[uint32][]*chainhash.Hash)
+	results := make([]TxMerkle, 0, 500)
+	for kvs := range innerJoin(db.DB, iterate(db.DB, selectedTxNum), selectTxByTxNum) {
+		if err := checkForError(kvs); err != nil {
+			return results, err
+		}
+		txNumKey, txNumVal := kvs[0].Key.(*prefixes.TxNumKey), kvs[0].Value.(*prefixes.TxNumValue)
+		_, txVal := kvs[1].Key.(*prefixes.TxKey), kvs[1].Value.(*prefixes.TxValue)
+		txHeight := stack.BisectRight(db.TxCounts, []uint32{txNumVal.TxNum})[0]
+		txPos := txNumVal.TxNum - db.TxCounts.Get(txHeight-1)
+		// We need all the TX hashes in order to select out the relevant ones.
+		if _, ok := blockTxsCache[txHeight]; !ok {
+			txs, err := db.GetBlockTXs(txHeight)
+			if err != nil {
+				return results, err
+			}
+			blockTxsCache[txHeight] = txs
+		}
+		blockTxs, _ := blockTxsCache[txHeight]
+		results = append(results, TxMerkle{
+			TxHash: txNumKey.TxHash,
+			RawTx:  txVal.RawTx,
+			Height: int(txHeight),
+			Pos:    txPos,
+			Merkle: merklePath(txPos, blockTxs, []*chainhash.Hash{}),
+		})
+	}
+	return results, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {
