@@ -49,10 +49,6 @@ func interruptListener() <-chan struct{} {
 			case sig := <-interruptChannel:
 				log.Infof("Received signal (%s).  Already "+
 					"shutting down...", sig)
-
-			case <-shutdownRequestChannel:
-				log.Info("Shutdown requested.  Already " +
-					"shutting down...")
 			}
 		}
 	}()
