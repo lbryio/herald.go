@@ -426,8 +426,11 @@ type serverResponse struct {
 }
 
 // jsonPatchingCodec is able to intercept the JSON requests/responses
-// and tweak them. Currently it appears we need to add a
-// "jsonrpc": "1.0" or "jsonrpc": "2.0" to make the client happy.
+// and tweak them. Currently, it appears we need to make several changes:
+// 1) add "jsonrpc": "2.0" (or "jsonrpc": "1.0") in response
+// 2) add newline to frame response
+// 3) add "params": [] when "params" is missing
+// 4) replace params ["arg1", "arg2", ...] with [["arg1", "arg2", ...]]
 type jsonPatchingCodec struct {
 	conn      net.Conn
 	inBuffer  *bytes.Buffer
