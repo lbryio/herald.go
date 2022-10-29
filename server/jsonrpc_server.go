@@ -73,17 +73,16 @@ type ServerVersionService struct {
 	Args *Args
 }
 
-type ServerVersionReq struct{}
+type ServerVersionReq [2]string // [client_name, client_version]
 
-type ServerVersionRes string
+type ServerVersionRes [2]string // [version, protocol_version]
 
-// Banner is the json rpc endpoint for 'server.version'.
-// FIXME: This should return a struct with the version and the protocol version.
-// <<-- that comment was written by github, scary shit because it's true
+// Version is the json rpc endpoint for 'server.version'.
 func (t *ServerService) Version(req *ServerVersionReq, res **ServerVersionRes) error {
-	log.Println("Version")
-
-	*res = (*ServerVersionRes)(&t.Args.ServerVersion)
-
+	// FIXME: We may need to do the computation of a negotiated version here.
+	// Also return an error if client is not supported?
+	result := [2]string{t.Args.ServerVersion, t.Args.ServerVersion}
+	*res = (*ServerVersionRes)(&result)
+	log.Printf("Version(%v) -> %v", *req, **res)
 	return nil
 }
