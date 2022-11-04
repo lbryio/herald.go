@@ -56,6 +56,7 @@ type Server struct {
 	HeightSubsMut    sync.RWMutex
 	NotifierChan     chan interface{}
 	Grp              *stop.Group
+	notiferListener  *net.TCPListener
 	sessionManager   *sessionManager
 	pb.UnimplementedHubServer
 }
@@ -151,6 +152,27 @@ func (s *Server) Run() {
 	if err := s.GrpcServer.Serve(l); err != nil {
 		log.Fatalf("failed to serve: %v", err)
 	}
+}
+
+func (s *Server) Stop() {
+	log.Println("Shutting down server...")
+
+	if s.EsClient != nil {
+		log.Println("Stopping es client...")
+		s.EsClient.Stop()
+	}
+	if s.GrpcServer != nil {
+		log.Println("Stopping grpc server...")
+		s.GrpcServer.GracefulStop()
+	}
+	log.Println("Stopping other server threads...")
+	s.Grp.StopAndWait()
+	if s.DB != nil {
+		log.Println("Stopping database connection...")
+		s.DB.Shutdown()
+	}
+
+	log.Println("Returning from Stop...")
 }
 
 func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, error) {
@@ -338,7 +360,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
 		HeightSubs:       make(map[net.Addr]net.Conn),
 		HeightSubsMut:    sync.RWMutex{},
-		NotifierChan:     make(chan interface{}),
+		NotifierChan:     make(chan interface{}, 1),
 		Grp:              grp,
 		sessionManager:   newSessionManager(myDB, args, sessionGrp, &chain),
 	}

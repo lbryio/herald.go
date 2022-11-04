@@ -57,6 +57,8 @@ func (s *Server) RunNotifier() error {
 		case internal.HeightHash:
 			heightHash, _ := notification.(internal.HeightHash)
 			s.DoNotify(&heightHash)
+		default:
+			logrus.Warn("unknown notification type")
 		}
 		s.sessionManager.doNotify(notification)
 	}
@@ -65,6 +67,7 @@ func (s *Server) RunNotifier() error {
 
 // NotifierServer implements the TCP protocol for height/blockheader notifications
 func (s *Server) NotifierServer() error {
+	s.Grp.Add(1)
 	address := ":" + s.Args.NotifierPort
 	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
@@ -77,11 +80,27 @@ func (s *Server) NotifierServer() error {
 	}
 
 	defer listen.Close()
+	rdyCh := make(chan bool)
 
 	for {
+		var conn net.Conn
+		var err error
 
 		logrus.Info("Waiting for connection")
-		conn, err := listen.Accept()
+
+		go func() {
+			conn, err = listen.Accept()
+			rdyCh <- true
+		}()
+
+		select {
+		case <-s.Grp.Ch():
+			s.Grp.Done()
+			return nil
+		case <-rdyCh:
+			logrus.Info("Connection accepted")
+		}
+
 		if err != nil {
 			logrus.Warn(err)
 			continue

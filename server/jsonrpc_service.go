@@ -134,6 +134,14 @@ fail1:
 			goto fail2
 		}
 
+		// Register "server.peers" handlers.
+		peersSvc := &PeersService{}
+		err = s1.RegisterTCPService(peersSvc, "server_peers")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+
 		r := gorilla_mux.NewRouter()
 		r.Handle("/rpc", s1)
 		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCHTTPPort), 10)

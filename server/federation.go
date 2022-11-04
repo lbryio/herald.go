@@ -3,7 +3,6 @@ package server
 import (
 	"bufio"
 	"context"
-	"log"
 	"math"
 	"net"
 	"os"
@@ -14,7 +13,9 @@ import (
 
 	"github.com/lbryio/herald.go/internal/metrics"
 	pb "github.com/lbryio/herald.go/protobuf/go"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // Peer holds relevant information about peers that we know about.
@@ -99,7 +100,7 @@ retry:
 	time.Sleep(time.Second * time.Duration(math.Pow(float64(failures), 2)))
 	conn, err := grpc.DialContext(ctx,
 		"0.0.0.0:"+port,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 
@@ -172,7 +173,7 @@ func (s *Server) subscribeToPeer(peer *Peer) error {
 
 	conn, err := grpc.DialContext(ctx,
 		peer.Address+":"+peer.Port,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 	if err != nil {
@@ -208,7 +209,7 @@ func (s *Server) helloPeer(peer *Peer) (*pb.HelloMessage, error) {
 
 	conn, err := grpc.DialContext(ctx,
 		peer.Address+":"+peer.Port,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 	if err != nil {
@@ -278,7 +279,7 @@ func (s *Server) notifyPeer(peerToNotify *Peer, newPeer *Peer) error {
 
 	conn, err := grpc.DialContext(ctx,
 		peerToNotify.Address+":"+peerToNotify.Port,
-		grpc.WithInsecure(),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 	if err != nil {
@@ -370,6 +371,10 @@ func (s *Server) addPeer(newPeer *Peer, ping bool, subscribe bool) error {
 		metrics.PeersKnown.Inc()
 		s.writePeers()
 		s.notifyPeerSubs(newPeer)
+		// This is weird because we're doing grpc and jsonrpc here.
+		// Do we still want to custom grpc?
+		log.Warn("Sending peer to NotifierChan")
+		s.NotifierChan <- newPeer
 
 		// Subscribe to all our peers for now
 		if subscribe {

@@ -33,6 +33,11 @@ type hashXNotification struct {
 	statusStr string
 }
 
+type peerNotification struct {
+	address string
+	port    string
+}
+
 type session struct {
 	id   uintptr
 	addr net.Addr
@@ -41,6 +46,8 @@ type session struct {
 	hashXSubs map[[HASHX_LEN]byte]string
 	// headersSub indicates header subscription
 	headersSub bool
+	// peersSub indicates peer subscription
+	peersBool bool
 	// headersSubRaw indicates the header subscription mode
 	headersSubRaw bool
 	// client provides the ability to send notifications
@@ -95,6 +102,11 @@ func (s *session) doNotify(notification interface{}) {
 			status = hex.EncodeToString(note.status)
 		}
 		params = []string{orig, status}
+	case peerNotification:
+		note, _ := notification.(peerNotification)
+		method = "server.peers.subscribe"
+		params = []string{note.address, note.port}
+
 	default:
 		log.Warnf("unknown notification type: %v", notification)
 		return
@@ -127,6 +139,8 @@ type sessionManager struct {
 	db             *db.ReadOnlyDBColumnFamily
 	args           *Args
 	chain          *chaincfg.Params
+	// peerSubs are sessions subscribed via 'blockchain.peers.subscribe'
+	peerSubs sessionMap
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
 	headerSubs sessionMap
 	// hashXSubs are sessions subscribed via 'blockchain.{address,scripthash}.subscribe'
@@ -143,6 +157,7 @@ func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Grou
 		db:             db,
 		args:           args,
 		chain:          chain,
+		peerSubs:       make(sessionMap),
 		headerSubs:     make(sessionMap),
 		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
 	}
@@ -207,6 +222,13 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	// Register "server.{features,banner,version}" handlers.
 	serverSvc := &ServerService{sm.args}
 	err := s1.RegisterName("server", serverSvc)
+	if err != nil {
+		log.Errorf("RegisterName: %v\n", err)
+	}
+
+	// Register "server.peers" handlers.
+	peersSvc := &PeersService{}
+	err = s1.RegisterName("server.peers", peersSvc)
 	if err != nil {
 		log.Errorf("RegisterName: %v\n", err)
 	}
@@ -351,6 +373,8 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 		if len(subsCopy) > 0 {
 			note.statusStr = hex.EncodeToString(note.status)
 		}
+	case peerNotification:
+		subsCopy = sm.peerSubs
 	default:
 		log.Warnf("unknown notification type: %v", notification)
 	}

@@ -51,6 +51,7 @@ func TestAddPeer(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
+	args.DisableStartNotifier = false
 
 	tests := []struct {
 		name string
@@ -92,6 +93,7 @@ func TestAddPeer(t *testing.T) {
 					log.Println(err)
 				}
 			}
+			hubServer.Stop()
 			var m = &dto.Metric{}
 			if err := metrics.PeersKnown.Write(m); err != nil {
 				t.Errorf("Error getting metrics %+v\n", err)
@@ -111,6 +113,7 @@ func TestPeerWriter(t *testing.T) {
 	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args.DisableWritePeers = false
+	args.DisableStartNotifier = false
 
 	tests := []struct {
 		name string
@@ -156,6 +159,7 @@ func TestPeerWriter(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("lineCountFile(peers.txt) = %d, want %d", got, tt.want)
 			}
+			hubServer.Stop()
 		})
 	}
 
@@ -167,8 +171,11 @@ func TestAddPeerEndpoint(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
+	args.DisableStartNotifier = false
 	args2 := server.MakeDefaultTestArgs()
+	args2.DisableStartNotifier = false
 	args2.Port = 50052
+	args2.NotifierPort = "18081"
 
 	tests := []struct {
 		name          string
@@ -219,8 +226,8 @@ func TestAddPeerEndpoint(t *testing.T) {
 				log.Println(err)
 			}
 
-			hubServer.GrpcServer.GracefulStop()
-			hubServer2.GrpcServer.GracefulStop()
+			// hubServer.GrpcServer.GracefulStop()
+			// hubServer2.GrpcServer.GracefulStop()
 			got1 := hubServer.GetNumPeersExported()()
 			got2 := hubServer2.GetNumPeersExported()()
 			if got1 != tt.wantServerOne {
@@ -229,6 +236,8 @@ func TestAddPeerEndpoint(t *testing.T) {
 			if got2 != tt.wantServerTwo {
 				t.Errorf("len(hubServer2.PeerServers) = %d, want %d\n", got2, tt.wantServerTwo)
 			}
+			hubServer.Stop()
+			hubServer2.Stop()
 		})
 	}
 
@@ -243,6 +252,11 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	args3 := server.MakeDefaultTestArgs()
 	args2.Port = 50052
 	args3.Port = 50053
+	args.DisableStartNotifier = false
+	args2.DisableStartNotifier = false
+	args3.DisableStartNotifier = false
+	args2.NotifierPort = "18081"
+	args3.NotifierPort = "18082"
 
 	tests := []struct {
 		name            string
@@ -296,9 +310,9 @@ func TestAddPeerEndpoint2(t *testing.T) {
 				log.Println(err)
 			}
 
-			hubServer.GrpcServer.GracefulStop()
-			hubServer2.GrpcServer.GracefulStop()
-			hubServer3.GrpcServer.GracefulStop()
+			// hubServer.GrpcServer.GracefulStop()
+			// hubServer2.GrpcServer.GracefulStop()
+			// hubServer3.GrpcServer.GracefulStop()
 			got1 := hubServer.GetNumPeersExported()()
 			got2 := hubServer2.GetNumPeersExported()()
 			got3 := hubServer3.GetNumPeersExported()()
@@ -311,6 +325,9 @@ func TestAddPeerEndpoint2(t *testing.T) {
 			if got3 != tt.wantServerThree {
 				t.Errorf("len(hubServer3.PeerServers) = %d, want %d\n", got3, tt.wantServerThree)
 			}
+			hubServer.Stop()
+			hubServer2.Stop()
+			hubServer3.Stop()
 		})
 	}
 
@@ -325,6 +342,11 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	args3 := server.MakeDefaultTestArgs()
 	args2.Port = 50052
 	args3.Port = 50053
+	args.DisableStartNotifier = false
+	args2.DisableStartNotifier = false
+	args3.DisableStartNotifier = false
+	args2.NotifierPort = "18081"
+	args3.NotifierPort = "18082"
 
 	tests := []struct {
 		name            string
@@ -386,9 +408,13 @@ func TestAddPeerEndpoint3(t *testing.T) {
 				log.Println(err)
 			}
 
-			hubServer.GrpcServer.GracefulStop()
-			hubServer2.GrpcServer.GracefulStop()
-			hubServer3.GrpcServer.GracefulStop()
+			// hubServer.GrpcServer.GracefulStop()
+			// hubServer2.GrpcServer.GracefulStop()
+			// hubServer3.GrpcServer.GracefulStop()
+
+			hubServer.Stop()
+			hubServer2.Stop()
+			hubServer3.Stop()
 			got1 := hubServer.GetNumPeersExported()()
 			got2 := hubServer2.GetNumPeersExported()()
 			got3 := hubServer3.GetNumPeersExported()()
@@ -411,9 +437,9 @@ func TestUDPServer(t *testing.T) {
 	// ctx := context.Background()
 	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
-	args.DisableStartUDP = false
 	args2 := server.MakeDefaultTestArgs()
 	args2.Port = 50052
+	args.DisableStartUDP = false
 	args2.DisableStartUDP = false
 
 	tests := []struct {
@@ -444,8 +470,10 @@ func TestUDPServer(t *testing.T) {
 				log.Println(err)
 			}
 
-			hubServer.GrpcServer.GracefulStop()
-			hubServer2.GrpcServer.GracefulStop()
+			// hubServer.GrpcServer.GracefulStop()
+			// hubServer2.GrpcServer.GracefulStop()
+			hubServer.Stop()
+			hubServer2.Stop()
 
 			got1 := hubServer.ExternalIP.String()
 			if got1 != tt.want {
