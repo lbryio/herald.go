@@ -93,7 +93,6 @@ func TestAddPeer(t *testing.T) {
 					log.Println(err)
 				}
 			}
-			hubServer.Stop()
 			var m = &dto.Metric{}
 			if err := metrics.PeersKnown.Write(m); err != nil {
 				t.Errorf("Error getting metrics %+v\n", err)
@@ -102,6 +101,7 @@ func TestAddPeer(t *testing.T) {
 			if got != tt.want {
 				t.Errorf("len(server.PeerServers) = %d, want %d\n", got, tt.want)
 			}
+			hubServer.Stop()
 		})
 	}
 

@@ -374,7 +374,7 @@ func (s *Server) addPeer(newPeer *Peer, ping bool, subscribe bool) error {
 		// This is weird because we're doing grpc and jsonrpc here.
 		// Do we still want to custom grpc?
 		log.Warn("Sending peer to NotifierChan")
-		s.NotifierChan <- newPeer
+		s.NotifierChan <- peerNotification{newPeer.Address, newPeer.Port}
 
 		// Subscribe to all our peers for now
 		if subscribe {
