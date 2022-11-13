@@ -204,7 +204,7 @@ func TestHeadersSubscribe(t *testing.T) {
 		return
 	}
 
-	sm := newSessionManager(db, args, grp, &chaincfg.RegressionNetParams)
+	sm := newSessionManager(nil, db, args, grp, &chaincfg.RegressionNetParams)
 	sm.start()
 	defer sm.stop()
 
@@ -385,7 +385,7 @@ func TestAddressSubscribe(t *testing.T) {
 		return
 	}
 
-	sm := newSessionManager(db, args, grp, &chaincfg.RegressionNetParams)
+	sm := newSessionManager(nil, db, args, grp, &chaincfg.RegressionNetParams)
 	sm.start()
 	defer sm.stop()
 

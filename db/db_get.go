@@ -958,7 +958,7 @@ func (db *ReadOnlyDBColumnFamily) GetTxMerkle(tx_hashes []chainhash.Hash) ([]TxM
 			}
 			blockTxsCache[txHeight] = txs
 		}
-		blockTxs, _ := blockTxsCache[txHeight]
+		blockTxs := blockTxsCache[txHeight]
 		results = append(results, TxMerkle{
 			TxHash: txNumKey.TxHash,
 			RawTx:  txVal.RawTx,
@@ -968,6 +968,83 @@ func (db *ReadOnlyDBColumnFamily) GetTxMerkle(tx_hashes []chainhash.Hash) ([]TxM
 		})
 	}
 	return results, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetClaimByID(claimID string) ([]*ExpandedResolveResult, []*ExpandedResolveResult, error) {
+	// claim, err := db.GetCachedClaimTxo(claimID, true)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// activation, err := db.GetActivation(claim.TxNum, claim.Position)
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// return PrepareResolveResult(
+	// 	db,
+	// 	claim.TxNum,
+	// 	claim.Position,
+	// 	claimID,
+	// 	claim.Name,
+	// 	claim.RootTxNum,
+	// 	claim.RootPosition,
+	// 	activation,
+	// 	claim.ChannelSignatureIsValid,
+	// )
+
+	/*
+			    def _getclaimbyid(self, claim_id: str):
+		        rows = []
+		        extra = []
+		        claim_hash = bytes.fromhex(claim_id)
+		        stream = self.db._fs_get_claim_by_hash(claim_hash)
+		        rows.append(stream or LookupError(f"Could not find claim at {claim_id}"))
+		        if stream and stream.channel_hash:
+		            channel = self.db._fs_get_claim_by_hash(stream.channel_hash)
+		            extra.append(channel or LookupError(f"Could not find channel at {stream.channel_hash.hex()}"))
+		        if stream and stream.reposted_claim_hash:
+		            repost = self.db._fs_get_claim_by_hash(stream.reposted_claim_hash)
+		            if repost:
+		                extra.append(repost)
+		        return Outputs.to_base64(rows, extra, 0, None, None)
+	*/
+	rows := make([]*ExpandedResolveResult, 0)
+	extras := make([]*ExpandedResolveResult, 0)
+	claimHash, err := hex.DecodeString(claimID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	stream, err := db.FsGetClaimByHash(claimHash)
+	if err != nil {
+		return nil, nil, err
+	}
+	var res = NewExpandedResolveResult()
+	res.Stream = &optionalResolveResultOrError{res: stream}
+	rows = append(rows, res)
+
+	if stream != nil && stream.ChannelHash != nil {
+		channel, err := db.FsGetClaimByHash(stream.ChannelHash)
+		if err != nil {
+			return nil, nil, err
+		}
+		var res = NewExpandedResolveResult()
+		res.Channel = &optionalResolveResultOrError{res: channel}
+		extras = append(extras, res)
+	}
+
+	if stream != nil && stream.RepostedClaimHash != nil {
+		repost, err := db.FsGetClaimByHash(stream.RepostedClaimHash)
+		if err != nil {
+			return nil, nil, err
+		}
+		var res = NewExpandedResolveResult()
+		res.Repost = &optionalResolveResultOrError{res: repost}
+		extras = append(extras, res)
+	}
+
+	return rows, extras, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {

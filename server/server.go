@@ -362,8 +362,10 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		HeightSubsMut:    sync.RWMutex{},
 		NotifierChan:     make(chan interface{}, 1),
 		Grp:              grp,
-		sessionManager:   newSessionManager(myDB, args, sessionGrp, &chain),
+		sessionManager:   nil,
 	}
+	// FIXME: HACK
+	s.sessionManager = newSessionManager(s, myDB, args, sessionGrp, &chain)
 
 	// Start up our background services
 	if !args.DisableResolve && !args.DisableRocksDBRefresh {

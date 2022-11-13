@@ -15,7 +15,7 @@ type PeersSubscribeReq struct {
 type PeersSubscribeResp struct{}
 
 // Features is the json rpc endpoint for 'server.peers.subcribe'.
-func (t *ServerService) PeersSubscribe(req *PeersSubscribeReq, res **PeersSubscribeResp) error {
+func (t *PeersService) Subscribe(req *PeersSubscribeReq, res **PeersSubscribeResp) error {
 	log.Println("PeersSubscribe")
 
 	*res = nil

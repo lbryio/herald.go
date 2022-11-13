@@ -138,6 +138,7 @@ type sessionManager struct {
 	manageTicker   *time.Ticker
 	db             *db.ReadOnlyDBColumnFamily
 	args           *Args
+	server         *Server
 	chain          *chaincfg.Params
 	// peerSubs are sessions subscribed via 'blockchain.peers.subscribe'
 	peerSubs sessionMap
@@ -147,7 +148,7 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
+func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
 		grp:            grp,
@@ -156,6 +157,7 @@ func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Grou
 		manageTicker:   time.NewTicker(time.Duration(max(5, args.SessionTimeout/20)) * time.Second),
 		db:             db,
 		args:           args,
+		server:         server,
 		chain:          chain,
 		peerSubs:       make(sessionMap),
 		headerSubs:     make(sessionMap),
@@ -234,7 +236,7 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	}
 
 	// Register "blockchain.claimtrie.*"" handlers.
-	claimtrieSvc := &ClaimtrieService{sm.db}
+	claimtrieSvc := &ClaimtrieService{sm.db, sm.server}
 	err = s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
 	if err != nil {
 		log.Errorf("RegisterName: %v\n", err)

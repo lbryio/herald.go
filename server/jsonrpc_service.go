@@ -91,7 +91,7 @@ fail1:
 		s1.RegisterCodec(&gorillaRpcCodec{gorilla_json.NewCodec()}, "application/json")
 
 		// Register "blockchain.claimtrie.*"" handlers.
-		claimtrieSvc := &ClaimtrieService{s.DB}
+		claimtrieSvc := &ClaimtrieService{s.DB, s}
 		err := s1.RegisterTCPService(claimtrieSvc, "blockchain_claimtrie")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
