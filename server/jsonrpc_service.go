@@ -135,7 +135,7 @@ fail1:
 		}
 
 		// Register "server.peers" handlers.
-		peersSvc := &PeersService{}
+		peersSvc := &PeersService{Server: s}
 		err = s1.RegisterTCPService(peersSvc, "server_peers")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)

@@ -229,7 +229,7 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 	}
 
 	// Register "server.peers" handlers.
-	peersSvc := &PeersService{}
+	peersSvc := &PeersService{Server: sm.server}
 	err = s1.RegisterName("server.peers", peersSvc)
 	if err != nil {
 		log.Errorf("RegisterName: %v\n", err)
