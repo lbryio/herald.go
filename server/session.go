@@ -47,7 +47,7 @@ type session struct {
 	// headersSub indicates header subscription
 	headersSub bool
 	// peersSub indicates peer subscription
-	peersBool bool
+	peersSub bool
 	// headersSubRaw indicates the header subscription mode
 	headersSubRaw bool
 	// client provides the ability to send notifications
@@ -103,6 +103,9 @@ func (s *session) doNotify(notification interface{}) {
 		}
 		params = []string{orig, status}
 	case peerNotification:
+		if !s.peersSub {
+			return
+		}
 		note, _ := notification.(peerNotification)
 		method = "server.peers.subscribe"
 		params = []string{note.address, note.port}

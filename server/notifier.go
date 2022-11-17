@@ -57,6 +57,10 @@ func (s *Server) RunNotifier() error {
 		case internal.HeightHash:
 			heightHash, _ := notification.(internal.HeightHash)
 			s.DoNotify(&heightHash)
+		// Do we need this?
+		// case peerNotification:
+		// 	peer, _ := notification.(peerNotification)
+		// 	s.notifyPeerSubs(&Peer{Address: peer.address, Port: peer.port})
 		default:
 			logrus.Warn("unknown notification type")
 		}
