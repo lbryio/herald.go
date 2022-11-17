@@ -29,36 +29,14 @@ func main() {
 
 	if args.CmdType == server.ServeCmd {
 		// This will cancel goroutines with the server finishes.
-		// ctxWCancel, cancel := context.WithCancel(ctx)
-		// defer cancel()
 		stopGroup := stop.New()
-		// defer stopGroup.Stop()
 
 		initsignals()
 		interrupt := interruptListener()
 
-		// s := server.MakeHubServer(ctxWCancel, args)
 		s := server.MakeHubServer(stopGroup, args)
 		go s.Run()
 
-		// defer func() {
-		// 	log.Println("Shutting down server...")
-
-		// 	if s.EsClient != nil {
-		// 		log.Println("Stopping es client...")
-		// 		s.EsClient.Stop()
-		// 	}
-		// 	if s.GrpcServer != nil {
-		// 		log.Println("Stopping grpc server...")
-		// 		s.GrpcServer.GracefulStop()
-		// 	}
-		// 	if s.DB != nil {
-		// 		log.Println("Stopping database connection...")
-		// 		s.DB.Shutdown()
-		// 	}
-
-		// 	log.Println("Returning from main...")
-		// }()
 		defer s.Stop()
 
 		<-interrupt
