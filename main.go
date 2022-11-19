@@ -43,7 +43,7 @@ func main() {
 		return
 	}
 
-	conn, err := grpc.Dial("localhost:"+string(args.Port),
+	conn, err := grpc.Dial("localhost:"+fmt.Sprintf("%d", args.Port),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)

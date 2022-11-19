@@ -1,14 +1,16 @@
 package server
 
 import (
-	"context"
+	"errors"
 
-	pb "github.com/lbryio/herald.go/protobuf/go"
 	log "github.com/sirupsen/logrus"
 )
 
 type PeersService struct {
 	Server *Server
+	// needed for subscribe/unsubscribe
+	sessionMgr *sessionManager
+	session    *session
 }
 
 type PeersSubscribeReq struct {
@@ -22,23 +24,16 @@ type PeersSubscribeResp string
 // Features is the json rpc endpoint for 'server.peers.subcribe'.
 func (t *PeersService) Subscribe(req *PeersSubscribeReq, res **PeersSubscribeResp) error {
 	log.Println("PeersSubscribe")
-	ctx := context.Background()
-	var port = "50001"
+	// var port = "50001"
 
 	// FIXME: Get the actual port from the request details
 
-	msg := &pb.ServerMessage{
-		Address: req.Ip,
-		Port:    port,
-	}
-
-	peers, err := t.Server.PeerSubscribe(ctx, msg)
-	if err != nil {
-		log.Println(err)
+	if t.sessionMgr == nil || t.session == nil {
 		*res = nil
-		return err
+		return errors.New("no session, rpc not supported")
 	}
+	t.sessionMgr.peersSubscribe(t.session, true /*subscribe*/)
 
-	*res = (*PeersSubscribeResp)(&peers.Value)
+	*res = nil
 	return nil
 }

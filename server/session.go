@@ -313,6 +313,18 @@ func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
 	return nil, nil
 }
 
+func (sm *sessionManager) peersSubscribe(sess *session, subscribe bool) {
+	sm.sessionsMut.Lock()
+	defer sm.sessionsMut.Unlock()
+	if subscribe {
+		sm.peerSubs[sess.id] = sess
+		sess.peersSub = true
+		return
+	}
+	delete(sm.peerSubs, sess.id)
+	sess.peersSub = false
+}
+
 func (sm *sessionManager) headersSubscribe(sess *session, raw bool, subscribe bool) {
 	sm.sessionsMut.Lock()
 	defer sm.sessionsMut.Unlock()
