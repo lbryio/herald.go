@@ -7,6 +7,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -167,7 +168,7 @@ func TestAddPeerEndpoint(t *testing.T) {
 	ctx := stop.NewDebug()
 	args := server.MakeDefaultTestArgs()
 	args2 := server.MakeDefaultTestArgs()
-	args2.Port = "50052"
+	args2.Port = 50052
 
 	tests := []struct {
 		name          string
@@ -198,7 +199,7 @@ func TestAddPeerEndpoint(t *testing.T) {
 			go hubServer.Run()
 			go hubServer2.Run()
 			//go hubServer.Run()
-			conn, err := grpc.Dial("localhost:"+args.Port,
+			conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
 			)
@@ -240,8 +241,8 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	args := server.MakeDefaultTestArgs()
 	args2 := server.MakeDefaultTestArgs()
 	args3 := server.MakeDefaultTestArgs()
-	args2.Port = "50052"
-	args3.Port = "50053"
+	args2.Port = 50052
+	args3.Port = 50053
 
 	tests := []struct {
 		name            string
@@ -266,7 +267,7 @@ func TestAddPeerEndpoint2(t *testing.T) {
 			go hubServer.Run()
 			go hubServer2.Run()
 			go hubServer3.Run()
-			conn, err := grpc.Dial("localhost:"+args.Port,
+			conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
 			)
@@ -322,8 +323,8 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	args := server.MakeDefaultTestArgs()
 	args2 := server.MakeDefaultTestArgs()
 	args3 := server.MakeDefaultTestArgs()
-	args2.Port = "50052"
-	args3.Port = "50053"
+	args2.Port = 50052
+	args3.Port = 50053
 
 	tests := []struct {
 		name            string
@@ -348,7 +349,7 @@ func TestAddPeerEndpoint3(t *testing.T) {
 			go hubServer.Run()
 			go hubServer2.Run()
 			go hubServer3.Run()
-			conn, err := grpc.Dial("localhost:"+args.Port,
+			conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
 				grpc.WithInsecure(),
 				grpc.WithBlock(),
 			)
@@ -412,7 +413,7 @@ func TestUDPServer(t *testing.T) {
 	args := server.MakeDefaultTestArgs()
 	args.DisableStartUDP = false
 	args2 := server.MakeDefaultTestArgs()
-	args2.Port = "50052"
+	args2.Port = 50052
 	args2.DisableStartUDP = false
 
 	tests := []struct {
@@ -449,12 +450,12 @@ func TestUDPServer(t *testing.T) {
 			got1 := hubServer.ExternalIP.String()
 			if got1 != tt.want {
 				t.Errorf("hubServer.ExternalIP = %s, want %s\n", got1, tt.want)
-				t.Errorf("hubServer.Args.Port = %s\n", hubServer.Args.Port)
+				t.Errorf("hubServer.Args.Port = %d\n", hubServer.Args.Port)
 			}
 			got2 := hubServer2.ExternalIP.String()
 			if got2 != tt.want {
 				t.Errorf("hubServer2.ExternalIP = %s, want %s\n", got2, tt.want)
-				t.Errorf("hubServer2.Args.Port = %s\n", hubServer2.Args.Port)
+				t.Errorf("hubServer2.Args.Port = %d\n", hubServer2.Args.Port)
 			}
 		})
 	}

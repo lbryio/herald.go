@@ -7,6 +7,7 @@ import (
 	"math"
 	"net"
 	"os"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -86,7 +87,7 @@ func (s *Server) getAndSetExternalIp(ip, port string) error {
 // storing them as known peers. Returns a map of peerKey -> object
 func (s *Server) loadPeers() error {
 	peerFile := s.Args.PeerFile
-	port := s.Args.Port
+	port := strconv.Itoa(s.Args.Port)
 
 	// First we make sure our server has come up, so we can answer back to peers.
 	var failures = 0
@@ -181,12 +182,12 @@ func (s *Server) subscribeToPeer(peer *Peer) error {
 
 	msg := &pb.ServerMessage{
 		Address: s.ExternalIP.String(),
-		Port:    s.Args.Port,
+		Port:    strconv.Itoa(s.Args.Port),
 	}
 
 	c := pb.NewHubClient(conn)
 
-	log.Printf("%s:%s subscribing to %+v\n", s.ExternalIP, s.Args.Port, peer)
+	log.Printf("%s:%d subscribing to %+v\n", s.ExternalIP, s.Args.Port, peer)
 	_, err = c.PeerSubscribe(ctx, msg)
 	if err != nil {
 		return err
@@ -219,12 +220,12 @@ func (s *Server) helloPeer(peer *Peer) (*pb.HelloMessage, error) {
 	c := pb.NewHubClient(conn)
 
 	msg := &pb.HelloMessage{
-		Port:    s.Args.Port,
+		Port:    strconv.Itoa(s.Args.Port),
 		Host:    s.ExternalIP.String(),
 		Servers: []*pb.ServerMessage{},
 	}
 
-	log.Printf("%s:%s saying hello to %+v\n", s.ExternalIP, s.Args.Port, peer)
+	log.Printf("%s:%d saying hello to %+v\n", s.ExternalIP, s.Args.Port, peer)
 	res, err := c.Hello(ctx, msg)
 	if err != nil {
 		log.Println(err)
@@ -345,15 +346,15 @@ func (s *Server) addPeer(newPeer *Peer, ping bool, subscribe bool) error {
 		}
 	}
 
-	if s.Args.Port == newPeer.Port &&
+	if strconv.Itoa(s.Args.Port) == newPeer.Port &&
 		(localHosts[newPeer.Address] || newPeer.Address == s.ExternalIP.String()) {
-		log.Printf("%s:%s addPeer: Self peer, skipping...\n", s.ExternalIP, s.Args.Port)
+		log.Printf("%s:%d addPeer: Self peer, skipping...\n", s.ExternalIP, s.Args.Port)
 		return nil
 	}
 
 	k := peerKey(newPeer)
 
-	log.Printf("%s:%s adding peer %+v\n", s.ExternalIP, s.Args.Port, newPeer)
+	log.Printf("%s:%d adding peer %+v\n", s.ExternalIP, s.Args.Port, newPeer)
 	if oldServer, loaded := s.PeerServersLoadOrStore(newPeer); !loaded {
 		if ping {
 			_, err := s.helloPeer(newPeer)
@@ -415,7 +416,7 @@ func (s *Server) makeHelloMessage() *pb.HelloMessage {
 	s.PeerServersMut.RUnlock()
 
 	return &pb.HelloMessage{
-		Port:    s.Args.Port,
+		Port:    strconv.Itoa(s.Args.Port),
 		Host:    s.ExternalIP.String(),
 		Servers: servers,
 	}

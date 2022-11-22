@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"time"
 
 	_ "net/http/pprof"
@@ -63,7 +64,7 @@ func main() {
 		return
 	}
 
-	conn, err := grpc.Dial("localhost:"+args.Port,
+	conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
 		grpc.WithInsecure(),
 		grpc.WithBlock(),
 	)

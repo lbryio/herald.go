@@ -22,7 +22,7 @@ const (
 type Args struct {
 	CmdType             int
 	Host                string
-	Port                string
+	Port                int
 	DBPath              string
 	Chain               *string
 	EsHost              string
@@ -67,7 +67,7 @@ type Args struct {
 
 const (
 	DefaultHost            = "0.0.0.0"
-	DefaultPort            = "50051"
+	DefaultPort            = 50051
 	DefaultDBPath          = "/mnt/d/data/snapshot_1072108/lbry-rocksdb/" // FIXME
 	DefaultEsHost          = "http://localhost"
 	DefaultEsIndex         = "claims"
@@ -214,7 +214,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 
 	// main server config arguments
 	host := parser.String("", "rpchost", &argparse.Options{Required: false, Help: "RPC host", Default: DefaultHost})
-	port := parser.String("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Default: DefaultPort})
+	port := parser.Int("", "rpcport", &argparse.Options{Required: false, Help: "RPC port", Validate: validatePort, Default: DefaultPort})
 	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
 	chain := parser.Selector("", "chain", []string{chaincfg.MainNetParams.Name, chaincfg.TestNet3Params.Name, chaincfg.RegressionNetParams.Name, "testnet"},
 		&argparse.Options{Required: false, Help: "Which chain to use, default is 'mainnet'. Values 'regtest' and 'testnet' are for testing", Default: chaincfg.MainNetParams.Name})
