@@ -54,13 +54,13 @@ func (cr *gorillaRpcCodecRequest) Method() (string, error) {
 func (s *Server) StartJsonRPC() error {
 	// Set up the pure JSONRPC server with persistent connections/sessions.
 	if s.Args.JSONRPCPort != 0 {
-		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCPort), 10)
-		laddr, err := net.ResolveTCPAddr("tcp", port)
+		port := ":" + strconv.Itoa(s.Args.JSONRPCPort)
+		laddr, err := net.ResolveTCPAddr("tcp4", port)
 		if err != nil {
 			log.Errorf("ResoveIPAddr: %v\n", err)
 			goto fail1
 		}
-		listener, err := net.ListenTCP("tcp", laddr)
+		listener, err := net.ListenTCP("tcp4", laddr)
 		if err != nil {
 			log.Errorf("ListenTCP: %v\n", err)
 			goto fail1
