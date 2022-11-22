@@ -23,7 +23,6 @@ import (
 
 type headerNotification struct {
 	internal.HeightHash
-	blockHeader         [HEADER_SIZE]byte
 	blockHeaderElectrum *BlockHeaderElectrum
 	blockHeaderStr      string
 }
@@ -67,7 +66,7 @@ func (s *session) doNotify(notification interface{}) {
 		if s.headersSubRaw {
 			header := note.blockHeaderStr
 			if len(header) == 0 {
-				header = hex.EncodeToString(note.blockHeader[:])
+				header = hex.EncodeToString(note.BlockHeader[:])
 			}
 			params = &HeadersSubscribeRawResp{
 				Hex:    header,
@@ -76,7 +75,7 @@ func (s *session) doNotify(notification interface{}) {
 		} else {
 			header := note.blockHeaderElectrum
 			if header == nil { // not initialized
-				header = newBlockHeaderElectrum(&note.blockHeader, uint32(heightHash.Height))
+				header = newBlockHeaderElectrum((*[HEADER_SIZE]byte)(note.BlockHeader), uint32(heightHash.Height))
 			}
 			params = header
 		}
@@ -326,6 +325,11 @@ func (sm *sessionManager) hashXSubscribe(sess *session, hashX []byte, original s
 }
 
 func (sm *sessionManager) doNotify(notification interface{}) {
+	switch notification.(type) {
+	case internal.HeightHash:
+		// The HeightHash notification translates to headerNotification.
+		notification = &headerNotification{HeightHash: notification.(internal.HeightHash)}
+	}
 	sm.sessionsMut.RLock()
 	var subsCopy sessionMap
 	switch notification.(type) {
@@ -333,8 +337,10 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 		note, _ := notification.(headerNotification)
 		subsCopy = sm.headerSubs
 		if len(subsCopy) > 0 {
-			note.blockHeaderElectrum = newBlockHeaderElectrum(&note.blockHeader, uint32(note.Height))
-			note.blockHeaderStr = hex.EncodeToString(note.blockHeader[:])
+			hdr := [HEADER_SIZE]byte{}
+			copy(hdr[:], note.BlockHeader)
+			note.blockHeaderElectrum = newBlockHeaderElectrum(&hdr, uint32(note.Height))
+			note.blockHeaderStr = hex.EncodeToString(note.BlockHeader[:])
 		}
 	case hashXNotification:
 		note, _ := notification.(hashXNotification)
