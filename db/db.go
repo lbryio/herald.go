@@ -775,7 +775,12 @@ func (db *ReadOnlyDBColumnFamily) detectChanges(notifCh chan<- interface{}) erro
 				log.Info("error getting block hash: ", err)
 				return err
 			}
-			notifCh <- &internal.HeightHash{Height: uint64(height), BlockHash: hash}
+			header, err := db.GetHeader(height)
+			if err != nil {
+				log.Info("error getting block header: ", err)
+				return err
+			}
+			notifCh <- &internal.HeightHash{Height: uint64(height), BlockHash: hash, BlockHeader: header}
 		}
 		//TODO: ClearCache
 		log.Warn("implement cache clearing")
