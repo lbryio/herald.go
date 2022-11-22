@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -170,9 +171,42 @@ type BlockHeadersReq struct {
 	B64         bool   `json:"b64"`
 }
 
+func (req *BlockHeadersReq) UnmarshalJSON(b []byte) error {
+	var params [4]interface{}
+	err := json.Unmarshal(b, &params)
+	if err != nil {
+		return err
+	}
+	switch params[0].(type) {
+	case float64:
+		req.StartHeight = uint32(params[0].(float64))
+	default:
+		return fmt.Errorf("expected numeric argument #0 (start_height)")
+	}
+	switch params[1].(type) {
+	case float64:
+		req.Count = uint32(params[1].(float64))
+	default:
+		return fmt.Errorf("expected numeric argument #1 (count)")
+	}
+	switch params[2].(type) {
+	case float64:
+		req.CpHeight = uint32(params[2].(float64))
+	default:
+		return fmt.Errorf("expected numeric argument #2 (cp_height)")
+	}
+	switch params[3].(type) {
+	case bool:
+		req.B64 = params[3].(bool)
+	default:
+		return fmt.Errorf("expected boolean argument #3 (b64)")
+	}
+	return nil
+}
+
 type BlockHeadersResp struct {
 	Base64 string `json:"base64,omitempty"`
-	Hex    string `json:"hex,omitempty"`
+	Hex    string `json:"hex"`
 	Count  uint32 `json:"count"`
 	Max    uint32 `json:"max"`
 	Branch string `json:"branch,omitempty"`
@@ -215,6 +249,21 @@ func (s *BlockchainBlockService) Headers(req *BlockHeadersReq, resp **BlockHeade
 
 type HeadersSubscribeReq struct {
 	Raw bool `json:"raw"`
+}
+
+func (req *HeadersSubscribeReq) UnmarshalJSON(b []byte) error {
+	var params [1]interface{}
+	err := json.Unmarshal(b, &params)
+	if err != nil {
+		return err
+	}
+	switch params[0].(type) {
+	case bool:
+		req.Raw = params[0].(bool)
+	default:
+		return fmt.Errorf("expected bool argument #0 (raw)")
+	}
+	return nil
 }
 
 type HeadersSubscribeResp struct {
@@ -344,6 +393,23 @@ func (s *BlockchainScripthashService) Get_balance(req *scripthashGetBalanceReq, 
 type AddressGetHistoryReq struct {
 	Address string `json:"address"`
 }
+
+func (req *AddressGetHistoryReq) UnmarshalJSON(b []byte) error {
+	var params [1]interface{}
+	json.Unmarshal(b, &params)
+	err := json.Unmarshal(b, &params)
+	if err != nil {
+		return err
+	}
+	switch params[0].(type) {
+	case string:
+		req.Address = params[0].(string)
+	default:
+		return fmt.Errorf("expected string argument #0 (address)")
+	}
+	return nil
+}
+
 type TxInfo struct {
 	TxHash string `json:"tx_hash"`
 	Height uint32 `json:"height"`
@@ -352,10 +418,7 @@ type TxInfoFee struct {
 	TxInfo
 	Fee uint64 `json:"fee"`
 }
-type AddressGetHistoryResp struct {
-	Confirmed   []TxInfo    `json:"confirmed"`
-	Unconfirmed []TxInfoFee `json:"unconfirmed"`
-}
+type AddressGetHistoryResp []TxInfoFee
 
 // 'blockchain.address.get_history'
 func (s *BlockchainAddressService) Get_history(req *AddressGetHistoryReq, resp **AddressGetHistoryResp) error {
@@ -383,11 +446,18 @@ func (s *BlockchainAddressService) Get_history(req *AddressGetHistoryReq, resp *
 				Height: tx.Height,
 			})
 	}
-	result := &AddressGetHistoryResp{
-		Confirmed:   confirmed,
-		Unconfirmed: []TxInfoFee{}, // TODO
+	unconfirmed := []TxInfoFee{} // TODO
+	result := make(AddressGetHistoryResp, len(confirmed)+len(unconfirmed))
+	i := 0
+	for _, tx := range confirmed {
+		result[i].TxInfo = tx
+		i += 1
 	}
-	*resp = result
+	for _, tx := range unconfirmed {
+		result[i] = tx
+		i += 1
+	}
+	*resp = &result
 	return err
 }
 
@@ -667,11 +737,12 @@ type TXDetail struct {
 	Height int `json:"block_height"`
 }
 
-// TransactionResp is a pair consisting of:
-// resp[0]: Raw transaction as hex string
-// resp[1]: TXFullDetail or TXDetail structure
-type TXGetResp [2]interface{}
-type TransactionGetResp TXGetResp
+type TXGetItem struct {
+	TxHash string
+	TxRaw  string
+	Detail interface{} // TXFullDetail or TXDetail struct
+}
+type TransactionGetResp TXGetItem
 
 // 'blockchain.transaction.get'
 func (s *BlockchainTransactionService) Get(req *TransactionGetReq, resp **TransactionGetResp) error {
@@ -685,7 +756,7 @@ func (s *BlockchainTransactionService) Get(req *TransactionGetReq, resp **Transa
 	if len(*response) < 1 {
 		return errors.New("tx not found")
 	}
-	switch (*response)[0][1].(type) {
+	switch (*response)[0].Detail.(type) {
 	case TXFullDetail:
 		break
 	case TXDetail:
@@ -697,7 +768,55 @@ func (s *BlockchainTransactionService) Get(req *TransactionGetReq, resp **Transa
 }
 
 type TransactionGetBatchReq []string
-type TransactionGetBatchResp []TXGetResp
+
+func (req *TransactionGetBatchReq) UnmarshalJSON(b []byte) error {
+	var params []interface{}
+	json.Unmarshal(b, &params)
+	if len(params) > 100 {
+		return fmt.Errorf("too many tx hashes in request: %v", len(params))
+	}
+	for i, txhash := range params {
+		switch params[0].(type) {
+		case string:
+			*req = append(*req, txhash.(string))
+		default:
+			return fmt.Errorf("expected string argument #%d (tx_hash)", i)
+		}
+	}
+	return nil
+}
+
+type TransactionGetBatchResp []TXGetItem
+
+func (resp *TransactionGetBatchResp) MarshalJSON() ([]byte, error) {
+	// encode key/value pairs as variable length JSON object
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	buf.WriteString("{")
+	for i, r := range *resp {
+		if i > 0 {
+			buf.WriteString(",")
+		}
+		txhash, raw, detail := r.TxHash, r.TxRaw, r.Detail
+		err := enc.Encode(txhash)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(":[")
+		err = enc.Encode(raw)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString(",")
+		err = enc.Encode(detail)
+		if err != nil {
+			return nil, err
+		}
+		buf.WriteString("]")
+	}
+	buf.WriteString("}")
+	return buf.Bytes(), nil
+}
 
 // 'blockchain.transaction.get_batch'
 func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, resp **TransactionGetBatchResp) error {
@@ -706,6 +825,7 @@ func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, re
 	}
 	tx_hashes := make([]chainhash.Hash, len(*req))
 	for i, txid := range *req {
+		tx_hashes = append(tx_hashes, chainhash.Hash{})
 		if err := chainhash.Decode(&tx_hashes[i], txid); err != nil {
 			return err
 		}
@@ -714,7 +834,7 @@ func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, re
 	if err != nil {
 		return err
 	}
-	result := make([]TXGetResp, 0, len(dbResult))
+	result := make([]TXGetItem, 0, len(dbResult))
 	for _, r := range dbResult {
 		merkles := make([]string, len(r.Merkle))
 		for i, m := range r.Merkle {
@@ -725,7 +845,7 @@ func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, re
 			Pos:    r.Pos,
 			Merkle: merkles,
 		}
-		result = append(result, TXGetResp{hex.EncodeToString(r.RawTx), &detail})
+		result = append(result, TXGetItem{r.TxHash.String(), hex.EncodeToString(r.RawTx), &detail})
 	}
 	*resp = (*TransactionGetBatchResp)(&result)
 	return err
@@ -735,7 +855,7 @@ type TransactionGetMerkleReq struct {
 	TxHash string `json:"tx_hash"`
 	Height uint32 `json:"height"`
 }
-type TransactionGetMerkleResp TXGetResp
+type TransactionGetMerkleResp TXGetItem
 
 // 'blockchain.transaction.get_merkle'
 func (s *BlockchainTransactionService) Get_merkle(req *TransactionGetMerkleReq, resp **TransactionGetMerkleResp) error {
@@ -749,7 +869,7 @@ func (s *BlockchainTransactionService) Get_merkle(req *TransactionGetMerkleReq, 
 	if len(*response) < 1 {
 		return errors.New("tx not found")
 	}
-	switch (*response)[0][1].(type) {
+	switch (*response)[0].Detail.(type) {
 	case TXFullDetail:
 		break
 	case TXDetail:
@@ -776,7 +896,7 @@ func (s *BlockchainTransactionService) Get_height(req *TransactionGetHeightReq, 
 }
 
 type TransactionInfoReq string
-type TransactionInfoResp TXGetResp
+type TransactionInfoResp TXGetItem
 
 // 'blockchain.transaction.info'
 func (s *BlockchainTransactionService) Info(req *TransactionInfoReq, resp **TransactionInfoResp) error {
@@ -790,12 +910,12 @@ func (s *BlockchainTransactionService) Info(req *TransactionInfoReq, resp **Tran
 	if len(*response) < 1 {
 		return errors.New("tx not found")
 	}
-	switch (*response)[0][1].(type) {
+	switch (*response)[0].Detail.(type) {
 	case TXFullDetail:
 		break
 	case TXDetail:
 	default:
-		if (*response)[0][0] == nil {
+		if (*response)[0].TxHash == "" {
 			return errors.New("no such mempool or blockchain transaction")
 		}
 	}

@@ -506,11 +506,6 @@ func (c *jsonPatchingCodec) Read(p []byte) (n int, err error) {
 			// Probable single object or list argument.
 			goto encode
 		}
-		args := strings.Split(string(bracketed), ",")
-		if len(args) <= 1 {
-			// No commas at all. Definitely a single argument.
-			goto encode
-		}
 		// The params look like ["arg1", "arg2", "arg3", ...].
 		// We're in trouble because our jsonrpc library does not
 		// handle this. So pack these args in an inner list.
