@@ -282,6 +282,9 @@ func DBStateKeyUnpack(key []byte) *DBStateKey {
 func DBStateValueUnpack(value []byte) *DBStateValue {
 	genesis := (*chainhash.Hash)(value[:32])
 	tip := (*chainhash.Hash)(value[32+4+4 : 32+4+4+32])
+	// HACK: Python scribe writes bytes of genesis hash in external byte-order.
+	// Instances of chainhash.Hash should use the internal byte-order.
+	internal.ReverseBytesInPlace(genesis[:])
 	x := &DBStateValue{
 		Genesis:        genesis,
 		Height:         binary.BigEndian.Uint32(value[32:]),
