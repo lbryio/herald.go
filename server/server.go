@@ -277,9 +277,9 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	// Determine which chain to use based on db and cli values
 	dbChain := (*chaincfg.Params)(nil)
-	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
+	if myDB != nil && myDB.LastState != nil {
 		// The chain params can be inferred from DBStateValue.
-		switch *myDB.LastState.Genesis {
+		switch myDB.LastState.Genesis.Hash {
 		case *chaincfg.MainNetParams.GenesisHash:
 			dbChain = &chaincfg.MainNetParams
 		case *chaincfg.TestNet3Params.GenesisHash:

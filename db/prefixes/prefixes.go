@@ -182,12 +182,25 @@ func NewLengthEncodedPartialClaimId(s string) LengthEncodedPartialClaimId {
 	}
 }
 
+type BigEndianChainHash struct {
+	chainhash.Hash
+}
+
+func NewBigEndianChainHash(hash *chainhash.Hash) BigEndianChainHash {
+	if hash != nil {
+		return BigEndianChainHash{
+			*hash,
+		}
+	}
+	return BigEndianChainHash{}
+}
+
 type DBStateKey struct {
 	Prefix []byte `struct:"[1]byte" json:"prefix"`
 }
 
 type DBStateValue struct {
-	Genesis        *chainhash.Hash
+	Genesis        BigEndianChainHash
 	Height         uint32
 	TxCount        uint32
 	Tip            *chainhash.Hash
@@ -203,7 +216,7 @@ type DBStateValue struct {
 
 func NewDBStateValue() *DBStateValue {
 	return &DBStateValue{
-		Genesis:        new(chainhash.Hash),
+		Genesis:        NewBigEndianChainHash(nil),
 		Height:         0,
 		TxCount:        0,
 		Tip:            new(chainhash.Hash),
@@ -237,7 +250,11 @@ func (v *DBStateValue) PackValue() []byte {
 	// b'>32sLL32sLLBBlllL'
 	n := 32 + 4 + 4 + 32 + 4 + 4 + 1 + 1 + 4 + 4 + 4 + 4
 	value := make([]byte, n)
-	copy(value, v.Genesis[:32])
+	genesis := v.Genesis.CloneBytes()
+	// HACK: Instances of chainhash.Hash use the internal byte-order.
+	// Python scribe writes bytes of genesis hash in external byte-order.
+	internal.ReverseBytesInPlace(genesis)
+	copy(value, genesis[:32])
 	binary.BigEndian.PutUint32(value[32:], v.Height)
 	binary.BigEndian.PutUint32(value[32+4:], v.TxCount)
 	copy(value[32+4+4:], v.Tip[:32])
@@ -286,7 +303,7 @@ func DBStateValueUnpack(value []byte) *DBStateValue {
 	// Instances of chainhash.Hash should use the internal byte-order.
 	internal.ReverseBytesInPlace(genesis[:])
 	x := &DBStateValue{
-		Genesis:        genesis,
+		Genesis:        NewBigEndianChainHash(genesis),
 		Height:         binary.BigEndian.Uint32(value[32:]),
 		TxCount:        binary.BigEndian.Uint32(value[32+4:]),
 		Tip:            tip,
@@ -711,7 +728,7 @@ type BlockTxsKey struct {
 }
 
 type BlockTxsValue struct {
-	TxHashes []*chainhash.Hash `struct-while:"!_eof" json:"tx_hashes"`
+	TxHashes []*chainhash.Hash `struct:"*[32]byte" struct-while:"!_eof" json:"tx_hashes"`
 }
 
 func (k *BlockTxsKey) NewBlockTxsKey(height uint32) *BlockTxsKey {
