@@ -182,12 +182,25 @@ func NewLengthEncodedPartialClaimId(s string) LengthEncodedPartialClaimId {
 	}
 }
 
+type BigEndianChainHash struct {
+	chainhash.Hash
+}
+
+func NewBigEndianChainHash(hash *chainhash.Hash) BigEndianChainHash {
+	if hash != nil {
+		return BigEndianChainHash{
+			*hash,
+		}
+	}
+	return BigEndianChainHash{}
+}
+
 type DBStateKey struct {
 	Prefix []byte `struct:"[1]byte" json:"prefix"`
 }
 
 type DBStateValue struct {
-	Genesis        *chainhash.Hash
+	Genesis        BigEndianChainHash
 	Height         uint32
 	TxCount        uint32
 	Tip            *chainhash.Hash
@@ -203,7 +216,7 @@ type DBStateValue struct {
 
 func NewDBStateValue() *DBStateValue {
 	return &DBStateValue{
-		Genesis:        new(chainhash.Hash),
+		Genesis:        NewBigEndianChainHash(nil),
 		Height:         0,
 		TxCount:        0,
 		Tip:            new(chainhash.Hash),
@@ -237,7 +250,11 @@ func (v *DBStateValue) PackValue() []byte {
 	// b'>32sLL32sLLBBlllL'
 	n := 32 + 4 + 4 + 32 + 4 + 4 + 1 + 1 + 4 + 4 + 4 + 4
 	value := make([]byte, n)
-	copy(value, v.Genesis[:32])
+	genesis := v.Genesis.CloneBytes()
+	// HACK: Instances of chainhash.Hash use the internal byte-order.
+	// Python scribe writes bytes of genesis hash in external byte-order.
+	internal.ReverseBytesInPlace(genesis)
+	copy(value, genesis[:32])
 	binary.BigEndian.PutUint32(value[32:], v.Height)
 	binary.BigEndian.PutUint32(value[32+4:], v.TxCount)
 	copy(value[32+4+4:], v.Tip[:32])
@@ -282,8 +299,11 @@ func DBStateKeyUnpack(key []byte) *DBStateKey {
 func DBStateValueUnpack(value []byte) *DBStateValue {
 	genesis := (*chainhash.Hash)(value[:32])
 	tip := (*chainhash.Hash)(value[32+4+4 : 32+4+4+32])
+	// HACK: Python scribe writes bytes of genesis hash in external byte-order.
+	// Instances of chainhash.Hash should use the internal byte-order.
+	internal.ReverseBytesInPlace(genesis[:])
 	x := &DBStateValue{
-		Genesis:        genesis,
+		Genesis:        NewBigEndianChainHash(genesis),
 		Height:         binary.BigEndian.Uint32(value[32:]),
 		TxCount:        binary.BigEndian.Uint32(value[32+4:]),
 		Tip:            tip,
@@ -708,7 +728,7 @@ type BlockTxsKey struct {
 }
 
 type BlockTxsValue struct {
-	TxHashes []*chainhash.Hash `struct-while:"!_eof" json:"tx_hashes"`
+	TxHashes []*chainhash.Hash `struct:"*[32]byte" struct-while:"!_eof" json:"tx_hashes"`
 }
 
 func (k *BlockTxsKey) NewBlockTxsKey(height uint32) *BlockTxsKey {
@@ -1047,84 +1067,6 @@ func TxNumKeyUnpack(key []byte) *TxNumKey {
 func TxNumValueUnpack(value []byte) *TxNumValue {
 	return &TxNumValue{
 		TxNum: binary.BigEndian.Uint32(value),
-	}
-}
-
-type TxKey struct {
-	Prefix []byte          `struct:"[1]byte" json:"prefix"`
-	TxHash *chainhash.Hash `struct:"*[32]byte" json:"tx_hash"`
-}
-
-type TxValue struct {
-	RawTx []byte `struct-while:"!_eof" json:"raw_tx"`
-}
-
-func (k *TxKey) PackKey() []byte {
-	prefixLen := 1
-	// b'>L'
-	n := prefixLen + 32
-	key := make([]byte, n)
-	copy(key, k.Prefix)
-	copy(key[prefixLen:], k.TxHash[:32])
-
-	return key
-}
-
-func (v *TxValue) PackValue() []byte {
-	value := make([]byte, len(v.RawTx))
-	copy(value, v.RawTx)
-
-	return value
-}
-
-func (kv *TxKey) NumFields() int {
-	return 1
-}
-
-func (k *TxKey) PartialPack(fields int) []byte {
-	// Limit fields between 0 and number of fields, we always at least need
-	// the prefix, and we never need to iterate past the number of fields.
-	if fields > 1 {
-		fields = 1
-	}
-	if fields < 0 {
-		fields = 0
-	}
-
-	prefixLen := 1
-	var n = prefixLen
-	for i := 0; i <= fields; i++ {
-		switch i {
-		case 1:
-			n += 32
-		}
-	}
-
-	key := make([]byte, n)
-
-	for i := 0; i <= fields; i++ {
-		switch i {
-		case 0:
-			copy(key, k.Prefix)
-		case 1:
-			copy(key[prefixLen:], k.TxHash[:32])
-		}
-	}
-
-	return key
-}
-
-func TxKeyUnpack(key []byte) *TxKey {
-	prefixLen := 1
-	return &TxKey{
-		Prefix: key[:prefixLen],
-		TxHash: (*chainhash.Hash)(key[prefixLen : prefixLen+32]),
-	}
-}
-
-func TxValueUnpack(value []byte) *TxValue {
-	return &TxValue{
-		RawTx: value,
 	}
 }
 
@@ -3351,9 +3293,12 @@ func (kv *TrendingNotificationValue) UnpackValue(buf []byte) {
 	offset += 8
 }
 
+type TxKey = MempoolTxKey
+type TxValue = MempoolTxValue
+
 type MempoolTxKey struct {
-	Prefix []byte `struct:"[1]byte"  json:"prefix"`
-	TxHash []byte `struct:"[32]byte" json:"tx_hash"`
+	Prefix []byte          `struct:"[1]byte" json:"prefix"`
+	TxHash *chainhash.Hash `struct:"*[32]byte" json:"tx_hash"`
 }
 
 type MempoolTxValue struct {
@@ -3386,7 +3331,7 @@ func (kv *MempoolTxKey) UnpackKey(buf []byte) {
 	offset := 0
 	kv.Prefix = buf[offset : offset+1]
 	offset += 1
-	kv.TxHash = buf[offset : offset+32]
+	kv.TxHash = (*chainhash.Hash)(buf[offset : offset+32])
 	offset += 32
 }
 
@@ -3924,12 +3869,6 @@ var prefixRegistry = map[byte]prefixMeta{
 		},
 		newValue: func() interface{} {
 			return &TxValue{}
-		},
-		newKeyUnpack: func(buf []byte) interface{} {
-			return TxKeyUnpack(buf)
-		},
-		newValueUnpack: func(buf []byte) interface{} {
-			return TxValueUnpack(buf)
 		},
 	},
 	BlockHash: {

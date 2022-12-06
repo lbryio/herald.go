@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
@@ -136,7 +137,8 @@ func (s *Server) PeerServersLoadOrStore(peer *Peer) (actual *Peer, loaded bool) 
 
 // Run "main" function for starting the server. This blocks.
 func (s *Server) Run() {
-	l, err := net.Listen("tcp", ":"+s.Args.Port)
+	address := ":" + strconv.Itoa(s.Args.Port)
+	l, err := net.Listen("tcp", address)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -171,6 +173,7 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	if myDB.LastState != nil {
 		logrus.Infof("DB version: %v", myDB.LastState.DBVersion)
 		logrus.Infof("height: %v", myDB.LastState.Height)
+		logrus.Infof("genesis: %v", myDB.LastState.Genesis.String())
 		logrus.Infof("tip: %v", myDB.LastState.Tip.String())
 		logrus.Infof("tx count: %v", myDB.LastState.TxCount)
 	}
@@ -274,9 +277,9 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	// Determine which chain to use based on db and cli values
 	dbChain := (*chaincfg.Params)(nil)
-	if myDB != nil && myDB.LastState != nil && myDB.LastState.Genesis != nil {
+	if myDB != nil && myDB.LastState != nil {
 		// The chain params can be inferred from DBStateValue.
-		switch *myDB.LastState.Genesis {
+		switch myDB.LastState.Genesis.Hash {
 		case *chaincfg.MainNetParams.GenesisHash:
 			dbChain = &chaincfg.MainNetParams
 		case *chaincfg.TestNet3Params.GenesisHash:
@@ -353,11 +356,19 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	}
 	if !args.DisableStartUDP {
 		go func() {
-			err := s.UDPServer()
+			err := s.UDPServer(s.Args.Port)
 			if err != nil {
-				log.Println("UDP Server failed!", err)
+				logrus.Errorf("UDP Server (%d) failed! %v", s.Args.Port, err)
 			}
 		}()
+		if s.Args.JSONRPCPort != 0 {
+			go func() {
+				err := s.UDPServer(s.Args.JSONRPCPort)
+				if err != nil {
+					logrus.Errorf("UDP Server (%d) failed! %v", s.Args.JSONRPCPort, err)
+				}
+			}()
+		}
 	}
 	if !args.DisableStartNotifier {
 		go func() {

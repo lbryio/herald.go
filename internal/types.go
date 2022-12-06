@@ -4,6 +4,7 @@ package internal
 
 // HeightHash struct for the height subscription endpoint.
 type HeightHash struct {
-	Height    uint64
-	BlockHash []byte
+	Height      uint64
+	BlockHash   []byte
+	BlockHeader []byte
 }

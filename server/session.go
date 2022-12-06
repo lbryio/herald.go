@@ -16,13 +16,13 @@ import (
 	"github.com/lbryio/herald.go/db"
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
+	"github.com/lbryio/lbcd/chaincfg/chainhash"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
 
 type headerNotification struct {
 	internal.HeightHash
-	blockHeader         [HEADER_SIZE]byte
 	blockHeaderElectrum *BlockHeaderElectrum
 	blockHeaderStr      string
 }
@@ -66,7 +66,7 @@ func (s *session) doNotify(notification interface{}) {
 		if s.headersSubRaw {
 			header := note.blockHeaderStr
 			if len(header) == 0 {
-				header = hex.EncodeToString(note.blockHeader[:])
+				header = hex.EncodeToString(note.BlockHeader[:])
 			}
 			params = &HeadersSubscribeRawResp{
 				Hex:    header,
@@ -75,7 +75,7 @@ func (s *session) doNotify(notification interface{}) {
 		} else {
 			header := note.blockHeaderElectrum
 			if header == nil { // not initialized
-				header = newBlockHeaderElectrum(&note.blockHeader, uint32(heightHash.Height))
+				header = newBlockHeaderElectrum((*[HEADER_SIZE]byte)(note.BlockHeader), uint32(heightHash.Height))
 			}
 			params = header
 		}
@@ -218,7 +218,7 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		log.Errorf("RegisterName: %v\n", err)
 	}
 
-	// Register other "blockchain.{block,address,scripthash}.*" handlers.
+	// Register "blockchain.{block,address,scripthash,transaction}.*" handlers.
 	blockchainSvc := &BlockchainBlockService{sm.db, sm.chain}
 	err = s1.RegisterName("blockchain.block", blockchainSvc)
 	if err != nil {
@@ -236,6 +236,11 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		goto fail
 	}
 	err = s1.RegisterName("blockchain.scripthash", &BlockchainScripthashService{sm.db, sm.chain, sm, sess})
+	if err != nil {
+		log.Errorf("RegisterName: %v\n", err)
+		goto fail
+	}
+	err = s1.RegisterName("blockchain.transaction", &BlockchainTransactionService{sm.db, sm.chain, sm})
 	if err != nil {
 		log.Errorf("RegisterName: %v\n", err)
 		goto fail
@@ -274,6 +279,11 @@ func (sm *sessionManager) removeSessionLocked(sess *session) {
 	delete(sm.sessions, sess.id)
 	sess.client.Close()
 	sess.conn.Close()
+}
+
+func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
+	// TODO
+	return nil, nil
 }
 
 func (sm *sessionManager) headersSubscribe(sess *session, raw bool, subscribe bool) {
@@ -315,6 +325,11 @@ func (sm *sessionManager) hashXSubscribe(sess *session, hashX []byte, original s
 }
 
 func (sm *sessionManager) doNotify(notification interface{}) {
+	switch notification.(type) {
+	case internal.HeightHash:
+		// The HeightHash notification translates to headerNotification.
+		notification = &headerNotification{HeightHash: notification.(internal.HeightHash)}
+	}
 	sm.sessionsMut.RLock()
 	var subsCopy sessionMap
 	switch notification.(type) {
@@ -322,8 +337,10 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 		note, _ := notification.(headerNotification)
 		subsCopy = sm.headerSubs
 		if len(subsCopy) > 0 {
-			note.blockHeaderElectrum = newBlockHeaderElectrum(&note.blockHeader, uint32(note.Height))
-			note.blockHeaderStr = hex.EncodeToString(note.blockHeader[:])
+			hdr := [HEADER_SIZE]byte{}
+			copy(hdr[:], note.BlockHeader)
+			note.blockHeaderElectrum = newBlockHeaderElectrum(&hdr, uint32(note.Height))
+			note.blockHeaderStr = hex.EncodeToString(note.BlockHeader[:])
 		}
 	case hashXNotification:
 		note, _ := notification.(hashXNotification)
@@ -487,11 +504,6 @@ func (c *jsonPatchingCodec) Read(p []byte) (n int, err error) {
 		n = len(bracketed)
 		if n > 1 && (bracketed[0] == '{' || bracketed[0] == '[') {
 			// Probable single object or list argument.
-			goto encode
-		}
-		args := strings.Split(string(bracketed), ",")
-		if len(args) <= 1 {
-			// No commas at all. Definitely a single argument.
 			goto encode
 		}
 		// The params look like ["arg1", "arg2", "arg3", ...].

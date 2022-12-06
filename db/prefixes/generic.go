@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-restruct/restruct"
+	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
 )
 
@@ -56,6 +57,34 @@ func (kv *BlockTxsValue) Unpack(buf []byte, order binary.ByteOrder) ([]byte, err
 		kv.TxHashes[i] = (*chainhash.Hash)(buf[offset:32])
 		offset += 32
 	}
+	return buf[offset:], nil
+}
+
+// Struct BigEndianChainHash is a chainhash.Hash stored in external
+// byte-order (opposite of other 32 byte chainhash.Hash values). In order
+// to reuse chainhash.Hash we need to correct the byte-order.
+// Currently this type is used for field Genesis of DBStateValue.
+
+func (kv *BigEndianChainHash) SizeOf() int {
+	return chainhash.HashSize
+}
+
+func (kv *BigEndianChainHash) Pack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	offset := 0
+	hash := kv.CloneBytes()
+	// HACK: Instances of chainhash.Hash use the internal byte-order.
+	// Python scribe writes bytes of genesis hash in external byte-order.
+	internal.ReverseBytesInPlace(hash)
+	offset += copy(buf[offset:chainhash.HashSize], hash[:])
+	return buf[offset:], nil
+}
+
+func (kv *BigEndianChainHash) Unpack(buf []byte, order binary.ByteOrder) ([]byte, error) {
+	offset := 0
+	offset += copy(kv.Hash[:], buf[offset:32])
+	// HACK: Instances of chainhash.Hash use the internal byte-order.
+	// Python scribe writes bytes of genesis hash in external byte-order.
+	internal.ReverseBytesInPlace(kv.Hash[:])
 	return buf[offset:], nil
 }
 

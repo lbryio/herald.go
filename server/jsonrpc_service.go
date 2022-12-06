@@ -52,24 +52,23 @@ func (cr *gorillaRpcCodecRequest) Method() (string, error) {
 
 // StartJsonRPC starts the json rpc server and registers the endpoints.
 func (s *Server) StartJsonRPC() error {
-	s.sessionManager.start()
-	defer s.sessionManager.stop()
-
 	// Set up the pure JSONRPC server with persistent connections/sessions.
 	if s.Args.JSONRPCPort != 0 {
-		port := ":" + strconv.FormatUint(uint64(s.Args.JSONRPCPort), 10)
-		laddr, err := net.ResolveTCPAddr("tcp", port)
+		port := ":" + strconv.Itoa(s.Args.JSONRPCPort)
+		laddr, err := net.ResolveTCPAddr("tcp4", port)
 		if err != nil {
 			log.Errorf("ResoveIPAddr: %v\n", err)
 			goto fail1
 		}
-		listener, err := net.ListenTCP("tcp", laddr)
+		listener, err := net.ListenTCP("tcp4", laddr)
 		if err != nil {
 			log.Errorf("ListenTCP: %v\n", err)
 			goto fail1
 		}
 		log.Infof("JSONRPC server listening on %s", listener.Addr().String())
+		s.sessionManager.start()
 		acceptConnections := func(listener net.Listener) {
+			defer s.sessionManager.stop()
 			for {
 				conn, err := listener.Accept()
 				if err != nil {
@@ -78,6 +77,7 @@ func (s *Server) StartJsonRPC() error {
 				}
 				log.Infof("Accepted: %v", conn.RemoteAddr())
 				s.sessionManager.addSession(conn)
+
 			}
 		}
 		go acceptConnections(netutil.LimitListener(listener, s.sessionManager.sessionsMax))
@@ -98,24 +98,29 @@ fail1:
 			goto fail2
 		}
 
-		// Register other "blockchain.{block,address,scripthash}.*" handlers.
+		// Register "blockchain.{block,address,scripthash,transaction}.*" handlers.
 		blockchainSvc := &BlockchainBlockService{s.DB, s.Chain}
 		err = s1.RegisterTCPService(blockchainSvc, "blockchain_block")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainHeadersService{s.DB, s.Chain, nil, nil}, "blockchain_headers")
+		err = s1.RegisterTCPService(&BlockchainHeadersService{s.DB, s.Chain, s.sessionManager, nil}, "blockchain_headers")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, nil, nil}, "blockchain_address")
+		err = s1.RegisterTCPService(&BlockchainAddressService{s.DB, s.Chain, s.sessionManager, nil}, "blockchain_address")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2
 		}
-		err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain, nil, nil}, "blockchain_scripthash")
+		err = s1.RegisterTCPService(&BlockchainScripthashService{s.DB, s.Chain, s.sessionManager, nil}, "blockchain_scripthash")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+		err = s1.RegisterTCPService(&BlockchainTransactionService{s.DB, s.Chain, s.sessionManager}, "blockchain_transaction")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2

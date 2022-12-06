@@ -273,12 +273,10 @@ func TestHeadersSubscribe(t *testing.T) {
 		t.Errorf("decode err: %v", err)
 	}
 	note1 := headerNotification{
-		HeightHash:          internal.HeightHash{Height: 500},
-		blockHeader:         [112]byte{},
+		HeightHash:          internal.HeightHash{Height: 500, BlockHeader: header500},
 		blockHeaderElectrum: nil,
 		blockHeaderStr:      "",
 	}
-	copy(note1.blockHeader[:], header500)
 	t.Logf("sending notification")
 	sm.doNotify(note1)
 

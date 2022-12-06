@@ -3,16 +3,19 @@ package db
 // db_get.go contains the basic access functions to the database.
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/lbryio/herald.go/db/prefixes"
 	"github.com/lbryio/herald.go/db/stack"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
+	"github.com/lbryio/lbcd/wire"
 	"github.com/linxGnu/grocksdb"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // GetExpirationHeight returns the expiration height for the given height. Uses
@@ -63,6 +66,31 @@ func (db *ReadOnlyDBColumnFamily) GetBlockHash(height uint32) ([]byte, error) {
 	rawValue := make([]byte, len(slice.Data()))
 	copy(rawValue, slice.Data())
 	return rawValue, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetBlockTXs(height uint32) ([]*chainhash.Hash, error) {
+	handle, err := db.EnsureHandle(prefixes.BlockTXs)
+	if err != nil {
+		return nil, err
+	}
+
+	key := prefixes.BlockTxsKey{
+		Prefix: []byte{prefixes.BlockTXs},
+		Height: height,
+	}
+	slice, err := db.DB.GetCF(db.Opts, handle, key.PackKey())
+	defer slice.Free()
+	if err != nil {
+		return nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.BlockTxsValueUnpack(rawValue)
+	return value.TxHashes, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
@@ -271,6 +299,7 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 	// Lookup in HashXMempoolStatus first.
 	status, err := db.getMempoolStatus(hashX)
 	if err == nil && status != nil {
+		log.Debugf("(mempool) status(%#v) -> %#v", hashX, status)
 		return status, err
 	}
 
@@ -291,6 +320,7 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 		copy(rawValue, slice.Data())
 		value := prefixes.HashXStatusValue{}
 		value.UnpackValue(rawValue)
+		log.Debugf("status(%#v) -> %#v", hashX, value.Status)
 		return value.Status, nil
 	}
 
@@ -299,6 +329,11 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if len(txs) == 0 {
+		return []byte{}, err
+	}
+
 	hash := sha256.New()
 	for _, tx := range txs {
 		hash.Write([]byte(fmt.Sprintf("%s:%d:", tx.TxHash.String(), tx.Height)))
@@ -731,6 +766,70 @@ func (db *ReadOnlyDBColumnFamily) FsGetClaimByHash(claimHash []byte) (*ResolveRe
 	)
 }
 
+func (db *ReadOnlyDBColumnFamily) GetTx(txhash *chainhash.Hash) ([]byte, *wire.MsgTx, error) {
+	// Lookup in MempoolTx first.
+	raw, tx, err := db.getMempoolTx(txhash)
+	if err == nil && raw != nil && tx != nil {
+		return raw, tx, err
+	}
+
+	handle, err := db.EnsureHandle(prefixes.Tx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key := prefixes.TxKey{Prefix: []byte{prefixes.Tx}, TxHash: txhash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return nil, nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.TxValue{}
+	value.UnpackValue(rawValue)
+	var msgTx wire.MsgTx
+	err = msgTx.Deserialize(bytes.NewReader(value.RawTx))
+	if err != nil {
+		return nil, nil, err
+	}
+	return value.RawTx, &msgTx, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) getMempoolTx(txhash *chainhash.Hash) ([]byte, *wire.MsgTx, error) {
+	handle, err := db.EnsureHandle(prefixes.MempoolTx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	key := prefixes.MempoolTxKey{Prefix: []byte{prefixes.Tx}, TxHash: txhash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return nil, nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.MempoolTxValue{}
+	value.UnpackValue(rawValue)
+	var msgTx wire.MsgTx
+	err = msgTx.Deserialize(bytes.NewReader(value.RawTx))
+	if err != nil {
+		return nil, nil, err
+	}
+	return value.RawTx, &msgTx, nil
+}
+
 func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountValue, error) {
 	handle, err := db.EnsureHandle(prefixes.TxCount)
 	if err != nil {
@@ -752,6 +851,123 @@ func (db *ReadOnlyDBColumnFamily) GetTxCount(height uint32) (*prefixes.TxCountVa
 	copy(rawValue, slice.Data())
 	value := prefixes.TxCountValueUnpack(rawValue)
 	return value, nil
+}
+
+func (db *ReadOnlyDBColumnFamily) GetTxHeight(txhash *chainhash.Hash) (uint32, error) {
+	handle, err := db.EnsureHandle(prefixes.TxNum)
+	if err != nil {
+		return 0, err
+	}
+
+	key := prefixes.TxNumKey{Prefix: []byte{prefixes.TxNum}, TxHash: txhash}
+	rawKey := key.PackKey()
+	slice, err := db.DB.GetCF(db.Opts, handle, rawKey)
+	defer slice.Free()
+	if err != nil {
+		return 0, err
+	}
+	if slice.Size() == 0 {
+		return 0, nil
+	}
+
+	// No slice copy needed. Value will be abandoned.
+	value := prefixes.TxNumValueUnpack(slice.Data())
+	height := stack.BisectRight(db.TxCounts, []uint32{value.TxNum})[0]
+	return height, nil
+}
+
+type TxMerkle struct {
+	TxHash *chainhash.Hash
+	RawTx  []byte
+	Height int
+	Pos    uint32
+	Merkle []*chainhash.Hash
+}
+
+// merklePath selects specific transactions by position within blockTxs.
+// The resulting merkle path (aka merkle branch, or merkle) is a list of TX hashes
+// which are in sibling relationship with TX nodes on the path to the root.
+func merklePath(pos uint32, blockTxs, partial []*chainhash.Hash) []*chainhash.Hash {
+	parent := func(p uint32) uint32 {
+		return p >> 1
+	}
+	sibling := func(p uint32) uint32 {
+		if p%2 == 0 {
+			return p + 1
+		} else {
+			return p - 1
+		}
+	}
+	p := parent(pos)
+	if p == 0 {
+		// No parent, path is complete.
+		return partial
+	}
+	// Add sibling to partial path and proceed to parent TX.
+	return merklePath(p, blockTxs, append(partial, blockTxs[sibling(pos)]))
+}
+
+func (db *ReadOnlyDBColumnFamily) GetTxMerkle(tx_hashes []chainhash.Hash) ([]TxMerkle, error) {
+
+	selectedTxNum := make([]*IterOptions, 0, len(tx_hashes))
+	for _, txhash := range tx_hashes {
+		key := prefixes.TxNumKey{Prefix: []byte{prefixes.TxNum}, TxHash: &txhash}
+		log.Debugf("%v", key)
+		opt, err := db.selectFrom(key.Prefix, &key, &key)
+		if err != nil {
+			return nil, err
+		}
+		selectedTxNum = append(selectedTxNum, opt...)
+	}
+
+	selectTxByTxNum := func(in []*prefixes.PrefixRowKV) ([]*IterOptions, error) {
+		txNumKey := in[0].Key.(*prefixes.TxNumKey)
+		log.Debugf("%v", txNumKey.TxHash.String())
+		out := make([]*IterOptions, 0, 100)
+		startKey := &prefixes.TxKey{
+			Prefix: []byte{prefixes.Tx},
+			TxHash: txNumKey.TxHash,
+		}
+		endKey := &prefixes.TxKey{
+			Prefix: []byte{prefixes.Tx},
+			TxHash: txNumKey.TxHash,
+		}
+		selectedTx, err := db.selectFrom([]byte{prefixes.Tx}, startKey, endKey)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, selectedTx...)
+		return out, nil
+	}
+
+	blockTxsCache := make(map[uint32][]*chainhash.Hash)
+	results := make([]TxMerkle, 0, 500)
+	for kvs := range innerJoin(db.DB, iterate(db.DB, selectedTxNum), selectTxByTxNum) {
+		if err := checkForError(kvs); err != nil {
+			return results, err
+		}
+		txNumKey, txNumVal := kvs[0].Key.(*prefixes.TxNumKey), kvs[0].Value.(*prefixes.TxNumValue)
+		_, txVal := kvs[1].Key.(*prefixes.TxKey), kvs[1].Value.(*prefixes.TxValue)
+		txHeight := stack.BisectRight(db.TxCounts, []uint32{txNumVal.TxNum})[0]
+		txPos := txNumVal.TxNum - db.TxCounts.Get(txHeight-1)
+		// We need all the TX hashes in order to select out the relevant ones.
+		if _, ok := blockTxsCache[txHeight]; !ok {
+			txs, err := db.GetBlockTXs(txHeight)
+			if err != nil {
+				return results, err
+			}
+			blockTxsCache[txHeight] = txs
+		}
+		blockTxs, _ := blockTxsCache[txHeight]
+		results = append(results, TxMerkle{
+			TxHash: txNumKey.TxHash,
+			RawTx:  txVal.RawTx,
+			Height: int(txHeight),
+			Pos:    txPos,
+			Merkle: merklePath(txPos, blockTxs, []*chainhash.Hash{}),
+		})
+	}
+	return results, nil
 }
 
 func (db *ReadOnlyDBColumnFamily) GetDBState() (*prefixes.DBStateValue, error) {
