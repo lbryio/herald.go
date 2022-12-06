@@ -441,8 +441,8 @@ func (db *ReadOnlyDBColumnFamily) selectFrom(prefix []byte, startKey, stopKey pr
 	// Prefix and handle
 	options := NewIterateOptions().WithDB(db).WithPrefix(prefix).WithCfHandle(handle)
 	// Start and stop bounds
-	options = options.WithStart(startKey.PackKey()).WithStop(stopKey.PackKey()).WithIncludeStop(true)
-	// Don't include the key
+	options = options.WithStart(startKey.PackKey()).WithStop(stopKey.PackKey()).WithIncludeStop(false)
+	// Include the key and value
 	options = options.WithIncludeKey(true).WithIncludeValue(true)
 	return []*IterOptions{options}, nil
 }
@@ -455,7 +455,7 @@ func iterate(db *grocksdb.DB, opts []*IterOptions) <-chan []*prefixes.PrefixRowK
 			for kv := range IterCF(db, o) {
 				row := make([]*prefixes.PrefixRowKV, 0, 1)
 				row = append(row, kv)
-				log.Debugf("iterate[%v][%v] %#v", i, j, kv)
+				log.Debugf("iterate[%v][%v] %#v -> %#v", i, j, kv.Key, kv.Value)
 				out <- row
 				j++
 			}
@@ -481,7 +481,7 @@ func innerJoin(db *grocksdb.DB, in <-chan []*prefixes.PrefixRowKV, selectFn func
 				row = append(row, kvs...)
 				row = append(row, kv...)
 				for i, kv := range row {
-					log.Debugf("row[%v] %#v", i, kv)
+					log.Debugf("row[%v] %#v -> %#v", i, kv.Key, kv.Value)
 				}
 				out <- row
 			}
@@ -579,6 +579,7 @@ func GetDBColumnFamilies(name string, secondayPath string, cfNames []string, grp
 	// db, handles, err := grocksdb.OpenDbColumnFamilies(opts, name, cfNames, cfOpts)
 
 	if err != nil {
+		log.Errorf("open db as secondary failed: %v", err)
 		return nil, err
 	}
 
@@ -685,7 +686,7 @@ func (db *ReadOnlyDBColumnFamily) RunDetectChanges(notifCh chan<- interface{}) {
 		for {
 			// FIXME: Figure out best sleep interval
 			if time.Since(lastPrint) > time.Second {
-				log.Debug("DetectChanges:", db.LastState)
+				log.Debugf("DetectChanges: %#v", db.LastState)
 				lastPrint = time.Now()
 			}
 			err := db.detectChanges(notifCh)

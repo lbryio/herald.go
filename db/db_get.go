@@ -7,7 +7,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math"
 
 	"github.com/lbryio/herald.go/db/prefixes"
@@ -15,6 +14,8 @@ import (
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
 	"github.com/lbryio/lbcd/wire"
 	"github.com/linxGnu/grocksdb"
+
+	log "github.com/sirupsen/logrus"
 )
 
 // GetExpirationHeight returns the expiration height for the given height. Uses
@@ -298,6 +299,7 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 	// Lookup in HashXMempoolStatus first.
 	status, err := db.getMempoolStatus(hashX)
 	if err == nil && status != nil {
+		log.Debugf("(mempool) status(%#v) -> %#v", hashX, status)
 		return status, err
 	}
 
@@ -318,6 +320,7 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 		copy(rawValue, slice.Data())
 		value := prefixes.HashXStatusValue{}
 		value.UnpackValue(rawValue)
+		log.Debugf("status(%#v) -> %#v", hashX, value.Status)
 		return value.Status, nil
 	}
 
@@ -326,6 +329,11 @@ func (db *ReadOnlyDBColumnFamily) GetStatus(hashX []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	if len(txs) == 0 {
+		return []byte{}, err
+	}
+
 	hash := sha256.New()
 	for _, tx := range txs {
 		hash.Write([]byte(fmt.Sprintf("%s:%d:", tx.TxHash.String(), tx.Height)))
@@ -904,6 +912,7 @@ func (db *ReadOnlyDBColumnFamily) GetTxMerkle(tx_hashes []chainhash.Hash) ([]TxM
 	selectedTxNum := make([]*IterOptions, 0, len(tx_hashes))
 	for _, txhash := range tx_hashes {
 		key := prefixes.TxNumKey{Prefix: []byte{prefixes.TxNum}, TxHash: &txhash}
+		log.Debugf("%v", key)
 		opt, err := db.selectFrom(key.Prefix, &key, &key)
 		if err != nil {
 			return nil, err
@@ -913,6 +922,7 @@ func (db *ReadOnlyDBColumnFamily) GetTxMerkle(tx_hashes []chainhash.Hash) ([]TxM
 
 	selectTxByTxNum := func(in []*prefixes.PrefixRowKV) ([]*IterOptions, error) {
 		txNumKey := in[0].Key.(*prefixes.TxNumKey)
+		log.Debugf("%v", txNumKey.TxHash.String())
 		out := make([]*IterOptions, 0, 100)
 		startKey := &prefixes.TxKey{
 			Prefix: []byte{prefixes.Tx},

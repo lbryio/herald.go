@@ -823,7 +823,7 @@ func (s *BlockchainTransactionService) Get_batch(req *TransactionGetBatchReq, re
 	if len(*req) > 100 {
 		return fmt.Errorf("too many tx hashes in request: %v", len(*req))
 	}
-	tx_hashes := make([]chainhash.Hash, len(*req))
+	tx_hashes := make([]chainhash.Hash, 0, len(*req))
 	for i, txid := range *req {
 		tx_hashes = append(tx_hashes, chainhash.Hash{})
 		if err := chainhash.Decode(&tx_hashes[i], txid); err != nil {
