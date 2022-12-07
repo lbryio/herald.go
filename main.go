@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"time"
 
 	_ "net/http/pprof"
@@ -14,6 +13,7 @@ import (
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 func main() {
@@ -29,43 +29,22 @@ func main() {
 
 	if args.CmdType == server.ServeCmd {
 		// This will cancel goroutines with the server finishes.
-		// ctxWCancel, cancel := context.WithCancel(ctx)
-		// defer cancel()
 		stopGroup := stop.New()
-		// defer stopGroup.Stop()
 
-		initsignals(stopGroup.Ch())
+		initsignals()
 		interrupt := interruptListener()
 
-		// s := server.MakeHubServer(ctxWCancel, args)
 		s := server.MakeHubServer(stopGroup, args)
 		go s.Run()
 
-		defer func() {
-			log.Println("Shutting down server...")
-
-			if s.EsClient != nil {
-				log.Println("Stopping es client...")
-				s.EsClient.Stop()
-			}
-			if s.GrpcServer != nil {
-				log.Println("Stopping grpc server...")
-				s.GrpcServer.GracefulStop()
-			}
-			if s.DB != nil {
-				log.Println("Stopping database connection...")
-				s.DB.Shutdown()
-			}
-
-			log.Println("Returning from main...")
-		}()
+		defer s.Stop()
 
 		<-interrupt
 		return
 	}
 
-	conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
-		grpc.WithInsecure(),
+	conn, err := grpc.Dial("localhost:"+fmt.Sprintf("%d", args.Port),
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithBlock(),
 	)
 	if err != nil {

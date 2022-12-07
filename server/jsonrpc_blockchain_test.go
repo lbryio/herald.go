@@ -185,6 +185,9 @@ func TestHeaders(t *testing.T) {
 		}
 		var resp *BlockHeadersResp
 		err := s.Headers(&req, &resp)
+		if err != nil {
+			t.Errorf("Headers: %v", err)
+		}
 		marshalled, err := json.MarshalIndent(resp, "", "    ")
 		if err != nil {
 			t.Errorf("height: %v unmarshal err: %v", height, err)
@@ -204,7 +207,7 @@ func TestHeadersSubscribe(t *testing.T) {
 		return
 	}
 
-	sm := newSessionManager(db, args, grp, &chaincfg.RegressionNetParams)
+	sm := newSessionManager(nil, db, args, grp, &chaincfg.RegressionNetParams)
 	sm.start()
 	defer sm.stop()
 
@@ -385,7 +388,7 @@ func TestAddressSubscribe(t *testing.T) {
 		return
 	}
 
-	sm := newSessionManager(db, args, grp, &chaincfg.RegressionNetParams)
+	sm := newSessionManager(nil, db, args, grp, &chaincfg.RegressionNetParams)
 	sm.start()
 	defer sm.stop()
 

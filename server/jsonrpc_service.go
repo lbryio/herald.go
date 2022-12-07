@@ -91,7 +91,7 @@ fail1:
 		s1.RegisterCodec(&gorillaRpcCodec{gorilla_json.NewCodec()}, "application/json")
 
 		// Register "blockchain.claimtrie.*"" handlers.
-		claimtrieSvc := &ClaimtrieService{s.DB}
+		claimtrieSvc := &ClaimtrieService{s.DB, s}
 		err := s1.RegisterTCPService(claimtrieSvc, "blockchain_claimtrie")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
@@ -129,6 +129,14 @@ fail1:
 		// Register "server.{features,banner,version}" handlers.
 		serverSvc := &ServerService{s.Args}
 		err = s1.RegisterTCPService(serverSvc, "server")
+		if err != nil {
+			log.Errorf("RegisterTCPService: %v\n", err)
+			goto fail2
+		}
+
+		// Register "server.peers" handlers.
+		peersSvc := &PeersService{Server: s}
+		err = s1.RegisterTCPService(peersSvc, "server_peers")
 		if err != nil {
 			log.Errorf("RegisterTCPService: %v\n", err)
 			goto fail2

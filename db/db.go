@@ -670,7 +670,6 @@ func (db *ReadOnlyDBColumnFamily) Unwind() {
 
 // Shutdown shuts down the db.
 func (db *ReadOnlyDBColumnFamily) Shutdown() {
-	db.Grp.StopAndWait()
 	log.Println("Calling cleanup...")
 	db.Cleanup()
 	log.Println("Leaving Shutdown...")

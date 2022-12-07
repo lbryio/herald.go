@@ -33,6 +33,11 @@ type hashXNotification struct {
 	statusStr string
 }
 
+type peerNotification struct {
+	address string
+	port    string
+}
+
 type session struct {
 	id   uintptr
 	addr net.Addr
@@ -41,6 +46,8 @@ type session struct {
 	hashXSubs map[[HASHX_LEN]byte]string
 	// headersSub indicates header subscription
 	headersSub bool
+	// peersSub indicates peer subscription
+	peersSub bool
 	// headersSubRaw indicates the header subscription mode
 	headersSubRaw bool
 	// client provides the ability to send notifications
@@ -55,12 +62,11 @@ type session struct {
 func (s *session) doNotify(notification interface{}) {
 	var method string
 	var params interface{}
-	switch notification.(type) {
+	switch note := notification.(type) {
 	case headerNotification:
 		if !s.headersSub {
 			return
 		}
-		note, _ := notification.(headerNotification)
 		heightHash := note.HeightHash
 		method = "blockchain.headers.subscribe"
 		if s.headersSubRaw {
@@ -80,7 +86,6 @@ func (s *session) doNotify(notification interface{}) {
 			params = header
 		}
 	case hashXNotification:
-		note, _ := notification.(hashXNotification)
 		orig, ok := s.hashXSubs[note.hashX]
 		if !ok {
 			return
@@ -95,6 +100,13 @@ func (s *session) doNotify(notification interface{}) {
 			status = hex.EncodeToString(note.status)
 		}
 		params = []string{orig, status}
+	case peerNotification:
+		if !s.peersSub {
+			return
+		}
+		method = "server.peers.subscribe"
+		params = []string{note.address, note.port}
+
 	default:
 		log.Warnf("unknown notification type: %v", notification)
 		return
@@ -126,14 +138,17 @@ type sessionManager struct {
 	manageTicker   *time.Ticker
 	db             *db.ReadOnlyDBColumnFamily
 	args           *Args
+	server         *Server
 	chain          *chaincfg.Params
+	// peerSubs are sessions subscribed via 'blockchain.peers.subscribe'
+	peerSubs sessionMap
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
 	headerSubs sessionMap
 	// hashXSubs are sessions subscribed via 'blockchain.{address,scripthash}.subscribe'
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
+func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
 		grp:            grp,
@@ -142,7 +157,9 @@ func newSessionManager(db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Grou
 		manageTicker:   time.NewTicker(time.Duration(max(5, args.SessionTimeout/20)) * time.Second),
 		db:             db,
 		args:           args,
+		server:         server,
 		chain:          chain,
+		peerSubs:       make(sessionMap),
 		headerSubs:     make(sessionMap),
 		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
 	}
@@ -211,8 +228,15 @@ func (sm *sessionManager) addSession(conn net.Conn) *session {
 		log.Errorf("RegisterName: %v\n", err)
 	}
 
+	// Register "server.peers" handlers.
+	peersSvc := &PeersService{Server: sm.server}
+	err = s1.RegisterName("server.peers", peersSvc)
+	if err != nil {
+		log.Errorf("RegisterName: %v\n", err)
+	}
+
 	// Register "blockchain.claimtrie.*"" handlers.
-	claimtrieSvc := &ClaimtrieService{sm.db}
+	claimtrieSvc := &ClaimtrieService{sm.db, sm.server}
 	err = s1.RegisterName("blockchain.claimtrie", claimtrieSvc)
 	if err != nil {
 		log.Errorf("RegisterName: %v\n", err)
@@ -286,6 +310,18 @@ func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
 	return nil, nil
 }
 
+func (sm *sessionManager) peersSubscribe(sess *session, subscribe bool) {
+	sm.sessionsMut.Lock()
+	defer sm.sessionsMut.Unlock()
+	if subscribe {
+		sm.peerSubs[sess.id] = sess
+		sess.peersSub = true
+		return
+	}
+	delete(sm.peerSubs, sess.id)
+	sess.peersSub = false
+}
+
 func (sm *sessionManager) headersSubscribe(sess *session, raw bool, subscribe bool) {
 	sm.sessionsMut.Lock()
 	defer sm.sessionsMut.Unlock()
@@ -325,16 +361,15 @@ func (sm *sessionManager) hashXSubscribe(sess *session, hashX []byte, original s
 }
 
 func (sm *sessionManager) doNotify(notification interface{}) {
-	switch notification.(type) {
+	switch note := notification.(type) {
 	case internal.HeightHash:
 		// The HeightHash notification translates to headerNotification.
-		notification = &headerNotification{HeightHash: notification.(internal.HeightHash)}
+		notification = &headerNotification{HeightHash: note}
 	}
 	sm.sessionsMut.RLock()
 	var subsCopy sessionMap
-	switch notification.(type) {
+	switch note := notification.(type) {
 	case headerNotification:
-		note, _ := notification.(headerNotification)
 		subsCopy = sm.headerSubs
 		if len(subsCopy) > 0 {
 			hdr := [HEADER_SIZE]byte{}
@@ -343,7 +378,6 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 			note.blockHeaderStr = hex.EncodeToString(note.BlockHeader[:])
 		}
 	case hashXNotification:
-		note, _ := notification.(hashXNotification)
 		hashXSubs, ok := sm.hashXSubs[note.hashX]
 		if ok {
 			subsCopy = hashXSubs
@@ -351,6 +385,8 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 		if len(subsCopy) > 0 {
 			note.statusStr = hex.EncodeToString(note.status)
 		}
+	case peerNotification:
+		subsCopy = sm.peerSubs
 	default:
 		log.Warnf("unknown notification type: %v", notification)
 	}
@@ -369,8 +405,10 @@ type sessionServerCodec struct {
 
 // ReadRequestHeader provides ability to rewrite the incoming
 // request "method" field. For example:
-//     blockchain.block.get_header -> blockchain.block.Get_header
-//     blockchain.address.listunspent -> blockchain.address.Listunspent
+//
+//	blockchain.block.get_header -> blockchain.block.Get_header
+//	blockchain.address.listunspent -> blockchain.address.Listunspent
+//
 // This makes the "method" string compatible with rpc.Server
 // requirements.
 func (c *sessionServerCodec) ReadRequestHeader(req *rpc.Request) error {

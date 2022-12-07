@@ -6,7 +6,6 @@ import (
 	"encoding/csv"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math"
 	"math/big"
 	"os"
@@ -16,6 +15,7 @@ import (
 	dbpkg "github.com/lbryio/herald.go/db"
 	prefixes "github.com/lbryio/herald.go/db/prefixes"
 	"github.com/linxGnu/grocksdb"
+	log "github.com/sirupsen/logrus"
 )
 
 func TestPrefixRegistry(t *testing.T) {

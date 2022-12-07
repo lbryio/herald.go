@@ -12,13 +12,13 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"reflect"
 	"sort"
 	"strings"
 
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
+	log "github.com/sirupsen/logrus"
 )
 
 const (

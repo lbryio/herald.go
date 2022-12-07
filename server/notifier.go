@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 
 	"github.com/lbryio/herald.go/internal"
@@ -53,10 +54,16 @@ func (s *Server) DoNotify(heightHash *internal.HeightHash) error {
 // RunNotifier Runs the notfying action forever
 func (s *Server) RunNotifier() error {
 	for notification := range s.NotifierChan {
-		switch notification.(type) {
+		switch note := notification.(type) {
 		case internal.HeightHash:
-			heightHash, _ := notification.(internal.HeightHash)
+			heightHash := note
 			s.DoNotify(&heightHash)
+		// Do we need this?
+		// case peerNotification:
+		// 	peer, _ := notification.(peerNotification)
+		// 	s.notifyPeerSubs(&Peer{Address: peer.address, Port: peer.port})
+		default:
+			logrus.Warn("unknown notification type")
 		}
 		s.sessionManager.doNotify(notification)
 	}
@@ -65,7 +72,8 @@ func (s *Server) RunNotifier() error {
 
 // NotifierServer implements the TCP protocol for height/blockheader notifications
 func (s *Server) NotifierServer() error {
-	address := ":" + s.Args.NotifierPort
+	s.Grp.Add(1)
+	address := ":" + fmt.Sprintf("%d", s.Args.NotifierPort)
 	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
 		return err
@@ -77,11 +85,27 @@ func (s *Server) NotifierServer() error {
 	}
 
 	defer listen.Close()
+	rdyCh := make(chan bool)
 
 	for {
+		var conn net.Conn
+		var err error
 
 		logrus.Info("Waiting for connection")
-		conn, err := listen.Accept()
+
+		go func() {
+			conn, err = listen.Accept()
+			rdyCh <- true
+		}()
+
+		select {
+		case <-s.Grp.Ch():
+			s.Grp.Done()
+			return nil
+		case <-rdyCh:
+			logrus.Info("Connection accepted")
+		}
+
 		if err != nil {
 			logrus.Warn(err)
 			continue

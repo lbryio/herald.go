@@ -15,6 +15,26 @@ import (
 
 const defaultBufferSize = 1024
 
+func subReady(s *server.Server) error {
+	sleepTime := time.Millisecond * 100
+	for {
+		if sleepTime > time.Second {
+			return fmt.Errorf("timeout")
+		}
+		s.HeightSubsMut.RLock()
+		if len(s.HeightSubs) > 0 {
+			s.HeightSubsMut.RUnlock()
+			return nil
+		}
+		s.HeightSubsMut.RUnlock()
+
+		logrus.Warn("waiting for subscriber")
+		time.Sleep(sleepTime)
+		sleepTime = sleepTime * 2
+
+	}
+}
+
 func tcpConnReady(addr string) (net.Conn, error) {
 	sleepTime := time.Millisecond * 100
 	for {
@@ -48,14 +68,13 @@ func tcpRead(conn net.Conn) ([]byte, error) {
 
 func TestNotifierServer(t *testing.T) {
 	args := server.MakeDefaultTestArgs()
-	// ctx := context.Background()
 	ctx := stop.NewDebug()
 	hub := server.MakeHubServer(ctx, args)
 
 	go hub.NotifierServer()
 	go hub.RunNotifier()
 
-	addr := fmt.Sprintf(":%s", args.NotifierPort)
+	addr := fmt.Sprintf(":%d", args.NotifierPort)
 	logrus.Info(addr)
 	conn, err := tcpConnReady(addr)
 	if err != nil {
@@ -77,7 +96,10 @@ func TestNotifierServer(t *testing.T) {
 
 	// Hacky but needed because if the reader isn't ready
 	// before the writer sends it won't get the data
-	time.Sleep(time.Second)
+	err = subReady(hub)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	hash, _ := hex.DecodeString("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")
 	logrus.Warn("sending hash")

@@ -7,8 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io/ioutil"
-	"log"
+	golog "log"
 	"net"
 	"net/http"
 	"os"
@@ -27,7 +26,7 @@ import (
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	logrus "github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
 )
@@ -56,6 +55,7 @@ type Server struct {
 	HeightSubsMut    sync.RWMutex
 	NotifierChan     chan interface{}
 	Grp              *stop.Group
+	notiferListener  *net.TCPListener
 	sessionManager   *sessionManager
 	pb.UnimplementedHubServer
 }
@@ -153,29 +153,50 @@ func (s *Server) Run() {
 	}
 }
 
+func (s *Server) Stop() {
+	log.Println("Shutting down server...")
+
+	if s.EsClient != nil {
+		log.Println("Stopping es client...")
+		s.EsClient.Stop()
+	}
+	if s.GrpcServer != nil {
+		log.Println("Stopping grpc server...")
+		s.GrpcServer.GracefulStop()
+	}
+	log.Println("Stopping other server threads...")
+	s.Grp.StopAndWait()
+	if s.DB != nil {
+		log.Println("Stopping database connection...")
+		s.DB.Shutdown()
+	}
+
+	log.Println("Returning from Stop...")
+}
+
 func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, error) {
-	tmpName, err := ioutil.TempDir("", "go-lbry-hub")
+	tmpName, err := os.MkdirTemp("", "go-lbry-hub")
 	if err != nil {
-		logrus.Info(err)
+		log.Info(err)
 		log.Fatal(err)
 	}
-	logrus.Info("tmpName", tmpName)
+	log.Info("tmpName", tmpName)
 	if err != nil {
-		logrus.Info(err)
+		log.Info(err)
 	}
 	myDB, err := db.GetProdDB(args.DBPath, tmpName, grp)
 	if err != nil {
 		// Can't load the db, fail loudly
-		logrus.Info(err)
+		log.Info(err)
 		log.Fatalln(err)
 	}
 
 	if myDB.LastState != nil {
-		logrus.Infof("DB version: %v", myDB.LastState.DBVersion)
-		logrus.Infof("height: %v", myDB.LastState.Height)
-		logrus.Infof("genesis: %v", myDB.LastState.Genesis.String())
-		logrus.Infof("tip: %v", myDB.LastState.Tip.String())
-		logrus.Infof("tx count: %v", myDB.LastState.TxCount)
+		log.Infof("DB version: %v", myDB.LastState.DBVersion)
+		log.Infof("height: %v", myDB.LastState.Height)
+		log.Infof("genesis: %v", myDB.LastState.Genesis.String())
+		log.Infof("tip: %v", myDB.LastState.Tip.String())
+		log.Infof("tx count: %v", myDB.LastState.TxCount)
 	}
 
 	blockingChannelHashes := make([][]byte, 0, 10)
@@ -186,7 +207,7 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	for _, id := range args.BlockingChannelIds {
 		hash, err := hex.DecodeString(id)
 		if err != nil {
-			logrus.Warn("Invalid channel id: ", id)
+			log.Warn("Invalid channel id: ", id)
 			continue
 		}
 		blockingChannelHashes = append(blockingChannelHashes, hash)
@@ -196,7 +217,7 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	for _, id := range args.FilteringChannelIds {
 		hash, err := hex.DecodeString(id)
 		if err != nil {
-			logrus.Warn("Invalid channel id: ", id)
+			log.Warn("Invalid channel id: ", id)
 			continue
 		}
 		filteringChannelHashes = append(filteringChannelHashes, hash)
@@ -207,10 +228,10 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	myDB.FilteringChannelHashes = filteringChannelHashes
 
 	if len(filteringIds) > 0 {
-		logrus.Infof("filtering claims reposted by channels: %+s", filteringIds)
+		log.Infof("filtering claims reposted by channels: %+s", filteringIds)
 	}
 	if len(blockingIds) > 0 {
-		logrus.Infof("blocking claims reposted by channels: %+s", blockingIds)
+		log.Infof("blocking claims reposted by channels: %+s", blockingIds)
 	}
 
 	return myDB, nil
@@ -234,7 +255,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	var client *elastic.Client = nil
 	if !args.DisableEs {
-		esUrl := args.EsHost + ":" + args.EsPort
+		esUrl := args.EsHost + ":" + fmt.Sprintf("%d", args.EsPort)
 		opts := []elastic.ClientOptionFunc{
 			elastic.SetSniff(true),
 			elastic.SetSnifferTimeoutStartup(time.Second * 60),
@@ -242,7 +263,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 			elastic.SetURL(esUrl),
 		}
 		if args.Debug {
-			opts = append(opts, elastic.SetTraceLog(log.New(os.Stderr, "[[ELASTIC]]", 0)))
+			opts = append(opts, elastic.SetTraceLog(golog.New(os.Stderr, "[[ELASTIC]]", 0)))
 		}
 		client, err = elastic.NewClient(opts...)
 		if err != nil {
@@ -271,7 +292,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	if !args.DisableResolve {
 		myDB, err = LoadDatabase(args, grp)
 		if err != nil {
-			logrus.Warning(err)
+			log.Warning(err)
 		}
 	}
 
@@ -302,7 +323,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	chain := chaincfg.MainNetParams
 	if dbChain != nil && cliChain != nil {
 		if dbChain != cliChain {
-			logrus.Warnf("network: %v (from db) conflicts with %v (from cli)", dbChain.Name, cliChain.Name)
+			log.Warnf("network: %v (from db) conflicts with %v (from cli)", dbChain.Name, cliChain.Name)
 		}
 		chain = *dbChain
 	} else if dbChain != nil {
@@ -310,7 +331,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	} else if cliChain != nil {
 		chain = *cliChain
 	}
-	logrus.Infof("network: %v", chain.Name)
+	log.Infof("network: %v", chain.Name)
 
 	args.GenesisHash = chain.GenesisHash.String()
 
@@ -338,34 +359,36 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		ExternalIP:       net.IPv4(127, 0, 0, 1),
 		HeightSubs:       make(map[net.Addr]net.Conn),
 		HeightSubsMut:    sync.RWMutex{},
-		NotifierChan:     make(chan interface{}),
+		NotifierChan:     make(chan interface{}, 1),
 		Grp:              grp,
-		sessionManager:   newSessionManager(myDB, args, sessionGrp, &chain),
+		sessionManager:   nil,
 	}
+	// FIXME: HACK
+	s.sessionManager = newSessionManager(s, myDB, args, sessionGrp, &chain)
 
 	// Start up our background services
 	if !args.DisableResolve && !args.DisableRocksDBRefresh {
-		logrus.Info("Running detect changes")
+		log.Info("Running detect changes")
 		myDB.RunDetectChanges(s.NotifierChan)
 	}
 	if !args.DisableBlockingAndFiltering {
 		myDB.RunGetBlocksAndFilters()
 	}
 	if !args.DisableStartPrometheus {
-		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
+		go s.prometheusEndpoint(fmt.Sprintf("%d", s.Args.PrometheusPort), "metrics")
 	}
 	if !args.DisableStartUDP {
 		go func() {
 			err := s.UDPServer(s.Args.Port)
 			if err != nil {
-				logrus.Errorf("UDP Server (%d) failed! %v", s.Args.Port, err)
+				log.Errorf("UDP Server (%d) failed! %v", s.Args.Port, err)
 			}
 		}()
 		if s.Args.JSONRPCPort != 0 {
 			go func() {
 				err := s.UDPServer(s.Args.JSONRPCPort)
 				if err != nil {
-					logrus.Errorf("UDP Server (%d) failed! %v", s.Args.JSONRPCPort, err)
+					log.Errorf("UDP Server (%d) failed! %v", s.Args.JSONRPCPort, err)
 				}
 			}()
 		}
@@ -409,7 +432,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 // for this hub to allow for metric tracking.
 func (s *Server) prometheusEndpoint(port string, endpoint string) {
 	http.Handle("/"+endpoint, promhttp.Handler())
-	log.Println(fmt.Sprintf("listening on :%s /%s", port, endpoint))
+	log.Printf("listening on :%s /%s\n", port, endpoint)
 	err := http.ListenAndServe(":"+port, nil)
 	log.Fatalln("Shouldn't happen??!?!", err)
 }
@@ -567,7 +590,7 @@ func InternalResolve(urls []string, DB *db.ReadOnlyDBColumnFamily) (*pb.Outputs,
 		BlockedTotal: 0,   //TODO
 	}
 
-	logrus.Warn(res)
+	log.Warn(res)
 
 	return res, nil
 }
