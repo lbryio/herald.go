@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/csv"
 	"encoding/hex"
-	"log"
 	"os"
 	"strings"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/linxGnu/grocksdb"
+	log "github.com/sirupsen/logrus"
 )
 
 ////////////////////////////////////////////////////////////////////////////////
