@@ -62,12 +62,11 @@ type session struct {
 func (s *session) doNotify(notification interface{}) {
 	var method string
 	var params interface{}
-	switch notification.(type) {
+	switch note := notification.(type) {
 	case headerNotification:
 		if !s.headersSub {
 			return
 		}
-		note, _ := notification.(headerNotification)
 		heightHash := note.HeightHash
 		method = "blockchain.headers.subscribe"
 		if s.headersSubRaw {
@@ -87,7 +86,6 @@ func (s *session) doNotify(notification interface{}) {
 			params = header
 		}
 	case hashXNotification:
-		note, _ := notification.(hashXNotification)
 		orig, ok := s.hashXSubs[note.hashX]
 		if !ok {
 			return
@@ -106,7 +104,6 @@ func (s *session) doNotify(notification interface{}) {
 		if !s.peersSub {
 			return
 		}
-		note, _ := notification.(peerNotification)
 		method = "server.peers.subscribe"
 		params = []string{note.address, note.port}
 
@@ -364,16 +361,15 @@ func (sm *sessionManager) hashXSubscribe(sess *session, hashX []byte, original s
 }
 
 func (sm *sessionManager) doNotify(notification interface{}) {
-	switch notification.(type) {
+	switch note := notification.(type) {
 	case internal.HeightHash:
 		// The HeightHash notification translates to headerNotification.
-		notification = &headerNotification{HeightHash: notification.(internal.HeightHash)}
+		notification = &headerNotification{HeightHash: note}
 	}
 	sm.sessionsMut.RLock()
 	var subsCopy sessionMap
-	switch notification.(type) {
+	switch note := notification.(type) {
 	case headerNotification:
-		note, _ := notification.(headerNotification)
 		subsCopy = sm.headerSubs
 		if len(subsCopy) > 0 {
 			hdr := [HEADER_SIZE]byte{}
@@ -382,7 +378,6 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 			note.blockHeaderStr = hex.EncodeToString(note.BlockHeader[:])
 		}
 	case hashXNotification:
-		note, _ := notification.(hashXNotification)
 		hashXSubs, ok := sm.hashXSubs[note.hashX]
 		if ok {
 			subsCopy = hashXSubs
@@ -410,8 +405,10 @@ type sessionServerCodec struct {
 
 // ReadRequestHeader provides ability to rewrite the incoming
 // request "method" field. For example:
-//     blockchain.block.get_header -> blockchain.block.Get_header
-//     blockchain.address.listunspent -> blockchain.address.Listunspent
+//
+//	blockchain.block.get_header -> blockchain.block.Get_header
+//	blockchain.address.listunspent -> blockchain.address.Listunspent
+//
 // This makes the "method" string compatible with rpc.Server
 // requirements.
 func (c *sessionServerCodec) ReadRequestHeader(req *rpc.Request) error {

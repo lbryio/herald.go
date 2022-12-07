@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"fmt"
-	"log"
 	"net"
 	"os"
 	"strconv"
@@ -16,13 +15,20 @@ import (
 	"github.com/lbryio/herald.go/server"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	dto "github.com/prometheus/client_model/go"
+	log "github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 // lineCountFile takes a fileName and counts the number of lines in it.
 func lineCountFile(fileName string) int {
 	f, err := os.Open(fileName)
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			log.Warn(err)
+		}
+	}()
 	if err != nil {
 		log.Println(err)
 		return 0
@@ -207,7 +213,7 @@ func TestAddPeerEndpoint(t *testing.T) {
 			go hubServer2.Run()
 			//go hubServer.Run()
 			conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
-				grpc.WithInsecure(),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithBlock(),
 			)
 			if err != nil {
@@ -282,7 +288,7 @@ func TestAddPeerEndpoint2(t *testing.T) {
 			go hubServer2.Run()
 			go hubServer3.Run()
 			conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
-				grpc.WithInsecure(),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithBlock(),
 			)
 			if err != nil {
@@ -372,14 +378,14 @@ func TestAddPeerEndpoint3(t *testing.T) {
 			go hubServer2.Run()
 			go hubServer3.Run()
 			conn, err := grpc.Dial("localhost:"+strconv.Itoa(args.Port),
-				grpc.WithInsecure(),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithBlock(),
 			)
 			if err != nil {
 				log.Fatalf("did not connect: %v", err)
 			}
 			conn2, err := grpc.Dial("localhost:50052",
-				grpc.WithInsecure(),
+				grpc.WithTransportCredentials(insecure.NewCredentials()),
 				grpc.WithBlock(),
 			)
 			if err != nil {

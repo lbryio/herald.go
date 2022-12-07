@@ -7,7 +7,9 @@ import (
 	"errors"
 	"fmt"
 	"hash"
-	"io/ioutil"
+
+	//"io/ioutil"
+
 	"log"
 	"net"
 	"net/http"
@@ -176,7 +178,7 @@ func (s *Server) Stop() {
 }
 
 func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, error) {
-	tmpName, err := ioutil.TempDir("", "go-lbry-hub")
+	tmpName, err := os.MkdirTemp("", "go-lbry-hub")
 	if err != nil {
 		logrus.Info(err)
 		log.Fatal(err)
@@ -433,7 +435,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 // for this hub to allow for metric tracking.
 func (s *Server) prometheusEndpoint(port string, endpoint string) {
 	http.Handle("/"+endpoint, promhttp.Handler())
-	log.Println(fmt.Sprintf("listening on :%s /%s", port, endpoint))
+	log.Printf("listening on :%s /%s\n", port, endpoint)
 	err := http.ListenAndServe(":"+port, nil)
 	log.Fatalln("Shouldn't happen??!?!", err)
 }

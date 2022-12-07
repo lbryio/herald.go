@@ -68,14 +68,11 @@ func tcpRead(conn net.Conn) ([]byte, error) {
 
 func TestNotifierServer(t *testing.T) {
 	args := server.MakeDefaultTestArgs()
-	// ctx := context.Background()
 	ctx := stop.NewDebug()
 	hub := server.MakeHubServer(ctx, args)
 
 	go hub.NotifierServer()
 	go hub.RunNotifier()
-
-	// time.Sleep(time.Second * 2)
 
 	addr := fmt.Sprintf(":%d", args.NotifierPort)
 	logrus.Info(addr)
@@ -99,7 +96,6 @@ func TestNotifierServer(t *testing.T) {
 
 	// Hacky but needed because if the reader isn't ready
 	// before the writer sends it won't get the data
-	// time.Sleep(time.Second * 10)
 	err = subReady(hub)
 	if err != nil {
 		t.Fatal(err)

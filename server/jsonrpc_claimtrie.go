@@ -8,7 +8,6 @@ import (
 	"github.com/lbryio/herald.go/internal/metrics"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -102,7 +101,7 @@ func (t *ClaimtrieService) GetClaimByID(args *GetClaimByIDData, result **pb.Outp
 		BlockedTotal: 0,   //TODO
 	}
 
-	logrus.Warn(res)
+	log.Warn(res)
 
 	*result = res
 	return nil

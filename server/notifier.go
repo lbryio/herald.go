@@ -54,9 +54,9 @@ func (s *Server) DoNotify(heightHash *internal.HeightHash) error {
 // RunNotifier Runs the notfying action forever
 func (s *Server) RunNotifier() error {
 	for notification := range s.NotifierChan {
-		switch notification.(type) {
+		switch note := notification.(type) {
 		case internal.HeightHash:
-			heightHash, _ := notification.(internal.HeightHash)
+			heightHash := note
 			s.DoNotify(&heightHash)
 		// Do we need this?
 		// case peerNotification:

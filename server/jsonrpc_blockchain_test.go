@@ -185,6 +185,9 @@ func TestHeaders(t *testing.T) {
 		}
 		var resp *BlockHeadersResp
 		err := s.Headers(&req, &resp)
+		if err != nil {
+			t.Errorf("Headers: %v", err)
+		}
 		marshalled, err := json.MarshalIndent(resp, "", "    ")
 		if err != nil {
 			t.Errorf("height: %v unmarshal err: %v", height, err)
