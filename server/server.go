@@ -256,7 +256,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	var client *elastic.Client = nil
 	if !args.DisableEs {
-		esUrl := args.EsHost + ":" + args.EsPort
+		esUrl := args.EsHost + ":" + fmt.Sprintf("%d", args.EsPort)
 		opts := []elastic.ClientOptionFunc{
 			elastic.SetSniff(true),
 			elastic.SetSnifferTimeoutStartup(time.Second * 60),
@@ -376,7 +376,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		myDB.RunGetBlocksAndFilters()
 	}
 	if !args.DisableStartPrometheus {
-		go s.prometheusEndpoint(s.Args.PrometheusPort, "metrics")
+		go s.prometheusEndpoint(fmt.Sprintf("%d", s.Args.PrometheusPort), "metrics")
 	}
 	if !args.DisableStartUDP {
 		go func() {

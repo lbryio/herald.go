@@ -175,7 +175,7 @@ func TestAddPeerEndpoint(t *testing.T) {
 	args2 := server.MakeDefaultTestArgs()
 	args2.DisableStartNotifier = false
 	args2.Port = 50052
-	args2.NotifierPort = "18081"
+	args2.NotifierPort = 18081
 
 	tests := []struct {
 		name          string
@@ -255,8 +255,8 @@ func TestAddPeerEndpoint2(t *testing.T) {
 	args.DisableStartNotifier = false
 	args2.DisableStartNotifier = false
 	args3.DisableStartNotifier = false
-	args2.NotifierPort = "18081"
-	args3.NotifierPort = "18082"
+	args2.NotifierPort = 18081
+	args3.NotifierPort = 18082
 
 	tests := []struct {
 		name            string
@@ -345,8 +345,8 @@ func TestAddPeerEndpoint3(t *testing.T) {
 	args.DisableStartNotifier = false
 	args2.DisableStartNotifier = false
 	args3.DisableStartNotifier = false
-	args2.NotifierPort = "18081"
-	args3.NotifierPort = "18082"
+	args2.NotifierPort = 18081
+	args3.NotifierPort = 18082
 
 	tests := []struct {
 		name            string

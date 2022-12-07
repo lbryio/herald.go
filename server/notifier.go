@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/binary"
+	"fmt"
 	"net"
 
 	"github.com/lbryio/herald.go/internal"
@@ -72,7 +73,7 @@ func (s *Server) RunNotifier() error {
 // NotifierServer implements the TCP protocol for height/blockheader notifications
 func (s *Server) NotifierServer() error {
 	s.Grp.Add(1)
-	address := ":" + s.Args.NotifierPort
+	address := ":" + fmt.Sprintf("%d", s.Args.NotifierPort)
 	addr, err := net.ResolveTCPAddr("tcp", address)
 	if err != nil {
 		return err

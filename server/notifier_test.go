@@ -77,7 +77,7 @@ func TestNotifierServer(t *testing.T) {
 
 	// time.Sleep(time.Second * 2)
 
-	addr := fmt.Sprintf(":%s", args.NotifierPort)
+	addr := fmt.Sprintf(":%d", args.NotifierPort)
 	logrus.Info(addr)
 	conn, err := tcpConnReady(addr)
 	if err != nil {
