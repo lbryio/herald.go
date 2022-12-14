@@ -140,6 +140,7 @@ type sessionManager struct {
 	args           *Args
 	server         *Server
 	chain          *chaincfg.Params
+	lbcd           *rpc.Client
 	// peerSubs are sessions subscribed via 'blockchain.peers.subscribe'
 	peerSubs sessionMap
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
@@ -148,7 +149,7 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
+func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params, lbcd *rpc.Client) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
 		grp:            grp,
@@ -159,6 +160,7 @@ func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args
 		args:           args,
 		server:         server,
 		chain:          chain,
+		lbcd:           lbcd,
 		peerSubs:       make(sessionMap),
 		headerSubs:     make(sessionMap),
 		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
@@ -306,9 +308,12 @@ func (sm *sessionManager) removeSessionLocked(sess *session) {
 }
 
 func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
-	// TODO
-	panic("not implemented")
-	return nil, nil
+	var reply string
+	err := sm.lbcd.Call("sendrawtransaction", hex.EncodeToString(rawTx), reply)
+	if err != nil {
+		return nil, err
+	}
+	return chainhash.NewHashFromStr(reply)
 }
 
 func (sm *sessionManager) peersSubscribe(sess *session, subscribe bool) {

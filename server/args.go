@@ -3,6 +3,7 @@ package server
 import (
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -25,6 +26,7 @@ type Args struct {
 	Port                int
 	DBPath              string
 	Chain               *string
+	DaemonURL           *url.URL
 	EsHost              string
 	EsPort              int
 	PrometheusPort      int
@@ -203,10 +205,19 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	environment := GetEnvironmentStandard()
 	parser := argparse.NewParser("herald", "herald server and client")
 
-	serveCmd := parser.NewCommand("serve", "start the hub server")
+	serveCmd := parser.NewCommand("serve", "start the herald server")
 	searchCmd := parser.NewCommand("search", "claim search")
 	dbCmd := parser.NewCommand("db", "db testing")
 
+	defaultDaemonURL := "localhost:9245"
+	if url, ok := environment["DAEMON_URL"]; ok {
+		defaultDaemonURL = url
+	}
+
+	validateURL := func(arg []string) error {
+		_, err := url.Parse(arg[0])
+		return err
+	}
 	validatePort := func(arg []string) error {
 		_, err := strconv.ParseUint(arg[0], 10, 16)
 		return err
@@ -218,6 +229,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
 	chain := parser.Selector("", "chain", []string{chaincfg.MainNetParams.Name, chaincfg.TestNet3Params.Name, chaincfg.RegressionNetParams.Name, "testnet"},
 		&argparse.Options{Required: false, Help: "Which chain to use, default is 'mainnet'. Values 'regtest' and 'testnet' are for testing", Default: chaincfg.MainNetParams.Name})
+	daemonURLStr := parser.String("", "daemon-url", &argparse.Options{Required: true, Help: "URL for rpc to lbrycrd or lbcd, <rpcuser>:<rpcpassword>@<lbcd rpc ip><lbrcd rpc port>.", Validate: validateURL, Default: defaultDaemonURL})
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: DefaultEsHost})
 	esPort := parser.Int("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.Int("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
@@ -277,6 +289,11 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		*jsonRPCPort = DefaultJSONRPCPort
 	}
 
+	daemonURL, err := url.Parse(*daemonURLStr)
+	if err != nil {
+		log.Fatalf("URL parse failed: %v", err)
+	}
+
 	banner := loadBanner(bannerFile, HUB_PROTOCOL_VERSION)
 
 	args := &Args{
@@ -285,6 +302,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 		Port:                *port,
 		DBPath:              *dbPath,
 		Chain:               chain,
+		DaemonURL:           daemonURL,
 		EsHost:              *esHost,
 		EsPort:              *esPort,
 		PrometheusPort:      *prometheusPort,

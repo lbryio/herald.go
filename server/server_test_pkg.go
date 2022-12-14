@@ -15,5 +15,5 @@ func (s *Server) GetNumPeersExported() func() int64 {
 }
 
 func NewSessionManagerExported(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
-	return newSessionManager(server, db, args, grp, chain)
+	return newSessionManager(server, db, args, grp, chain, nil)
 }

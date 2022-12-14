@@ -1,15 +1,19 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
+	"io"
 	golog "log"
 	"net"
 	"net/http"
+	"net/rpc"
+	"net/rpc/jsonrpc"
 	"os"
 	"regexp"
 	"strconv"
@@ -38,6 +42,7 @@ type Server struct {
 	WeirdCharsRe     *regexp.Regexp
 	DB               *db.ReadOnlyDBColumnFamily
 	Chain            *chaincfg.Params
+	DaemonClient     *rpc.Client
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
 	S256             *hash.Hash
@@ -237,6 +242,38 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	return myDB, nil
 }
 
+type BasicAuthClientCodec struct {
+	client   http.Client
+	url      string
+	user     string
+	password string
+	buff     *bytes.Buffer
+}
+
+func (c BasicAuthClientCodec) Read(p []byte) (n int, err error) {
+	return c.buff.Read(p)
+}
+
+func (c BasicAuthClientCodec) Write(p []byte) (n int, err error) {
+	req, err := http.NewRequest("POST", c.url, bytes.NewReader(p))
+	if err != nil {
+		return 0, err
+	}
+	req.SetBasicAuth(c.user, c.password)
+	req.Header.Add("Content-Type", "application/json")
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return len(p), err
+	}
+	io.Copy(c.buff, resp.Body)
+	return len(p), err
+}
+
+func (c BasicAuthClientCodec) Close() error {
+	c.client.CloseIdleConnections()
+	return nil
+}
+
 // MakeHubServer takes the arguments given to a hub when it's started and
 // initializes everything. It loads information about previously known peers,
 // creates needed internal data structures, and initializes goroutines.
@@ -253,7 +290,24 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		log.Fatal(err)
 	}
 
-	var client *elastic.Client = nil
+	var lbcdClient *rpc.Client = nil
+	if args.DaemonURL != nil {
+		log.Warnf("connecting to lbcd daemon at %v...", args.DaemonURL)
+		password, _ := args.DaemonURL.User.Password()
+		codec := jsonrpc.NewClientCodec(
+			&BasicAuthClientCodec{
+				client: http.Client{
+					Timeout: 30 * time.Second,
+				},
+				url:      args.DaemonURL.Host,
+				user:     args.DaemonURL.User.Username(),
+				password: password,
+				buff:     bytes.NewBuffer(nil),
+			})
+		lbcdClient = rpc.NewClientWithCodec(codec)
+	}
+
+	var esClient *elastic.Client = nil
 	if !args.DisableEs {
 		esUrl := args.EsHost + ":" + fmt.Sprintf("%d", args.EsPort)
 		opts := []elastic.ClientOptionFunc{
@@ -265,7 +319,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		if args.Debug {
 			opts = append(opts, elastic.SetTraceLog(golog.New(os.Stderr, "[[ELASTIC]]", 0)))
 		}
-		client, err = elastic.NewClient(opts...)
+		esClient, err = elastic.NewClient(opts...)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -344,7 +398,8 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		WeirdCharsRe:     weirdCharsRe,
 		DB:               myDB,
 		Chain:            &chain,
-		EsClient:         client,
+		DaemonClient:     lbcdClient,
+		EsClient:         esClient,
 		QueryCache:       cache,
 		S256:             &s256,
 		LastRefreshCheck: time.Now(),
@@ -364,7 +419,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		sessionManager:   nil,
 	}
 	// FIXME: HACK
-	s.sessionManager = newSessionManager(s, myDB, args, sessionGrp, &chain)
+	s.sessionManager = newSessionManager(s, myDB, args, sessionGrp, &chain, lbcdClient)
 
 	// Start up our background services
 	if !args.DisableResolve && !args.DisableRocksDBRefresh {
