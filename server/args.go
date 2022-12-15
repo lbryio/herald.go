@@ -229,7 +229,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	dbPath := parser.String("", "db-path", &argparse.Options{Required: false, Help: "RocksDB path", Default: DefaultDBPath})
 	chain := parser.Selector("", "chain", []string{chaincfg.MainNetParams.Name, chaincfg.TestNet3Params.Name, chaincfg.RegressionNetParams.Name, "testnet"},
 		&argparse.Options{Required: false, Help: "Which chain to use, default is 'mainnet'. Values 'regtest' and 'testnet' are for testing", Default: chaincfg.MainNetParams.Name})
-	daemonURLStr := parser.String("", "daemon-url", &argparse.Options{Required: true, Help: "URL for rpc to lbrycrd or lbcd, <rpcuser>:<rpcpassword>@<lbcd rpc ip><lbrcd rpc port>.", Validate: validateURL, Default: defaultDaemonURL})
+	daemonURLStr := parser.String("", "daemon-url", &argparse.Options{Required: false, Help: "URL for rpc to lbrycrd or lbcd, <rpcuser>:<rpcpassword>@<lbcd rpc ip><lbrcd rpc port>.", Validate: validateURL, Default: defaultDaemonURL})
 	esHost := parser.String("", "eshost", &argparse.Options{Required: false, Help: "elasticsearch host", Default: DefaultEsHost})
 	esPort := parser.Int("", "esport", &argparse.Options{Required: false, Help: "elasticsearch port", Default: DefaultEsPort})
 	prometheusPort := parser.Int("", "prometheus-port", &argparse.Options{Required: false, Help: "prometheus port", Default: DefaultPrometheusPort})
