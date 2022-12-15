@@ -3413,7 +3413,7 @@ func (kv *TouchedHashXValue) UnpackValue(buf []byte) {
 
 type HashXStatusKey struct {
 	Prefix []byte `struct:"[1]byte" json:"prefix"`
-	HashX  []byte `struct:"[20]byte" json:"hashX"`
+	HashX  []byte `struct:"[11]byte" json:"hashX"`
 }
 
 type HashXStatusValue struct {
@@ -3425,15 +3425,15 @@ func (kv *HashXStatusKey) NumFields() int {
 }
 
 func (kv *HashXStatusKey) PartialPack(fields int) []byte {
-	// b'>20s'
-	n := len(kv.Prefix) + 20
+	// b'>20s' (really HASHX_LEN 11 bytes)
+	n := len(kv.Prefix) + 11
 	buf := make([]byte, n)
 	offset := 0
 	offset += copy(buf[offset:], kv.Prefix[:1])
 	if fields <= 0 {
 		return buf[:offset]
 	}
-	offset += copy(buf[offset:], kv.HashX[:20])
+	offset += copy(buf[offset:], kv.HashX[:11])
 	return buf[:offset]
 }
 
@@ -3442,12 +3442,12 @@ func (kv *HashXStatusKey) PackKey() []byte {
 }
 
 func (kv *HashXStatusKey) UnpackKey(buf []byte) {
-	// b'>20s'
+	// b'>20s' (really HASHX_LEN 11 bytes)
 	offset := 0
 	kv.Prefix = buf[offset : offset+1]
 	offset += 1
-	kv.HashX = buf[offset : offset+20]
-	offset += 20
+	kv.HashX = buf[offset : offset+11]
+	offset += 11
 }
 
 func (kv *HashXStatusValue) PackValue() []byte {
