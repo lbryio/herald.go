@@ -1,14 +1,12 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
-	"io"
 	"io/ioutil"
 	golog "log"
 	"net"
@@ -240,38 +238,6 @@ func LoadDatabase(args *Args, grp *stop.Group) (*db.ReadOnlyDBColumnFamily, erro
 	}
 
 	return myDB, nil
-}
-
-type BasicAuthClientCodec struct {
-	client   http.Client
-	url      string
-	user     string
-	password string
-	buff     *bytes.Buffer
-}
-
-func (c BasicAuthClientCodec) Read(p []byte) (n int, err error) {
-	return c.buff.Read(p)
-}
-
-func (c BasicAuthClientCodec) Write(p []byte) (n int, err error) {
-	req, err := http.NewRequest("POST", c.url, bytes.NewReader(p))
-	if err != nil {
-		return 0, err
-	}
-	req.SetBasicAuth(c.user, c.password)
-	req.Header.Add("Content-Type", "application/json")
-	resp, err := c.client.Do(req)
-	if err != nil {
-		return len(p), err
-	}
-	io.Copy(c.buff, resp.Body)
-	return len(p), err
-}
-
-func (c BasicAuthClientCodec) Close() error {
-	c.client.CloseIdleConnections()
-	return nil
 }
 
 // MakeHubServer takes the arguments given to a hub when it's started and

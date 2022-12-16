@@ -705,7 +705,7 @@ func (s *BlockchainScripthashService) Unsubscribe(req *ScripthashSubscribeReq, r
 	return nil
 }
 
-type TransactionBroadcastReq []string
+type TransactionBroadcastReq [1]string
 type TransactionBroadcastResp string
 
 // 'blockchain.transaction.broadcast'
