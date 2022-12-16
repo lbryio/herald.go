@@ -12,8 +12,6 @@ import (
 	golog "log"
 	"net"
 	"net/http"
-	"net/rpc"
-	"net/rpc/jsonrpc"
 	"os"
 	"regexp"
 	"strconv"
@@ -26,6 +24,7 @@ import (
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/lbryio/lbcd/chaincfg"
+	lbcd "github.com/lbryio/lbcd/rpcclient"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
@@ -42,7 +41,7 @@ type Server struct {
 	WeirdCharsRe     *regexp.Regexp
 	DB               *db.ReadOnlyDBColumnFamily
 	Chain            *chaincfg.Params
-	DaemonClient     *rpc.Client
+	DaemonClient     *lbcd.Client
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
 	S256             *hash.Hash
@@ -290,21 +289,21 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		log.Fatal(err)
 	}
 
-	var lbcdClient *rpc.Client = nil
+	var lbcdClient *lbcd.Client = nil
 	if args.DaemonURL != nil {
-		log.Warnf("connecting to lbcd daemon at %v...", args.DaemonURL)
+		log.Warnf("connecting to lbcd daemon at %v...", args.DaemonURL.Host)
 		password, _ := args.DaemonURL.User.Password()
-		codec := jsonrpc.NewClientCodec(
-			&BasicAuthClientCodec{
-				client: http.Client{
-					Timeout: 30 * time.Second,
-				},
-				url:      args.DaemonURL.Host,
-				user:     args.DaemonURL.User.Username(),
-				password: password,
-				buff:     bytes.NewBuffer(nil),
-			})
-		lbcdClient = rpc.NewClientWithCodec(codec)
+		cfg := &lbcd.ConnConfig{
+			Host:         args.DaemonURL.Host,
+			User:         args.DaemonURL.User.Username(),
+			Pass:         password,
+			HTTPPostMode: true,
+			DisableTLS:   true,
+		}
+		lbcdClient, err = lbcd.New(cfg, nil)
+		if err != nil {
+			log.Fatalf("lbcd connection failed: %v", err)
+		}
 	}
 
 	var esClient *elastic.Client = nil

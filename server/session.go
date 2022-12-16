@@ -17,6 +17,8 @@ import (
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
+	lbcd "github.com/lbryio/lbcd/rpcclient"
+	"github.com/lbryio/lbcd/wire"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
@@ -140,7 +142,7 @@ type sessionManager struct {
 	args           *Args
 	server         *Server
 	chain          *chaincfg.Params
-	lbcd           *rpc.Client
+	lbcd           *lbcd.Client
 	// peerSubs are sessions subscribed via 'blockchain.peers.subscribe'
 	peerSubs sessionMap
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
@@ -149,7 +151,7 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params, lbcd *rpc.Client) *sessionManager {
+func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params, lbcd *lbcd.Client) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
 		grp:            grp,
@@ -308,12 +310,12 @@ func (sm *sessionManager) removeSessionLocked(sess *session) {
 }
 
 func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
-	var reply string
-	err := sm.lbcd.Call("sendrawtransaction", hex.EncodeToString(rawTx), reply)
+	var msgTx wire.MsgTx
+	err := msgTx.Deserialize(bytes.NewReader(rawTx))
 	if err != nil {
 		return nil, err
 	}
-	return chainhash.NewHashFromStr(reply)
+	return sm.lbcd.SendRawTransaction(&msgTx, false)
 }
 
 func (sm *sessionManager) peersSubscribe(sess *session, subscribe bool) {

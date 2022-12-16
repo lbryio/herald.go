@@ -705,7 +705,7 @@ func (s *BlockchainScripthashService) Unsubscribe(req *ScripthashSubscribeReq, r
 	return nil
 }
 
-type TransactionBroadcastReq string
+type TransactionBroadcastReq []string
 type TransactionBroadcastResp string
 
 // 'blockchain.transaction.broadcast'
@@ -713,7 +713,7 @@ func (s *BlockchainTransactionService) Broadcast(req *TransactionBroadcastReq, r
 	if s.sessionMgr == nil {
 		return errors.New("no session manager, rpc not supported")
 	}
-	strTx := string(*req)
+	strTx := string((*req)[0])
 	rawTx, err := hex.DecodeString(strTx)
 	if err != nil {
 		return err
