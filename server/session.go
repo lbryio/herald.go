@@ -17,6 +17,8 @@ import (
 	"github.com/lbryio/herald.go/internal"
 	"github.com/lbryio/lbcd/chaincfg"
 	"github.com/lbryio/lbcd/chaincfg/chainhash"
+	lbcd "github.com/lbryio/lbcd/rpcclient"
+	"github.com/lbryio/lbcd/wire"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	log "github.com/sirupsen/logrus"
 )
@@ -140,6 +142,7 @@ type sessionManager struct {
 	args           *Args
 	server         *Server
 	chain          *chaincfg.Params
+	lbcd           *lbcd.Client
 	// peerSubs are sessions subscribed via 'blockchain.peers.subscribe'
 	peerSubs sessionMap
 	// headerSubs are sessions subscribed via 'blockchain.headers.subscribe'
@@ -148,7 +151,7 @@ type sessionManager struct {
 	hashXSubs map[[HASHX_LEN]byte]sessionMap
 }
 
-func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params) *sessionManager {
+func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args, grp *stop.Group, chain *chaincfg.Params, lbcd *lbcd.Client) *sessionManager {
 	return &sessionManager{
 		sessions:       make(sessionMap),
 		grp:            grp,
@@ -159,6 +162,7 @@ func newSessionManager(server *Server, db *db.ReadOnlyDBColumnFamily, args *Args
 		args:           args,
 		server:         server,
 		chain:          chain,
+		lbcd:           lbcd,
 		peerSubs:       make(sessionMap),
 		headerSubs:     make(sessionMap),
 		hashXSubs:      make(map[[HASHX_LEN]byte]sessionMap),
@@ -306,8 +310,12 @@ func (sm *sessionManager) removeSessionLocked(sess *session) {
 }
 
 func (sm *sessionManager) broadcastTx(rawTx []byte) (*chainhash.Hash, error) {
-	// TODO
-	return nil, nil
+	var msgTx wire.MsgTx
+	err := msgTx.Deserialize(bytes.NewReader(rawTx))
+	if err != nil {
+		return nil, err
+	}
+	return sm.lbcd.SendRawTransaction(&msgTx, false)
 }
 
 func (sm *sessionManager) peersSubscribe(sess *session, subscribe bool) {
@@ -366,10 +374,12 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 		// The HeightHash notification translates to headerNotification.
 		notification = &headerNotification{HeightHash: note}
 	}
+
 	sm.sessionsMut.RLock()
 	var subsCopy sessionMap
 	switch note := notification.(type) {
 	case headerNotification:
+		log.Infof("header notification @ %#v", note)
 		subsCopy = sm.headerSubs
 		if len(subsCopy) > 0 {
 			hdr := [HEADER_SIZE]byte{}
@@ -378,6 +388,7 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 			note.blockHeaderStr = hex.EncodeToString(note.BlockHeader[:])
 		}
 	case hashXNotification:
+		log.Infof("hashX notification @ %#v", note)
 		hashXSubs, ok := sm.hashXSubs[note.hashX]
 		if ok {
 			subsCopy = hashXSubs
@@ -395,6 +406,27 @@ func (sm *sessionManager) doNotify(notification interface{}) {
 	// Deliver notification to relevant sessions.
 	for _, sess := range subsCopy {
 		sess.doNotify(notification)
+	}
+
+	// Produce secondary hashXNotification(s) corresponding to the headerNotification.
+	switch note := notification.(type) {
+	case headerNotification:
+		touched, err := sm.db.GetTouchedHashXs(uint32(note.Height))
+		if err != nil {
+			log.Errorf("failed to get touched hashXs at height %v, error: %v", note.Height, err)
+			break
+		}
+		for _, hashX := range touched {
+			hashXstatus, err := sm.db.GetStatus(hashX)
+			if err != nil {
+				log.Errorf("failed to get status of hashX %v, error: %v", hashX, err)
+				continue
+			}
+			note2 := hashXNotification{}
+			copy(note2.hashX[:], hashX)
+			note2.status = hashXstatus
+			sm.doNotify(note2)
+		}
 	}
 }
 

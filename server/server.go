@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"io/ioutil"
 	golog "log"
 	"net"
 	"net/http"
@@ -22,6 +23,7 @@ import (
 	"github.com/lbryio/herald.go/meta"
 	pb "github.com/lbryio/herald.go/protobuf/go"
 	"github.com/lbryio/lbcd/chaincfg"
+	lbcd "github.com/lbryio/lbcd/rpcclient"
 	"github.com/lbryio/lbry.go/v3/extras/stop"
 	"github.com/olivere/elastic/v7"
 	"github.com/prometheus/client_golang/prometheus"
@@ -38,6 +40,7 @@ type Server struct {
 	WeirdCharsRe     *regexp.Regexp
 	DB               *db.ReadOnlyDBColumnFamily
 	Chain            *chaincfg.Params
+	DaemonClient     *lbcd.Client
 	EsClient         *elastic.Client
 	QueryCache       *ttlcache.Cache
 	S256             *hash.Hash
@@ -253,7 +256,32 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		log.Fatal(err)
 	}
 
-	var client *elastic.Client = nil
+	var lbcdClient *lbcd.Client = nil
+	if args.DaemonURL != nil && args.DaemonURL.Host != "" {
+		var rpcCertificate []byte
+		if args.DaemonCAPath != "" {
+			rpcCertificate, err = ioutil.ReadFile(args.DaemonCAPath)
+			if err != nil {
+				log.Fatalf("failed to read SSL certificate from path: %v", args.DaemonCAPath)
+			}
+		}
+		log.Warnf("connecting to lbcd daemon at %v...", args.DaemonURL.Host)
+		password, _ := args.DaemonURL.User.Password()
+		cfg := &lbcd.ConnConfig{
+			Host:         args.DaemonURL.Host,
+			User:         args.DaemonURL.User.Username(),
+			Pass:         password,
+			HTTPPostMode: true,
+			DisableTLS:   rpcCertificate == nil,
+			Certificates: rpcCertificate,
+		}
+		lbcdClient, err = lbcd.New(cfg, nil)
+		if err != nil {
+			log.Fatalf("lbcd daemon connection failed: %v", err)
+		}
+	}
+
+	var esClient *elastic.Client = nil
 	if !args.DisableEs {
 		esUrl := args.EsHost + ":" + fmt.Sprintf("%d", args.EsPort)
 		opts := []elastic.ClientOptionFunc{
@@ -265,7 +293,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		if args.Debug {
 			opts = append(opts, elastic.SetTraceLog(golog.New(os.Stderr, "[[ELASTIC]]", 0)))
 		}
-		client, err = elastic.NewClient(opts...)
+		esClient, err = elastic.NewClient(opts...)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -344,7 +372,8 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		WeirdCharsRe:     weirdCharsRe,
 		DB:               myDB,
 		Chain:            &chain,
-		EsClient:         client,
+		DaemonClient:     lbcdClient,
+		EsClient:         esClient,
 		QueryCache:       cache,
 		S256:             &s256,
 		LastRefreshCheck: time.Now(),
@@ -364,7 +393,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 		sessionManager:   nil,
 	}
 	// FIXME: HACK
-	s.sessionManager = newSessionManager(s, myDB, args, sessionGrp, &chain)
+	s.sessionManager = newSessionManager(s, myDB, args, sessionGrp, &chain, lbcdClient)
 
 	// Start up our background services
 	if !args.DisableResolve && !args.DisableRocksDBRefresh {

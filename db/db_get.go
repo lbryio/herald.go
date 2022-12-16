@@ -93,6 +93,32 @@ func (db *ReadOnlyDBColumnFamily) GetBlockTXs(height uint32) ([]*chainhash.Hash,
 	return value.TxHashes, nil
 }
 
+func (db *ReadOnlyDBColumnFamily) GetTouchedHashXs(height uint32) ([][]byte, error) {
+	handle, err := db.EnsureHandle(prefixes.TouchedHashX)
+	if err != nil {
+		return nil, err
+	}
+
+	key := prefixes.TouchedHashXKey{
+		Prefix: []byte{prefixes.TouchedHashX},
+		Height: height,
+	}
+	slice, err := db.DB.GetCF(db.Opts, handle, key.PackKey())
+	defer slice.Free()
+	if err != nil {
+		return nil, err
+	}
+	if slice.Size() == 0 {
+		return nil, nil
+	}
+
+	rawValue := make([]byte, len(slice.Data()))
+	copy(rawValue, slice.Data())
+	value := prefixes.TouchedHashXValue{}
+	value.UnpackValue(rawValue)
+	return value.TouchedHashXs, nil
+}
+
 func (db *ReadOnlyDBColumnFamily) GetHeader(height uint32) ([]byte, error) {
 	handle, err := db.EnsureHandle(prefixes.Header)
 	if err != nil {
