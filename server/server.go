@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"hash"
 	"io"
+	"io/ioutil"
 	golog "log"
 	"net"
 	"net/http"
@@ -291,6 +292,13 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 
 	var lbcdClient *lbcd.Client = nil
 	if args.DaemonURL != nil {
+		var rpcCertificate []byte
+		if args.DaemonCAPath != "" {
+			rpcCertificate, err = ioutil.ReadFile(args.DaemonCAPath)
+			if err != nil {
+				log.Fatalf("failed to read SSL certificate from path: %v", args.DaemonCAPath)
+			}
+		}
 		log.Warnf("connecting to lbcd daemon at %v...", args.DaemonURL.Host)
 		password, _ := args.DaemonURL.User.Password()
 		cfg := &lbcd.ConnConfig{
@@ -298,11 +306,12 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 			User:         args.DaemonURL.User.Username(),
 			Pass:         password,
 			HTTPPostMode: true,
-			DisableTLS:   true,
+			DisableTLS:   rpcCertificate == nil,
+			Certificates: rpcCertificate,
 		}
 		lbcdClient, err = lbcd.New(cfg, nil)
 		if err != nil {
-			log.Fatalf("lbcd connection failed: %v", err)
+			log.Fatalf("lbcd daemon connection failed: %v", err)
 		}
 	}
 
