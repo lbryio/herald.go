@@ -210,7 +210,7 @@ func ParseArgs(searchRequest *pb.SearchRequest) *Args {
 	searchCmd := parser.NewCommand("search", "claim search")
 	dbCmd := parser.NewCommand("db", "db testing")
 
-	defaultDaemonURL := "localhost:9245"
+	defaultDaemonURL := "http://localhost:9245"
 	if url, ok := environment["DAEMON_URL"]; ok {
 		defaultDaemonURL = url
 	}

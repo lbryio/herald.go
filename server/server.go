@@ -257,7 +257,7 @@ func MakeHubServer(grp *stop.Group, args *Args) *Server {
 	}
 
 	var lbcdClient *lbcd.Client = nil
-	if args.DaemonURL != nil {
+	if args.DaemonURL != nil && args.DaemonURL.Host != "" {
 		var rpcCertificate []byte
 		if args.DaemonCAPath != "" {
 			rpcCertificate, err = ioutil.ReadFile(args.DaemonCAPath)
